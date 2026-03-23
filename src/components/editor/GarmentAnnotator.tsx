@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Pencil, Trash2, MousePointer2, CheckCircle2 } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize } from 'lucide-react';
 
 interface Point {
   x: number;
@@ -26,6 +26,7 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
   const [currentStart, setCurrentStart] = useState<Point | null>(null);
   const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
   const [isBlueprintMode, setIsBlueprintMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -72,9 +73,13 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={
+      isFullscreen 
+        ? "fixed inset-0 z-50 bg-gray-900/95 flex flex-col p-4 md:p-8 gap-4 md:gap-6 backdrop-blur-sm animate-in fade-in"
+        : "flex flex-col gap-4"
+    }>
       {/* Artboard Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-sm">
+      <div className={`flex flex-wrap items-center gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-sm shrink-0 ${isFullscreen ? 'mx-auto w-full max-w-5xl' : ''}`}>
          <button 
            onClick={() => setIsBlueprintMode(!isBlueprintMode)}
            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${isBlueprintMode ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
@@ -106,6 +111,16 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
            <Pencil size={14} />
            {isDrawingMode ? 'Draw Now...' : 'Add Callout Line'}
          </button>
+         
+         <div className="flex-1" />
+         
+         <button 
+           onClick={() => setIsFullscreen(!isFullscreen)}
+           className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors ml-auto"
+           title={isFullscreen ? "Exit Fullscreen" : "Edit in Fullscreen"}
+         >
+           {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+         </button>
       </div>
 
       {/* Interactive Main Canvas */}
@@ -116,8 +131,10 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
         style={{ touchAction: 'none' }}
-        className={`bg-gray-50 rounded-2xl border aspect-[4/5] flex items-center justify-center p-6 relative overflow-hidden group ${
+        className={`bg-gray-50 rounded-2xl border flex items-center justify-center p-6 relative overflow-hidden group ${
           isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
+        } ${
+          isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5]'
         }`}
       >
         <img 
