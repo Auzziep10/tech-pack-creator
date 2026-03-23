@@ -18,7 +18,7 @@ export function CreateTechPack() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [step, setStep] = useState<FlowStep>('upload');
-  const [image, setImage] = useState<{file: File | null, url: string} | null>(null);
+  const [images, setImages] = useState<{file: File | null, frontUrl: string, backUrl: string} | null>(null);
   
   const [garmentType, setGarmentType] = useState('Garment');
   const [chestWidth, setChestWidth] = useState('');
@@ -37,8 +37,8 @@ export function CreateTechPack() {
         
         unsubscribe = onSnapshot(doc(db, 'scanSessions', newSessionId), (snapshot) => {
           const data = snapshot.data();
-          if (data && data.status === 'completed' && data.imageUrl) {
-            handleImageSelected(null, data.imageUrl);
+          if (data && data.status === 'completed' && data.frontImageUrl && data.backImageUrl) {
+            handleImageSelected(null, data.frontImageUrl, data.backImageUrl);
           }
         });
       } catch (err) {
@@ -53,16 +53,16 @@ export function CreateTechPack() {
     };
   }, [user]);
 
-  const handleImageSelected = (file: File | null, url: string) => {
-    setImage({ file, url });
+  const handleImageSelected = (file: File | null, frontUrl: string, backUrl: string = '') => {
+    setImages({ file, frontUrl, backUrl });
     // Auto-advance to next step
-    startAnalysis(url);
+    startAnalysis(frontUrl, backUrl);
   };
 
-  const startAnalysis = async (imageUrl: string) => {
+  const startAnalysis = async (frontUrl: string, backUrl: string) => {
     setStep('analyzing');
     try {
-      const type = await analyzeGarmentForMeasurement(imageUrl);
+      const type = await analyzeGarmentForMeasurement(frontUrl, backUrl);
       setGarmentType(type);
       setStep('requestMeasurement');
     } catch (e) {
@@ -73,15 +73,15 @@ export function CreateTechPack() {
   };
 
   const handleGenerateTechPack = async () => {
-    if (!image || !chestWidth || !bodyLength) return;
+    if (!images || !chestWidth || !bodyLength) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(image.url, chestWidth, bodyLength, baseSize, garmentType);
+      const data = await generateTechPack(images.frontUrl, images.backUrl, chestWidth, bodyLength, baseSize, garmentType);
       
-      let finalImageUrl = image.url;
-      if (image.file && user) {
+      let finalImageUrl = images.frontUrl;
+      if (images.file && user) {
          try {
-           finalImageUrl = await uploadGarmentImage(image.file, user.uid);
+           finalImageUrl = await uploadGarmentImage(images.file, user.uid);
          } catch (uploadErr) {
            console.error("Storage upload failed, falling back to local base64:", uploadErr);
          }
@@ -135,7 +135,7 @@ export function CreateTechPack() {
             
             <div className="flex flex-col md:flex-row gap-8 items-stretch">
               <div className="flex-1">
-                 <ImageUpload onImageSelected={(file, url) => handleImageSelected(file, url)} />
+                 <ImageUpload onImageSelected={(file, url) => handleImageSelected(file, url, '')} />
               </div>
               
               <div className="w-px bg-gray-200 hidden md:block" />
@@ -173,14 +173,23 @@ export function CreateTechPack() {
         {step === 'requestMeasurement' && (
           <div className="space-y-8 animate-in slide-in-from-right-8 duration-500">
              <div className="flex gap-8">
-                <div className="w-1/3 shrink-0">
-                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative p-4">
-                    <img src={image?.url} alt="Mockup" className="w-full h-full object-contain aspect-square mix-blend-multiply" />
+                <div className="w-1/3 shrink-0 flex flex-col gap-2">
+                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative p-4 h-64">
+                    <img src={images?.frontUrl} alt="Mockup Front" className="w-full h-full object-contain aspect-square mix-blend-multiply" />
                     <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
                        <CheckCircle2 size={16} className="text-green-600" />
-                       <span className="text-xs font-semibold tracking-wide text-gray-900">ANALYZED</span>
+                       <span className="text-xs font-semibold tracking-wide text-gray-900">FRONT</span>
                     </div>
                   </div>
+                  {images?.backUrl && (
+                    <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative p-4 h-64">
+                      <img src={images.backUrl} alt="Mockup Back" className="w-full h-full object-contain aspect-square mix-blend-multiply" />
+                      <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                         <CheckCircle2 size={16} className="text-green-600" />
+                         <span className="text-xs font-semibold tracking-wide text-gray-900">BACK</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="w-2/3 flex flex-col justify-center gap-6">

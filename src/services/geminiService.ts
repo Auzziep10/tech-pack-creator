@@ -30,17 +30,24 @@ async function urlToGenerativePart(urlOrBase64: string): Promise<any> {
   });
 }
 
-export async function analyzeGarmentForMeasurement(imageDataUrl: string): Promise<string> {
+export async function analyzeGarmentForMeasurement(frontImageUrl: string, backImageUrl?: string): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const imagePart = await urlToGenerativePart(imageDataUrl);
+    const frontPart = await urlToGenerativePart(frontImageUrl);
     
     const prompt = `You are an expert technical apparel designer.
 Analyze this garment mockup. 
 What is the specific type and style of this garment? (e.g., "Drop-Hem Short Sleeve T-Shirt", "Oversized Hoodie", "Crewneck Sweater").
 Respond ONLY with the crisp name of the garment style, nothing else.`;
 
-    const result = await model.generateContent([prompt, imagePart]);
+    const parts: any[] = [prompt, frontPart];
+    if (backImageUrl && backImageUrl.trim() !== '') {
+       const backPart = await urlToGenerativePart(backImageUrl);
+       parts.push("\n\nThe following is the BACK side of the garment:");
+       parts.push(backPart);
+    }
+
+    const result = await model.generateContent(parts);
     const response = result.response.text().trim();
     return response || "Chest Width";
   } catch (error) {
@@ -51,10 +58,10 @@ Respond ONLY with the crisp name of the garment style, nothing else.`;
   }
 }
 
-export async function generateTechPack(imageDataUrl: string, chestWidth: string, bodyLength: string, baseSize: string, garmentType: string) {
+export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, chestWidth: string, bodyLength: string, baseSize: string, garmentType: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const imagePart = await urlToGenerativePart(imageDataUrl);
+    const frontPart = await urlToGenerativePart(frontImageUrl);
     
     const prompt = `You are an expert technical apparel designer.
 Analyze this garment mockup. The AI previously classified it as a "${garmentType}".
@@ -80,7 +87,14 @@ Carefully identify the specific style, silhouette, and features of the garment i
 Using the TWO provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like shoulders, neck, and sleeves) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
 Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the two anchors exactly as provided), 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
 
-    const result = await model.generateContent([prompt, imagePart]);
+    const parts: any[] = [prompt, frontPart];
+    if (backImageUrl && backImageUrl.trim() !== '') {
+       const backPart = await urlToGenerativePart(backImageUrl);
+       parts.push("\n\nThe following is the BACK side of the garment:");
+       parts.push(backPart);
+    }
+
+    const result = await model.generateContent(parts);
     const text = result.response.text().trim();
     
     const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();

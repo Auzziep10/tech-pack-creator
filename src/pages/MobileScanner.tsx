@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { completeScanSession, uploadGarmentImage } from '../services/dbService';
+import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 
@@ -11,6 +11,7 @@ export function MobileScanner() {
   
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [scanSide, setScanSide] = useState<'front' | 'back'>('front');
   const [isUploading, setIsUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [hasCameraError, setHasCameraError] = useState(false);
@@ -69,13 +70,19 @@ export function MobileScanner() {
        // Convert base64 to file
        const res = await fetch(capturedImage);
        const blob = await res.blob();
-       const file = new File([blob], `scan_${sessionId}.jpg`, { type: 'image/jpeg' });
+       const file = new File([blob], `scan_${sessionId}_${scanSide}.jpg`, { type: 'image/jpeg' });
        
        // Upload to firebase (using sessionId as dummy userId for folder isolation)
-       const uploadedUrl = await uploadGarmentImage(file, sessionId);
+       const uploadedUrl = await uploadGarmentImage(file, `${sessionId}_${scanSide}`);
        
-       await completeScanSession(sessionId, uploadedUrl);
-       setSuccess(true);
+       if (scanSide === 'front') {
+         await updateScanSessionFront(sessionId, uploadedUrl);
+         setScanSide('back');
+         setCapturedImage(null);
+       } else {
+         await completeScanSession(sessionId, uploadedUrl);
+         setSuccess(true);
+       }
     } catch (err) {
       console.error("Upload failed", err);
       alert("Failed to send image. Please try again.");
@@ -117,7 +124,7 @@ export function MobileScanner() {
               {/* Header Mask */}
               <div className="bg-black/50 backdrop-blur-sm h-32 flex items-center justify-center pt-8 px-6">
                  <div className="text-center">
-                   <h2 className="text-white font-serif text-xl font-bold tracking-wide">Scan Garment</h2>
+                   <h2 className="text-white font-serif text-xl font-bold tracking-wide uppercase">Scan {scanSide} of Garment</h2>
                    <p className="text-white/80 text-sm mt-1">Lay flat and align within the frame</p>
                  </div>
               </div>

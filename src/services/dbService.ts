@@ -80,11 +80,20 @@ export const createScanSession = async (userId: string) => {
   return docRef.id;
 };
 
-export const completeScanSession = async (sessionId: string, imageUrl: string) => {
+export const updateScanSessionFront = async (sessionId: string, frontImageUrl: string) => {
+  const sessionRef = doc(db, 'scanSessions', sessionId);
+  await updateDoc(sessionRef, {
+    status: 'front_scanned',
+    frontImageUrl,
+    updatedAt: serverTimestamp()
+  });
+};
+
+export const completeScanSession = async (sessionId: string, backImageUrl: string) => {
   const sessionRef = doc(db, 'scanSessions', sessionId);
   await updateDoc(sessionRef, {
     status: 'completed',
-    imageUrl,
+    backImageUrl,
     updatedAt: serverTimestamp()
   });
 };
