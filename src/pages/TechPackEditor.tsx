@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,6 +41,23 @@ export function TechPackEditor() {
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isVectorizing, setIsVectorizing] = useState(false);
+
+  const handleVectorize = async () => {
+    const apiKey = window.prompt("Please enter your NanoBanana API Key to generate a clean vector. (You can securely save this later if it works!):");
+    if (!apiKey) return;
+    
+    setIsVectorizing(true);
+    try {
+      const { vectorizeGarmentImage } = await import('../services/nanobananaService');
+      const newImageUrl = await vectorizeGarmentImage(imageUrl, apiKey);
+      setImageUrl(newImageUrl);
+    } catch (e: any) {
+      alert("Nano Banana Vectorization failed: " + e.message);
+    } finally {
+      setIsVectorizing(false);
+    }
+  };
 
   useEffect(() => {
     if (location.state?.techPack) {
@@ -188,7 +205,19 @@ export function TechPackEditor() {
               )}
 
               <div>
-                <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Construction Details</h3>
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4">
+                  <h3 className="text-xl font-serif font-bold text-gray-900">Construction Details</h3>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={handleVectorize} 
+                    isLoading={isVectorizing}
+                    className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                  >
+                    <Wand2 size={14} />
+                    Vectorize Image (NanoBanana)
+                  </Button>
+                </div>
                 <ol className="space-y-4 pl-5 list-decimal marker:text-black marker:font-bold text-gray-700">
                   {data.callouts.map((callout: any, i: number) => (
                     <li key={i} className="pl-2">
