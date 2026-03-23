@@ -23,6 +23,7 @@ export function CreateTechPack() {
   const [garmentType, setGarmentType] = useState('Garment');
   const [chestWidth, setChestWidth] = useState('');
   const [bodyLength, setBodyLength] = useState('');
+  const [shoulderWidth, setShoulderWidth] = useState('');
   const [baseSize, setBaseSize] = useState('Medium');
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -73,10 +74,10 @@ export function CreateTechPack() {
   };
 
   const handleGenerateTechPack = async () => {
-    if (!images || !chestWidth || !bodyLength) return;
+    if (!images || !chestWidth || !bodyLength || !shoulderWidth) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(images.frontUrl, images.backUrl, chestWidth, bodyLength, baseSize, garmentType);
+      const data = await generateTechPack(images.frontUrl, images.backUrl, chestWidth, bodyLength, shoulderWidth, baseSize, garmentType);
       
       let finalImageUrl = images.frontUrl;
       if (images.file && user) {
@@ -97,7 +98,7 @@ export function CreateTechPack() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
         <h1 className="text-4xl font-serif font-bold tracking-tight text-gray-900">Create Tech Pack</h1>
         <p className="text-gray-500 mt-1 text-lg">Upload a garment mockup to begin AI analysis.</p>
@@ -201,7 +202,7 @@ export function CreateTechPack() {
                      </p>
                    </div>
                    
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
                      <div className="space-y-2">
                        <label className="text-sm font-medium text-gray-700 block">Base Size</label>
                        <div className="relative">
@@ -219,25 +220,36 @@ export function CreateTechPack() {
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Chest Width (X-Axis)`}
+                         label={`Chest Width`}
                          placeholder="e.g. 21.5&quot;"
                          value={chestWidth}
                          onChange={e => setChestWidth(e.target.value)}
                          autoFocus
                        />
                        <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight across from 1" below the armhole seam to the opposite side.
+                         Measure straight across from 1" below the armhole seam to opposite side.
                        </p>
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Front Body Length (Y-Axis)`}
+                         label={`Front Body Length`}
                          placeholder="e.g. 28&quot;"
                          value={bodyLength}
                          onChange={e => setBodyLength(e.target.value)}
                        />
                        <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight down from the High Point Shoulder (HPS) seam to the bottom edge.
+                         Measure straight down from High Point Shoulder (HPS) seam to bottom edge.
+                       </p>
+                     </div>
+                     <div className="space-y-2">
+                       <Input 
+                         label={`Shoulder Width`}
+                         placeholder="e.g. 18.5&quot;"
+                         value={shoulderWidth}
+                         onChange={e => setShoulderWidth(e.target.value)}
+                       />
+                       <p className="text-[11px] text-gray-500 leading-snug">
+                         Measure straight across the BACK from shoulder seam to shoulder seam.
                        </p>
                      </div>
                    </div>
@@ -245,7 +257,7 @@ export function CreateTechPack() {
                    <div className="pt-4 flex justify-end">
                      <Button 
                        onClick={handleGenerateTechPack} 
-                       disabled={!chestWidth.trim() || !bodyLength.trim()} 
+                       disabled={!chestWidth.trim() || !bodyLength.trim() || !shoulderWidth.trim()} 
                        size="lg" 
                        className="gap-2 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
                      >

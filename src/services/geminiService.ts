@@ -58,16 +58,17 @@ Respond ONLY with the crisp name of the garment style, nothing else.`;
   }
 }
 
-export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, chestWidth: string, bodyLength: string, baseSize: string, garmentType: string) {
+export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, chestWidth: string, bodyLength: string, shoulderWidth: string, baseSize: string, garmentType: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const frontPart = await urlToGenerativePart(frontImageUrl);
     
     const prompt = `You are an expert technical apparel designer.
 Analyze this garment mockup. The AI previously classified it as a "${garmentType}".
-To permanently eliminate camera lens distortion (where the top of the garment is closer to the lens than the bottom in flat-lays), the user has provided BOTH the Horizontal (X) and Vertical (Y) anchor measurements for a size ${baseSize}:
+To permanently eliminate camera lens distortion (where the top of the garment is closer to the lens than the bottom in flat-lays), the user has provided three precise geometric anchors for a size ${baseSize}:
 - **Chest Width**: ${chestWidth}
 - **Front Body Length (HPS to Hem)**: ${bodyLength}
+- **Shoulder Width (Seam to Seam)**: ${shoulderWidth}
 
 Based on this image and these two exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
 The JSON should have the following structure:
@@ -84,8 +85,8 @@ The JSON should have the following structure:
 }
 
 Carefully identify the specific style, silhouette, and features of the garment in the image.
-Using the TWO provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like shoulders, neck, and sleeves) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
-Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the two anchors exactly as provided), 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
+Using the THREE provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like neck drops, sleeve lengths, and armholes) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
+Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the three anchors exactly as provided), 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
 
     const parts: any[] = [prompt, frontPart];
     if (backImageUrl && backImageUrl.trim() !== '') {
