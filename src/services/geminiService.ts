@@ -59,6 +59,8 @@ The JSON should have the following structure:
   ]
 }
 
+Carefully identify the specific style, silhouette, and features of the garment in the image (e.g., is it a drop-hem or curved-hem t-shirt? Are the sleeves short or long? Is the fit boxy, oversized, or tailored?).
+Adjust your proportional math to perfectly match the exact silhouette and features observed in the photo. 
 Ensure the measurements are mathematically realistic proportional to the anchor measurement provided. Include at least 6 key measurements, 4 callouts, and 1-2 fabrication details.`;
 
     const result = await model.generateContent([prompt, imagePart]);
@@ -67,27 +69,7 @@ Ensure the measurements are mathematically realistic proportional to the anchor 
     const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(jsonStr);
   } catch (error) {
-    console.warn("Gemini API Error (likely using stub key). Returning mock data.");
-    await new Promise(r => setTimeout(r, 2000));
-    return {
-      measurements: [
-        { point: keyMeasurementName, description: "Anchor measurement provided by user", value: keyMeasurementValue, tolerance: "+/- 0.5\"" },
-        { point: "Body Length", description: "HPS to bottom hem", value: "28\"", tolerance: "+/- 0.5\"" },
-        { point: "Sleeve Length", description: "Center back to sleeve opening", value: "35\"", tolerance: "+/- 0.5\"" },
-        { point: "Shoulder Width", description: "Seam to seam across back", value: "19\"", tolerance: "+/- 0.25\"" },
-        { point: "Bottom Hem Opening", description: "Straight across bottom edge", value: "21.5\"", tolerance: "+/- 0.5\"" },
-        { point: "Neck Opening", description: "Seam to seam at collarbone", value: "8\"", tolerance: "+/- 0.25\"" }
-      ],
-      callouts: [
-        { id: 1, description: "Double needle coverstitch at hems and sleeve openings" },
-        { id: 2, description: "Woven brand label placed precisely 2\" below back neckline on the inside" },
-        { id: 3, description: "1/4\" twill tape neck seam cover for durability" },
-        { id: 4, description: "Bar tacks at corner stress points of the kangaroo pocket" }
-      ],
-      fabrication: [
-        { placement: "Main Body", material: "100% Combed Cotton French Terry", weight: "400gsm", notes: "Pre-shrunk, enzyme washed" },
-        { placement: "Ribbing at Cuffs/Hem", material: "98% Cotton / 2% Elastane 2x1 Rib", weight: "380gsm", notes: "Color-matched to main body" }
-      ]
-    };
+    console.error("Gemini API Error details:", error);
+    throw new Error("AI Generation Failed. Your Gemini API key might be missing, invalid, or encountering an issue.");
   }
 }

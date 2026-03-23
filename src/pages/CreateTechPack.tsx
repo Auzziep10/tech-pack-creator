@@ -88,8 +88,9 @@ export function CreateTechPack() {
 
       setStep('done');
       navigate('/pack/draft', { state: { image: finalImageUrl, techPack: data } });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || "Failed to generate tech pack. Check console for details.");
       setStep('requestMeasurement'); // Revert on error
     }
   };
