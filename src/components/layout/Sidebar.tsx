@@ -14,7 +14,7 @@ export function Sidebar() {
     <aside className="w-64 h-screen shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 fixed left-0 top-0 z-30">
       <div className="flex items-center gap-3 px-2 mb-8 mt-2">
         <h1 className="font-serif font-bold text-2xl tracking-tight text-gray-900">
-          WOVN<span className="text-gray-400 font-sans text-xs ml-2 tracking-normal uppercase font-semibold">Print Shop OS</span>
+          TechPack<span className="text-gray-400 font-sans text-xs ml-2 tracking-normal uppercase font-semibold">Generator</span>
         </h1>
       </div>
 

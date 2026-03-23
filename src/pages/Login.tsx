@@ -41,7 +41,7 @@ export function Login() {
           <div className="w-16 h-16 rounded-2xl bg-black flex items-center justify-center shadow-md mb-4">
             <Layers className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-serif font-bold tracking-tight text-gray-900">WOVN Print Shop OS</h1>
+          <h1 className="text-3xl font-serif font-bold tracking-tight text-gray-900">TechPack Generator</h1>
           <p className="text-gray-500 mt-2 text-center">
             Log in to manage your garment technical specifications.
           </p>
