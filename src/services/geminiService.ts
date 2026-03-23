@@ -15,10 +15,25 @@ function base64ToGenerativePart(dataUrl: string) {
   };
 }
 
+async function urlToGenerativePart(urlOrBase64: string): Promise<any> {
+  if (urlOrBase64.startsWith('data:')) {
+    return base64ToGenerativePart(urlOrBase64);
+  }
+  
+  const response = await fetch(urlOrBase64);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(base64ToGenerativePart(reader.result as string));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function analyzeGarmentForMeasurement(imageDataUrl: string): Promise<string> {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const imagePart = base64ToGenerativePart(imageDataUrl);
+    const imagePart = await urlToGenerativePart(imageDataUrl);
     
     const prompt = `You are an expert technical apparel designer.
 Analyze this garment mockup. To create a full technical specification pack (Tech Pack) for manufacturing, you need one key "anchor" measurement to scale the rest.
@@ -39,7 +54,7 @@ Respond ONLY with the name of the measurement, nothing else.`;
 export async function generateTechPack(imageDataUrl: string, keyMeasurementName: string, keyMeasurementValue: string, baseSize: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const imagePart = base64ToGenerativePart(imageDataUrl);
+    const imagePart = await urlToGenerativePart(imageDataUrl);
     
     const prompt = `You are an expert technical apparel designer.
 Analyze this garment mockup. The user has provided the following anchor measurement for a size ${baseSize}:

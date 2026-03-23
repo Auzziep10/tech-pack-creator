@@ -37,7 +37,7 @@ export function CreateTechPack() {
         unsubscribe = onSnapshot(doc(db, 'scanSessions', newSessionId), (snapshot) => {
           const data = snapshot.data();
           if (data && data.status === 'completed' && data.imageUrl) {
-            handleImageSelected(null, data.base64Image || data.imageUrl);
+            handleImageSelected(null, data.imageUrl);
           }
         });
       } catch (err) {

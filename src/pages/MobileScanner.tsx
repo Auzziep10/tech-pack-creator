@@ -47,21 +47,12 @@ export function MobileScanner() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
-      const MAX_DIM = 1000;
-      let width = video.videoWidth;
-      let height = video.videoHeight;
-      if (width > height) {
-        if (width > MAX_DIM) { height = Math.round(height * (MAX_DIM / width)); width = MAX_DIM; }
-      } else {
-        if (height > MAX_DIM) { width = Math.round(width * (MAX_DIM / height)); height = MAX_DIM; }
-      }
-      
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 1.0); // 100% Quality
         setCapturedImage(dataUrl);
       }
     }
@@ -83,7 +74,7 @@ export function MobileScanner() {
        // Upload to firebase (using sessionId as dummy userId for folder isolation)
        const uploadedUrl = await uploadGarmentImage(file, sessionId);
        
-       await completeScanSession(sessionId, uploadedUrl, capturedImage);
+       await completeScanSession(sessionId, uploadedUrl);
        setSuccess(true);
     } catch (err) {
       console.error("Upload failed", err);
