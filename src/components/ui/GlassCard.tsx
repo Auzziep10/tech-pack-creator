@@ -7,14 +7,14 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function GlassCard({ children, className = '', variant = 'default', ...props }: GlassCardProps) {
   const variants = {
-    default: "bg-[#1A1A1A]/80 border-white/10",
-    subtle: "bg-white/[0.02] border-white/[0.05]",
-    glow: "bg-[#1A1A1A]/90 border-blue-500/20 shadow-[0_0_30px_rgba(37,99,235,0.05)]"
+    default: "bg-white border-gray-200 shadow-sm",
+    subtle: "bg-gray-50 border-gray-100",
+    glow: "bg-white border-blue-100 shadow-[0_0_20px_rgba(59,130,246,0.1)]"
   };
 
   return (
     <div 
-      className={`backdrop-blur-xl border rounded-2xl overflow-hidden ${variants[variant]} ${className}`}
+      className={`border rounded-2xl overflow-hidden ${variants[variant]} ${className}`}
       {...props}
     >
       {children}

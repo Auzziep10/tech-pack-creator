@@ -63,8 +63,8 @@ export function ImageUpload({ onImageSelected }: ImageUploadProps) {
           onDrop={handleDrop}
           className={`relative flex flex-col items-center justify-center w-full h-80 rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden ${
             isDragging 
-              ? 'border-blue-500 bg-blue-500/10' 
-              : 'border-white/10 bg-black/20 hover:border-white/30 hover:bg-black/40'
+              ? 'border-black bg-gray-50' 
+              : 'border-gray-200 bg-gray-50 hover:border-black hover:bg-gray-100'
           }`}
         >
           <input
@@ -74,19 +74,19 @@ export function ImageUpload({ onImageSelected }: ImageUploadProps) {
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
           <div className="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
-            <Upload className={`w-12 h-12 mb-4 transition-colors ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
-            <p className="mb-2 text-sm text-gray-300">
-              <span className="font-semibold text-blue-400">Click to upload</span> or drag and drop
+            <Upload className={`w-12 h-12 mb-4 transition-colors ${isDragging ? 'text-black' : 'text-gray-400'}`} />
+            <p className="mb-2 text-sm text-gray-600">
+              <span className="font-semibold text-black">Click to upload</span> or drag and drop
             </p>
             <p className="text-xs text-gray-500">PNG, JPG or WEBP (MAX. 5MB)</p>
           </div>
         </motion.div>
       ) : (
-        <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 group">
-          <img src={preview} alt="Upload preview" className="w-full h-auto max-h-[600px] object-contain bg-black/40" />
+        <div className="relative w-full rounded-2xl overflow-hidden border border-gray-200 bg-gray-50 group p-4 flex justify-center">
+          <img src={preview} alt="Upload preview" className="w-full h-auto max-h-[600px] object-contain mix-blend-multiply" />
           <button
             onClick={clearImage}
-            className="absolute top-4 right-4 p-2 bg-black/60 hover:bg-red-500/80 backdrop-blur text-white rounded-full transition-all opacity-0 group-hover:opacity-100 shadow-xl"
+            className="absolute top-4 right-4 p-2 bg-white border border-gray-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 text-gray-500 rounded-full transition-all opacity-0 group-hover:opacity-100 shadow-sm"
           >
             <X size={20} />
           </button>

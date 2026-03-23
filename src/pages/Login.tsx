@@ -35,19 +35,19 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#fafafa] flex items-center justify-center p-4">
       <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(37,99,235,0.4)] mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-black flex items-center justify-center shadow-md mb-4">
             <Layers className="text-white w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">TechPack OS</h1>
-          <p className="text-gray-400 mt-2 text-center">
+          <h1 className="text-3xl font-serif font-bold tracking-tight text-gray-900">WOVN Print Shop OS</h1>
+          <p className="text-gray-500 mt-2 text-center">
             Log in to manage your garment technical specifications.
           </p>
         </div>
 
-        <GlassCard className="p-8">
+        <GlassCard className="p-8 shadow-sm border-gray-200">
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
               label="Email Address"
@@ -80,7 +80,7 @@ export function Login() {
           <div className="mt-6 text-center">
             <button 
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
             >
               {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
             </button>

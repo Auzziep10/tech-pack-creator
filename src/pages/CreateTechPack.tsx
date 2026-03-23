@@ -65,8 +65,8 @@ export function CreateTechPack() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Create Tech Pack</h1>
-        <p className="text-gray-400 mt-1 text-lg">Upload a garment mockup to begin AI analysis.</p>
+        <h1 className="text-4xl font-serif font-bold tracking-tight text-gray-900">Create Tech Pack</h1>
+        <p className="text-gray-500 mt-1 text-lg">Upload a garment mockup to begin AI analysis.</p>
       </div>
 
       <div className="flex items-center gap-4 mb-8">
@@ -81,9 +81,9 @@ export function CreateTechPack() {
           return (
             <div key={s.id} className="flex items-center gap-4">
               <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${
-                isActive ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' :
-                isPast ? 'bg-green-500/10 border-green-500/30 text-green-400' :
-                'border-white/10 text-gray-500'
+                isActive ? 'bg-black border-black text-white' :
+                isPast ? 'bg-gray-100 border-gray-300 text-gray-900' :
+                'border-gray-200 text-gray-400 bg-white'
               }`}>
                 {isPast ? <CheckCircle2 size={16} /> : <span className="font-bold text-xs">{i + 1}</span>}
                 <span className="text-sm font-medium">{s.label}</span>
@@ -94,20 +94,20 @@ export function CreateTechPack() {
         })}
       </div>
 
-      <GlassCard className="p-8">
+      <GlassCard className="p-8 shadow-sm border border-gray-200 bg-white">
         {(step === 'upload' || step === 'analyzing') && (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-white mb-6">Upload Mockup</h2>
+            <h2 className="text-2xl font-serif font-semibold text-gray-900 mb-6">Upload Mockup</h2>
             <ImageUpload onImageSelected={handleImageSelected} />
             
             {step === 'analyzing' && (
               <div className="flex flex-col items-center justify-center py-12 animate-in fade-in">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin" />
-                  <Sparkles className="absolute inset-0 m-auto text-blue-400 animate-pulse" size={20} />
+                  <div className="w-16 h-16 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+                  <Sparkles className="absolute inset-0 m-auto text-black animate-pulse" size={20} />
                 </div>
-                <h3 className="text-xl font-medium mt-6 text-white text-center">AI Vision Analysis</h3>
-                <p className="text-gray-400 mt-2 text-center max-w-sm">
+                <h3 className="text-xl font-serif mt-6 text-gray-900 text-center">AI Vision Analysis</h3>
+                <p className="text-gray-500 mt-2 text-center max-w-sm">
                   Scanning garment details, construction features, and silhouette...
                 </p>
               </div>
@@ -119,23 +119,22 @@ export function CreateTechPack() {
           <div className="space-y-8 animate-in slide-in-from-right-8 duration-500">
              <div className="flex gap-8">
                 <div className="w-1/3 shrink-0">
-                  <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40 relative">
-                    <img src={image?.url} alt="Mockup" className="w-full object-contain aspect-square" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                    <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                       <CheckCircle2 size={16} className="text-green-400" />
-                       <span className="text-xs font-semibold tracking-wide text-white">ANALYZED</span>
+                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50 relative p-4">
+                    <img src={image?.url} alt="Mockup" className="w-full h-full object-contain aspect-square mix-blend-multiply" />
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                       <CheckCircle2 size={16} className="text-green-600" />
+                       <span className="text-xs font-semibold tracking-wide text-gray-900">ANALYZED</span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="w-2/3 flex flex-col justify-center gap-6">
-                   <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-5 relative overflow-hidden">
-                     <div className="absolute -right-4 -top-4 text-blue-500/10"><Sparkles size={100} /></div>
-                     <h3 className="text-xl font-semibold text-white mb-2 relative z-10">Anchor Measurement Found</h3>
-                     <p className="text-gray-400 text-sm leading-relaxed relative z-10">
+                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative overflow-hidden">
+                     <div className="absolute -right-4 -top-4 text-gray-200"><Sparkles size={100} /></div>
+                     <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">Anchor Measurement Found</h3>
+                     <p className="text-gray-600 text-sm leading-relaxed relative z-10">
                        To generate accurate specs for the rest of this garment, the AI needs a starting point. Please provide the 
-                       <strong className="text-blue-400 mx-1">{anchorName}</strong> for your base size (e.g. Medium).
+                       <strong className="text-black font-semibold mx-1">{anchorName}</strong> for your base size (e.g. Medium).
                      </p>
                    </div>
                    
@@ -168,11 +167,11 @@ export function CreateTechPack() {
         {step === 'generating' && (
           <div className="flex flex-col items-center justify-center py-20 animate-in fade-in">
              <div className="relative">
-                <div className="w-20 h-20 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-                <Sparkles className="absolute inset-0 m-auto text-purple-400 animate-pulse" size={28} />
+                <div className="w-20 h-20 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+                <Sparkles className="absolute inset-0 m-auto text-black animate-pulse" size={28} />
              </div>
-             <h3 className="text-2xl font-medium mt-6 text-white text-center">Drafting the Tech Pack</h3>
-             <p className="text-gray-400 mt-2 text-center max-w-sm">
+             <h3 className="text-3xl font-serif mt-6 text-gray-900 text-center">Drafting the Tech Pack</h3>
+             <p className="text-gray-500 mt-2 text-center max-w-sm">
                Calculating proportional measurements, calling out construction details, and identifying fabric...
              </p>
           </div>

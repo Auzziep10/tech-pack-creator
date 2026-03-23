@@ -13,11 +13,11 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const baseStyles = "relative inline-flex items-center justify-center font-medium transition-all duration-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#111] overflow-hidden group";
     
     const variants = {
-      primary: "bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_25px_rgba(37,99,235,0.5)] focus:ring-blue-500 border border-blue-500/50",
-      secondary: "bg-zinc-800 text-white hover:bg-zinc-700 border border-zinc-700 focus:ring-zinc-500",
-      ghost: "bg-transparent text-gray-300 hover:text-white hover:bg-white/10 focus:ring-white/20",
-      glass: "bg-white/5 backdrop-blur-md text-white border border-white/10 hover:bg-white/10 hover:border-white/20 shadow-xl focus:ring-white/30",
-      danger: "bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-red-300 border border-red-500/20 focus:ring-red-500/40"
+      primary: "bg-black text-white hover:bg-gray-800 shadow-md",
+      secondary: "bg-white text-gray-900 border border-gray-200 hover:bg-gray-50 hover:border-gray-300 shadow-sm",
+      ghost: "bg-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100",
+      glass: "bg-white/80 backdrop-blur-md text-gray-900 border border-gray-200 hover:bg-white/90 shadow-sm",
+      danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
     };
 
     const sizes = {

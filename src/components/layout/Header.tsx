@@ -1,18 +1,26 @@
 import React from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 
 export function Header() {
   return (
-    <header className="h-16 border-b border-white/5 bg-black/20 backdrop-blur-xl sticky top-0 z-20 flex items-center justify-between px-8">
-      <div className="flex items-center gap-4">
-        <h2 className="text-gray-300 font-medium">Workspace</h2>
+    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 flex items-center justify-between px-8">
+      <div className="flex items-center gap-4 w-96">
+        <div className="relative w-full">
+           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+           <input 
+              placeholder="Search active orders..." 
+              className="w-full bg-gray-50 border border-gray-200 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" 
+           />
+        </div>
       </div>
       
       <div className="flex items-center gap-5">
-        <button className="text-gray-400 hover:text-white transition-colors">
+        <button className="text-gray-400 hover:text-gray-900 transition-colors">
           <Bell size={20} />
         </button>
-        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 opacity-80 border border-white/20" />
+        <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">
+          AU
+        </div>
       </div>
     </header>
   );

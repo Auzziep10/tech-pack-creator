@@ -25,10 +25,10 @@ export function Dashboard() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Tech Packs</h1>
-          <p className="text-gray-400 mt-1">Manage your Garment Technical Specifications.</p>
+          <h1 className="text-4xl font-serif text-gray-900">Tech Pack Pipeline</h1>
+          <p className="text-gray-500 mt-2">Manage Garment Technical Specifications.</p>
         </div>
-        <Button onClick={() => navigate('/create')} className="gap-2 shrink-0">
+        <Button onClick={() => navigate('/create')} className="gap-2 shrink-0 rounded-full px-6">
           <PlusCircle size={18} />
           New Tech Pack
         </Button>
@@ -37,13 +37,13 @@ export function Dashboard() {
       {loading ? (
         <div className="py-20 flex justify-center text-gray-400">Loading...</div>
       ) : techPacks.length === 0 ? (
-        <div className="py-20 flex flex-col items-center justify-center text-gray-400 text-center">
-          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/10">
-            <PlusCircle size={24} className="text-gray-500" />
+        <div className="py-20 flex flex-col items-center justify-center text-gray-500 text-center">
+          <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4 border border-gray-200">
+            <PlusCircle size={24} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">No tech packs yet</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No tech packs yet</h3>
           <p className="max-w-sm mb-6">Create your first garment tech pack using AI analysis.</p>
-          <Button onClick={() => navigate('/create')} variant="secondary">Get Started</Button>
+          <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">Get Started</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
@@ -51,21 +51,29 @@ export function Dashboard() {
             <GlassCard 
               key={pack.id} 
               onClick={() => navigate(`/pack/${pack.id}`, { state: pack })}
-              className="p-0 group cursor-pointer hover:border-blue-500/50 transition-colors flex flex-col"
+              className="p-0 group cursor-pointer hover:border-gray-400 transition-all flex flex-col hover:shadow-md"
             >
-              <div className="aspect-[4/3] bg-black/40 relative overflow-hidden flex flex-col items-center justify-center border-b border-white/5 p-4">
+              <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
                 {pack.imageUrl ? (
-                  <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-contain drop-shadow-lg" />
+                  <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-contain" />
                 ) : (
                   <>
-                    <ImageIcon size={40} className="text-white/10 mb-2" />
-                    <span className="text-gray-600 text-sm font-medium">No Image</span>
+                    <ImageIcon size={40} className="text-gray-200 mb-2" />
+                    <span className="text-gray-400 text-sm font-medium">No Image</span>
                   </>
                 )}
               </div>
               <div className="p-5 flex-1 flex flex-col">
-                <h3 className="font-semibold text-white group-hover:text-blue-400 transition-colors text-lg truncate">{pack.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-bold text-gray-900 group-hover:text-black transition-colors text-lg truncate">{pack.name}</h3>
+                </div>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex-1 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                     <div className="bg-black w-full h-full" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-500">100%</span>
+                </div>
+                <p className="text-xs text-gray-400 mt-3 font-medium uppercase tracking-wide">
                   {pack.updatedAt?.toDate ? pack.updatedAt.toDate().toLocaleDateString() : 'Just now'}
                 </p>
               </div>
