@@ -7,7 +7,10 @@ import { Input } from '../components/ui/Input';
 import { Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { analyzeGarmentForMeasurement, generateTechPack } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
-import { uploadGarmentImage } from '../services/dbService';
+import { uploadGarmentImage, createScanSession } from '../services/dbService';
+import { QRCodeSVG } from 'qrcode.react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 type FlowStep = 'upload' | 'analyzing' | 'requestMeasurement' | 'generating' | 'done';
 
@@ -15,13 +18,41 @@ export function CreateTechPack() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [step, setStep] = useState<FlowStep>('upload');
-  const [image, setImage] = useState<{file: File, url: string} | null>(null);
+  const [image, setImage] = useState<{file: File | null, url: string} | null>(null);
   
   const [anchorName, setAnchorName] = useState('');
   const [anchorValue, setAnchorValue] = useState('');
   const [baseSize, setBaseSize] = useState('Medium');
-  
-  const handleImageSelected = (file: File, url: string) => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!user) return;
+    let unsubscribe: () => void;
+    
+    const initSession = async () => {
+      try {
+        const newSessionId = await createScanSession(user.uid);
+        setSessionId(newSessionId);
+        
+        unsubscribe = onSnapshot(doc(db, 'scanSessions', newSessionId), (snapshot) => {
+          const data = snapshot.data();
+          if (data && data.status === 'completed' && data.imageUrl) {
+            handleImageSelected(null, data.imageUrl);
+          }
+        });
+      } catch (err) {
+        console.error("Failed to create scan session", err);
+      }
+    };
+    
+    initSession();
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user]);
+
+  const handleImageSelected = (file: File | null, url: string) => {
     setImage({ file, url });
     // Auto-advance to next step
     startAnalysis(url);
@@ -47,7 +78,7 @@ export function CreateTechPack() {
       const data = await generateTechPack(image.url, anchorName, anchorValue, baseSize);
       
       let finalImageUrl = image.url;
-      if (user) {
+      if (image.file && user) {
          try {
            finalImageUrl = await uploadGarmentImage(image.file, user.uid);
          } catch (uploadErr) {
@@ -99,7 +130,28 @@ export function CreateTechPack() {
         {(step === 'upload' || step === 'analyzing') && (
           <div className="space-y-6">
             <h2 className="text-2xl font-serif font-semibold text-gray-900 mb-6">Upload Mockup</h2>
-            <ImageUpload onImageSelected={handleImageSelected} />
+            
+            <div className="flex flex-col md:flex-row gap-8 items-stretch">
+              <div className="flex-1">
+                 <ImageUpload onImageSelected={(file, url) => handleImageSelected(file, url)} />
+              </div>
+              
+              <div className="w-px bg-gray-200 hidden md:block" />
+              
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                 <div className="bg-white p-4 border border-gray-200 rounded-2xl shadow-sm mb-4">
+                   {sessionId ? (
+                     <QRCodeSVG value={`${window.location.origin}/scan/${sessionId}`} size={160} />
+                   ) : (
+                     <div className="w-40 h-40 bg-gray-100 animate-pulse rounded-xl" />
+                   )}
+                 </div>
+                 <h3 className="font-serif font-bold text-gray-900 text-xl">Scan to Capture</h3>
+                 <p className="text-gray-500 text-sm mt-2 max-w-[250px]">
+                   Use your phone's camera to seamlessly scan your garment laid out flat.
+                 </p>
+              </div>
+            </div>
             
             {step === 'analyzing' && (
               <div className="flex flex-col items-center justify-center py-12 animate-in fade-in">

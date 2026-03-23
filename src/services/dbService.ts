@@ -67,3 +67,24 @@ export const getTechPack = async (id: string) => {
   }
   return null;
 };
+
+// --- Mobile Scanning Features ---
+
+export const createScanSession = async (userId: string) => {
+  const docRef = await addDoc(collection(db, 'scanSessions'), {
+    userId,
+    status: 'pending',
+    imageUrl: null,
+    createdAt: serverTimestamp()
+  });
+  return docRef.id;
+};
+
+export const completeScanSession = async (sessionId: string, imageUrl: string) => {
+  const sessionRef = doc(db, 'scanSessions', sessionId);
+  await updateDoc(sessionRef, {
+    status: 'completed',
+    imageUrl,
+    updatedAt: serverTimestamp()
+  });
+};
