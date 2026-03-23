@@ -192,9 +192,9 @@ export function CreateTechPack() {
                      </p>
                    </div>
                    
-                   <div className="flex gap-4">
-                     <div className="w-1/4 space-y-1.5 flex flex-col justify-end">
-                       <label className="text-sm font-medium text-gray-700">Base Size</label>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+                     <div className="space-y-2">
+                       <label className="text-sm font-medium text-gray-700 block">Base Size</label>
                        <div className="relative">
                          <select
                            value={baseSize}
@@ -208,7 +208,7 @@ export function CreateTechPack() {
                          <svg className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                        </div>
                      </div>
-                     <div className="flex-1 space-y-1">
+                     <div className="space-y-2">
                        <Input 
                          label={`Chest Width (X-Axis)`}
                          placeholder="e.g. 21.5&quot;"
@@ -216,18 +216,18 @@ export function CreateTechPack() {
                          onChange={e => setChestWidth(e.target.value)}
                          autoFocus
                        />
-                       <p className="text-[11px] text-gray-500 leading-tight">
+                       <p className="text-[11px] text-gray-500 leading-snug">
                          Measure straight across from 1" below the armhole seam to the opposite side.
                        </p>
                      </div>
-                     <div className="flex-1 space-y-1">
+                     <div className="space-y-2">
                        <Input 
                          label={`Front Body Length (Y-Axis)`}
                          placeholder="e.g. 28&quot;"
                          value={bodyLength}
                          onChange={e => setBodyLength(e.target.value)}
                        />
-                       <p className="text-[11px] text-gray-500 leading-tight">
+                       <p className="text-[11px] text-gray-500 leading-snug">
                          Measure straight down from the High Point Shoulder (HPS) seam to the bottom edge.
                        </p>
                      </div>
