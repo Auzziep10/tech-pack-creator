@@ -36,9 +36,9 @@ export async function analyzeGarmentForMeasurement(imageDataUrl: string): Promis
     const imagePart = await urlToGenerativePart(imageDataUrl);
     
     const prompt = `You are an expert technical apparel designer.
-Analyze this garment mockup. To create a full technical specification pack (Tech Pack) for manufacturing, you need one key "anchor" measurement to scale the rest.
-What is the single most important measurement you need from the user to determine the rest? (e.g., "Chest Width", "Body Length", "Inseam").
-Respond ONLY with the name of the measurement, nothing else.`;
+Analyze this garment mockup. 
+What is the specific type and style of this garment? (e.g., "Drop-Hem Short Sleeve T-Shirt", "Oversized Hoodie", "Crewneck Sweater").
+Respond ONLY with the crisp name of the garment style, nothing else.`;
 
     const result = await model.generateContent([prompt, imagePart]);
     const response = result.response.text().trim();
@@ -47,20 +47,22 @@ Respond ONLY with the name of the measurement, nothing else.`;
     console.warn("Gemini API Error (likely using stub key). Falling back to default.");
     // Simulate network delay
     await new Promise(r => setTimeout(r, 1500));
-    return "Chest Width";
+    return "T-Shirt / Basic Garment";
   }
 }
 
-export async function generateTechPack(imageDataUrl: string, keyMeasurementName: string, keyMeasurementValue: string, baseSize: string) {
+export async function generateTechPack(imageDataUrl: string, chestWidth: string, bodyLength: string, baseSize: string, garmentType: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const imagePart = await urlToGenerativePart(imageDataUrl);
     
     const prompt = `You are an expert technical apparel designer.
-Analyze this garment mockup. The user has provided the following anchor measurement for a size ${baseSize}:
-${keyMeasurementName}: ${keyMeasurementValue}
+Analyze this garment mockup. The AI previously classified it as a "${garmentType}".
+To permanently eliminate camera lens distortion (where the top of the garment is closer to the lens than the bottom in flat-lays), the user has provided BOTH the Horizontal (X) and Vertical (Y) anchor measurements for a size ${baseSize}:
+- **Chest Width**: ${chestWidth}
+- **Front Body Length (HPS to Hem)**: ${bodyLength}
 
-Based on this image and the anchor measurement, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
+Based on this image and these two exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
 The JSON should have the following structure:
 {
   "measurements": [
@@ -74,9 +76,9 @@ The JSON should have the following structure:
   ]
 }
 
-Carefully identify the specific style, silhouette, and features of the garment in the image (e.g., is it a drop-hem or curved-hem t-shirt? Are the sleeves short or long? Is the fit boxy, oversized, or tailored?).
-Adjust your proportional math to perfectly match the exact silhouette and features observed in the photo. 
-Ensure the measurements are mathematically realistic proportional to the anchor measurement provided. Include at least 6 key measurements, 4 callouts, and 1-2 fabrication details.`;
+Carefully identify the specific style, silhouette, and features of the garment in the image.
+Using the TWO provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like shoulders, neck, and sleeves) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
+Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the two anchors exactly as provided), 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
 
     const result = await model.generateContent([prompt, imagePart]);
     const text = result.response.text().trim();

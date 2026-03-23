@@ -20,8 +20,9 @@ export function CreateTechPack() {
   const [step, setStep] = useState<FlowStep>('upload');
   const [image, setImage] = useState<{file: File | null, url: string} | null>(null);
   
-  const [anchorName, setAnchorName] = useState('');
-  const [anchorValue, setAnchorValue] = useState('');
+  const [garmentType, setGarmentType] = useState('Garment');
+  const [chestWidth, setChestWidth] = useState('');
+  const [bodyLength, setBodyLength] = useState('');
   const [baseSize, setBaseSize] = useState('Medium');
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -61,21 +62,21 @@ export function CreateTechPack() {
   const startAnalysis = async (imageUrl: string) => {
     setStep('analyzing');
     try {
-      const measurementNeeded = await analyzeGarmentForMeasurement(imageUrl);
-      setAnchorName(measurementNeeded);
+      const type = await analyzeGarmentForMeasurement(imageUrl);
+      setGarmentType(type);
       setStep('requestMeasurement');
     } catch (e) {
       console.error(e);
-      setAnchorName('Chest Width');
+      setGarmentType('T-Shirt / Basic Garment');
       setStep('requestMeasurement');
     }
   };
 
   const handleGenerateTechPack = async () => {
-    if (!image || !anchorValue) return;
+    if (!image || !chestWidth || !bodyLength) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(image.url, anchorName, anchorValue, baseSize);
+      const data = await generateTechPack(image.url, chestWidth, bodyLength, baseSize, garmentType);
       
       let finalImageUrl = image.url;
       if (image.file && user) {
@@ -185,15 +186,14 @@ export function CreateTechPack() {
                 <div className="w-2/3 flex flex-col justify-center gap-6">
                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative overflow-hidden">
                      <div className="absolute -right-4 -top-4 text-gray-200"><Sparkles size={100} /></div>
-                     <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">Anchor Measurement Found</h3>
+                     <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">AI Detected: {garmentType}</h3>
                      <p className="text-gray-600 text-sm leading-relaxed relative z-10">
-                       To generate accurate specs for the rest of this garment, the AI needs a starting point. Please provide the 
-                       <strong className="text-black font-semibold mx-1">{anchorName}</strong> for your base size.
+                       To eliminate camera lens distortion and assure millimeter accuracy, please provide the horizontal and vertical anchor measurements for your base size.
                      </p>
                    </div>
                    
                    <div className="flex gap-4">
-                     <div className="w-1/3 space-y-1.5 flex flex-col justify-end">
+                     <div className="w-1/4 space-y-1.5 flex flex-col justify-end">
                        <label className="text-sm font-medium text-gray-700">Base Size</label>
                        <div className="relative">
                          <select
@@ -210,11 +210,19 @@ export function CreateTechPack() {
                      </div>
                      <div className="flex-1">
                        <Input 
-                         label={`${anchorName} (e.g. 21.5")`}
-                         placeholder="Enter measurement..."
-                         value={anchorValue}
-                         onChange={e => setAnchorValue(e.target.value)}
+                         label={`Chest Width (X-Axis)`}
+                         placeholder="e.g. 21.5&quot;"
+                         value={chestWidth}
+                         onChange={e => setChestWidth(e.target.value)}
                          autoFocus
+                       />
+                     </div>
+                     <div className="flex-1">
+                       <Input 
+                         label={`Front Body Length (Y-Axis)`}
+                         placeholder="e.g. 28&quot;"
+                         value={bodyLength}
+                         onChange={e => setBodyLength(e.target.value)}
                        />
                      </div>
                    </div>
@@ -222,7 +230,7 @@ export function CreateTechPack() {
                    <div className="pt-4 flex justify-end">
                      <Button 
                        onClick={handleGenerateTechPack} 
-                       disabled={!anchorValue.trim()} 
+                       disabled={!chestWidth.trim() || !bodyLength.trim()} 
                        size="lg" 
                        className="gap-2 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
                      >
