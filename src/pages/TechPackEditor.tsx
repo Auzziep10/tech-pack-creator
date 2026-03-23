@@ -7,6 +7,25 @@ import jsPDF from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack } from '../services/dbService';
 
+const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = 'auto';
+      ref.current.style.height = ref.current.scrollHeight + 'px';
+    }
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      className={`resize-none overflow-hidden block ${className}`}
+      rows={1}
+    />
+  );
+};
+
 export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -169,7 +188,7 @@ export function TechPackEditor() {
                 <ol className="space-y-4 pl-5 list-decimal marker:text-black marker:font-bold text-gray-700">
                   {data.callouts.map((callout: any, i: number) => (
                     <li key={i} className="pl-2">
-                      <input 
+                      <AutoTextarea 
                         className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                         value={callout.description}
                         onChange={(e) => updateCallout(i, e.target.value)}
@@ -200,17 +219,17 @@ export function TechPackEditor() {
                     <tbody>
                       {data.measurements.map((m: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3">
-                             <input className="w-full bg-transparent outline-none font-medium text-gray-900" value={m.point} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
+                          <td className="px-4 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={m.point} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3">
-                             <input className="w-full bg-transparent outline-none text-gray-500 text-xs" value={m.description} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
+                          <td className="px-4 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={m.description} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3">
-                             <input className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold" value={m.value} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                          <td className="px-4 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold" value={m.value} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
                           </td>
-                          <td className="px-3 py-3">
-                             <input className="w-full bg-transparent outline-none text-gray-400 font-mono text-[10px]" value={m.tolerance} onChange={e => updateMeasurement(i, 'tolerance', e.target.value)} />
+                          <td className="px-3 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 font-mono text-[10px]" value={m.tolerance} onChange={e => updateMeasurement(i, 'tolerance', e.target.value)} />
                           </td>
                         </tr>
                       ))}
@@ -236,16 +255,16 @@ export function TechPackEditor() {
                       {data.fabrication.map((f: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 align-top">
-                             <textarea rows={2} className="w-full bg-transparent outline-none font-medium text-gray-900 resize-none" value={f.placement} onChange={e => updateFabrication(i, 'placement', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={f.placement} onChange={e => updateFabrication(i, 'placement', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <textarea rows={2} className="w-full bg-transparent outline-none text-gray-600 resize-none text-xs" value={f.material} onChange={e => updateFabrication(i, 'material', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 text-xs" value={f.material} onChange={e => updateFabrication(i, 'material', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <input className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.weight} onChange={e => updateFabrication(i, 'weight', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.weight} onChange={e => updateFabrication(i, 'weight', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <textarea rows={2} className="w-full bg-transparent outline-none text-gray-400 text-[10px] resize-none" value={f.notes} onChange={e => updateFabrication(i, 'notes', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 text-[10px]" value={f.notes} onChange={e => updateFabrication(i, 'notes', e.target.value)} />
                           </td>
                         </tr>
                       ))}
