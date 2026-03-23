@@ -6,6 +6,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack } from '../services/dbService';
+import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 
 const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -178,10 +179,13 @@ export function TechPackEditor() {
           <div className="grid grid-cols-12 gap-10">
             {/* Left Column: Image & Callouts */}
             <div className="col-span-5 space-y-8">
-              <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-6 relative">
-                {imageUrl && <img src={imageUrl} alt="Mockup" className="max-w-full max-h-full object-contain mix-blend-multiply" />}
-                {!imageUrl && <div className="text-gray-400">No Image Provided</div>}
-              </div>
+              {imageUrl ? (
+                <GarmentAnnotator imageUrl={imageUrl} measurements={data.measurements} />
+              ) : (
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-6">
+                  <div className="text-gray-400">No Image Provided</div>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Construction Details</h3>
