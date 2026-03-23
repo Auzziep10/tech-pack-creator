@@ -188,12 +188,12 @@ export function MobileScanner() {
                {isUploading ? (
                  <>
                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                   Sending...
+                   {scanSide === 'front' ? 'Saving...' : 'Sending to Desktop...'}
                  </>
                ) : (
                  <>
                    <Camera size={20} />
-                   Send to Desktop
+                   {scanSide === 'front' ? 'Accept Front Image' : 'Finish & Upload'}
                  </>
                )}
              </button>
