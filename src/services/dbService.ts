@@ -80,11 +80,12 @@ export const createScanSession = async (userId: string) => {
   return docRef.id;
 };
 
-export const completeScanSession = async (sessionId: string, imageUrl: string) => {
+export const completeScanSession = async (sessionId: string, imageUrl: string, base64Image?: string) => {
   const sessionRef = doc(db, 'scanSessions', sessionId);
   await updateDoc(sessionRef, {
     status: 'completed',
     imageUrl,
+    base64Image: base64Image || null,
     updatedAt: serverTimestamp()
   });
 };
