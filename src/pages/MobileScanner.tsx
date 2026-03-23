@@ -16,14 +16,24 @@ export function MobileScanner() {
   const [success, setSuccess] = useState(false);
   const [hasCameraError, setHasCameraError] = useState(false);
 
-  const startCamera = useCallback(async () => {
+  // New Zoom and Camera Cycle State
+  const [zoom, setZoom] = useState(1);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
+
+  const startCamera = useCallback(async (deviceId?: string) => {
     try {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-      });
+      
+      const constraints: MediaStreamConstraints = {
+        video: deviceId 
+          ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+          : { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      };
+
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
       setHasCameraError(false);
       if (videoRef.current) {
@@ -36,12 +46,39 @@ export function MobileScanner() {
   }, [stream]);
 
   useEffect(() => {
-    startCamera();
+    const initDevices = async () => {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const vDevs = devs.filter(d => d.kind === 'videoinput');
+        setVideoDevices(vDevs);
+        
+        // Find back camera index if possible
+        const backIdx = vDevs.findIndex(d => d.label.toLowerCase().includes('back'));
+        if (backIdx >= 0) {
+          setCurrentDeviceIndex(backIdx);
+          startCamera(vDevs[backIdx].deviceId);
+        } else {
+          startCamera(vDevs[0]?.deviceId);
+        }
+      } catch (e) {
+        startCamera();
+      }
+    };
+    initDevices();
+    
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
+
+  const cycleCamera = () => {
+    if (videoDevices.length > 1) {
+      const nextIdx = (currentDeviceIndex + 1) % videoDevices.length;
+      setCurrentDeviceIndex(nextIdx);
+      startCamera(videoDevices[nextIdx].deviceId);
+    }
+  };
 
   useEffect(() => {
     if (videoRef.current && stream && !capturedImage) {
@@ -55,11 +92,19 @@ export function MobileScanner() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const fw = video.videoWidth;
+      const fh = video.videoHeight;
+      const cropW = fw / zoom;
+      const cropH = fh / zoom;
+      const cropX = (fw - cropW) / 2;
+      const cropY = (fh - cropH) / 2;
+
+      canvas.width = cropW;
+      canvas.height = cropH;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Draw the zoomed sub-rectangle onto the tight canvas
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
         const dataUrl = canvas.toDataURL('image/jpeg', 1.0); // 100% Quality
         setCapturedImage(dataUrl);
       }
@@ -122,6 +167,7 @@ export function MobileScanner() {
              autoPlay 
              playsInline 
              muted 
+             style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
              className="w-full h-full object-cover absolute inset-0"
              onLoadedMetadata={() => videoRef.current?.play()}
            />
@@ -151,17 +197,41 @@ export function MobileScanner() {
               </div>
               
               {/* Footer Mask */}
-              <div className="bg-black/50 backdrop-blur-sm h-40 flex items-center justify-center pb-8 border-t border-white/10">
-                 {hasCameraError ? (
-                   <button onClick={startCamera} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg">Retry Camera</button>
-                 ) : (
-                   <button 
-                     onClick={capturePhoto} 
-                     className="w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center p-1 pointer-events-auto active:scale-95 transition-transform"
-                   >
-                      <div className="w-full h-full bg-white rounded-full shadow-lg" />
-                   </button>
-                 )}
+              <div className="bg-black/50 backdrop-blur-sm h-40 flex flex-col items-center justify-center pb-8 border-t border-white/10 relative">
+                 
+                 {/* Zoom Slider */}
+                 <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto">
+                    <span className="text-white text-xs font-bold">1x</span>
+                    <input 
+                      type="range" 
+                      min="1" max="3" step="0.1" 
+                      value={zoom} 
+                      onChange={(e) => setZoom(parseFloat(e.target.value))} 
+                      className="w-32"
+                    />
+                    <span className="text-white text-xs font-bold">3x</span>
+                 </div>
+
+                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto">
+                   {/* Left side flip camera */}
+                   {videoDevices.length > 1 && (
+                     <button onClick={cycleCamera} className="absolute left-8 bg-white/20 p-3 rounded-full text-white active:scale-95 transition-transform">
+                        <RefreshCw size={24} />
+                     </button>
+                   )}
+                   
+                   {/* Center Capture */}
+                   {hasCameraError ? (
+                     <button onClick={() => startCamera()} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg">Retry Camera</button>
+                   ) : (
+                     <button 
+                       onClick={capturePhoto} 
+                       className="w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center p-1 active:scale-95 transition-transform"
+                     >
+                        <div className="w-full h-full bg-white rounded-full shadow-lg" />
+                     </button>
+                   )}
+                 </div>
               </div>
            </div>
          </>

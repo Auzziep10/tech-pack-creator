@@ -60,11 +60,11 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
           label: selectedMeasurement
         }
       ]);
+      setIsDrawingMode(false); // turn off drawing mode after 1 line
+      setSelectedMeasurement('');
     }
     setCurrentStart(null);
     setCurrentMouse(null);
-    setIsDrawingMode(false); // turn off drawing mode after 1 line
-    setSelectedMeasurement('');
   };
 
   const removeAnnotation = (id: string, e: React.MouseEvent) => {
