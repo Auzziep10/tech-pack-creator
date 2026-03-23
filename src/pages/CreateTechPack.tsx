@@ -19,6 +19,7 @@ export function CreateTechPack() {
   
   const [anchorName, setAnchorName] = useState('');
   const [anchorValue, setAnchorValue] = useState('');
+  const [baseSize, setBaseSize] = useState('Medium');
   
   const handleImageSelected = (file: File, url: string) => {
     setImage({ file, url });
@@ -43,7 +44,7 @@ export function CreateTechPack() {
     if (!image || !anchorValue) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(image.url, anchorName, anchorValue);
+      const data = await generateTechPack(image.url, anchorName, anchorValue, baseSize);
       
       let finalImageUrl = image.url;
       if (user) {
@@ -134,18 +135,35 @@ export function CreateTechPack() {
                      <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">Anchor Measurement Found</h3>
                      <p className="text-gray-600 text-sm leading-relaxed relative z-10">
                        To generate accurate specs for the rest of this garment, the AI needs a starting point. Please provide the 
-                       <strong className="text-black font-semibold mx-1">{anchorName}</strong> for your base size (e.g. Medium).
+                       <strong className="text-black font-semibold mx-1">{anchorName}</strong> for your base size.
                      </p>
                    </div>
                    
-                   <div className="space-y-4">
-                     <Input 
-                       label={`${anchorName} (with units, e.g. 21.5")`}
-                       placeholder="Enter measurement..."
-                       value={anchorValue}
-                       onChange={e => setAnchorValue(e.target.value)}
-                       autoFocus
-                     />
+                   <div className="flex gap-4">
+                     <div className="w-1/3 space-y-1.5 flex flex-col justify-end">
+                       <label className="text-sm font-medium text-gray-700">Base Size</label>
+                       <div className="relative">
+                         <select
+                           value={baseSize}
+                           onChange={(e) => setBaseSize(e.target.value)}
+                           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black transition-colors appearance-none cursor-pointer h-10"
+                         >
+                           {['XS', 'Small', 'Medium', 'Large', 'XL', '2XL', '3XL'].map(size => (
+                             <option key={size} value={size}>{size}</option>
+                           ))}
+                         </select>
+                         <svg className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                       </div>
+                     </div>
+                     <div className="flex-1">
+                       <Input 
+                         label={`${anchorName} (e.g. 21.5")`}
+                         placeholder="Enter measurement..."
+                         value={anchorValue}
+                         onChange={e => setAnchorValue(e.target.value)}
+                         autoFocus
+                       />
+                     </div>
                    </div>
                    
                    <div className="pt-4 flex justify-end">

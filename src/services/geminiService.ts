@@ -36,13 +36,13 @@ Respond ONLY with the name of the measurement, nothing else.`;
   }
 }
 
-export async function generateTechPack(imageDataUrl: string, keyMeasurementName: string, keyMeasurementValue: string) {
+export async function generateTechPack(imageDataUrl: string, keyMeasurementName: string, keyMeasurementValue: string, baseSize: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const imagePart = base64ToGenerativePart(imageDataUrl);
     
     const prompt = `You are an expert technical apparel designer.
-Analyze this garment mockup. The user has provided the following anchor measurement:
+Analyze this garment mockup. The user has provided the following anchor measurement for a size ${baseSize}:
 ${keyMeasurementName}: ${keyMeasurementValue}
 
 Based on this image and the anchor measurement, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
