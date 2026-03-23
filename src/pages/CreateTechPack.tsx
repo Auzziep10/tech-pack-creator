@@ -243,7 +243,7 @@ export function CreateTechPack() {
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Shoulder Width`}
+                         label={`Shoulder Hem`}
                          placeholder="e.g. 18.5&quot;"
                          value={shoulderWidth}
                          onChange={e => setShoulderWidth(e.target.value)}

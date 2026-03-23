@@ -68,7 +68,7 @@ Analyze this garment mockup. The AI previously classified it as a "${garmentType
 To permanently eliminate camera lens distortion (where the top of the garment is closer to the lens than the bottom in flat-lays), the user has provided three precise geometric anchors for a size ${baseSize}:
 - **Chest Width**: ${chestWidth}
 - **Front Body Length (HPS to Hem)**: ${bodyLength}
-- **Shoulder Width (Seam to Seam)**: ${shoulderWidth}
+- **Shoulder Hem (Seam to Seam)**: ${shoulderWidth}
 
 Based on this image and these two exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
 The JSON should have the following structure:
