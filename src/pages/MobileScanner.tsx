@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
-import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Camera, CheckCircle2, RefreshCw, Box } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
+import { WebXRLidar } from '../components/scanner/WebXRLidar';
 
 export function MobileScanner() {
   const { sessionId } = useParams();
@@ -21,6 +22,8 @@ export function MobileScanner() {
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
   const [showXrPrompt, setShowXrPrompt] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isArMode, setIsArMode] = useState(false);
+  const [arMeasurements, setArMeasurements] = useState<any[]>([]);
 
   const startCamera = useCallback(async (deviceId?: string) => {
     try {
@@ -138,11 +141,12 @@ export function MobileScanner() {
        const uploadedUrl = await uploadGarmentImage(file, `${sessionId}_${scanSide}`);
        
        if (scanSide === 'front') {
-         await updateScanSessionFront(sessionId, uploadedUrl);
+         await updateScanSessionFront(sessionId, uploadedUrl, arMeasurements);
          setScanSide('back');
          setCapturedImage(null);
+         setArMeasurements([]);
        } else {
-         await completeScanSession(sessionId, uploadedUrl);
+         await completeScanSession(sessionId, uploadedUrl, arMeasurements);
          setSuccess(true);
        }
     } catch (err) {
@@ -201,6 +205,18 @@ export function MobileScanner() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (isArMode) {
+    return (
+      <WebXRLidar 
+        onComplete={(measurements) => {
+          setArMeasurements(prev => [...prev, ...measurements]);
+          setIsArMode(false);
+        }} 
+        onCancel={() => setIsArMode(false)} 
+      />
     );
   }
 
@@ -278,6 +294,11 @@ export function MobileScanner() {
                         <div className="w-full h-full bg-white rounded-full shadow-lg" />
                      </button>
                    )}
+
+                   {/* Right side AR toggle (if supported device browser like Android Chrome or WebXR Viewer) */}
+                   <button onClick={() => setIsArMode(true)} className="absolute right-8 bg-indigo-500/80 p-3 rounded-full text-white active:scale-95 transition-transform flex items-center shadow-[0_0_15px_#6366f1]">
+                      <Box size={24} />
+                   </button>
                  </div>
               </div>
            </div>
@@ -287,6 +308,14 @@ export function MobileScanner() {
          <div className="flex-1 flex flex-col bg-black absolute inset-0 z-20">
            <div className="flex-1 relative p-4 flex items-center justify-center bg-gray-900">
              <img src={capturedImage} alt="Captured garment" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+             {arMeasurements.length > 0 && (
+               <div className="absolute top-8 left-8 bg-black/60 backdrop-blur-md p-4 rounded-xl shadow-lg border border-indigo-500/30">
+                 <h4 className="text-white font-bold mb-2 text-sm flex items-center gap-2"><Box size={14} className="text-indigo-400"/> LiDAR Data Captured:</h4>
+                 <div className="space-y-1">
+                   {arMeasurements.map((m, i) => <div key={i} className="text-indigo-200 text-xs font-mono">{m.distance} cm matched</div>)}
+                 </div>
+               </div>
+             )}
            </div>
            <div className="h-32 bg-white flex items-center justify-around px-6 rounded-t-3xl border-t border-gray-200">
              <button 
