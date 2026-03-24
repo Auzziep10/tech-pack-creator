@@ -31,7 +31,7 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
       base64Data = window.btoa(binary);
     }
 
-    const prompt = "Act as an expert technical CAD designer. Create a pristine, flat black-and-white vector technical line-art CAD blueprint SVG of the garment shown in the image. Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting and no other text.";
+    const prompt = "Act as an expert technical CAD designer. Create a pristine, flat black-and-white vector technical line-art CAD blueprint SVG of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include measurement guide lines, construction stitching, and typical tech pack aesthetic. Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting. IMPORTANT: Ensure the <svg> tag includes width=\"1000\" and height=\"1000\".";
 
     let result;
     try {
@@ -77,7 +77,31 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
     }
 
     const encodedSvg = encodeURIComponent(text);
-    return `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
+
+    // Convert the AI-generated SVG flawlessly to a raw PNG raster
+    return new Promise<string>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1000;
+        canvas.height = 1000;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/png", 1.0));
+        } else {
+          resolve(svgDataUrl);
+        }
+      };
+      img.onerror = () => {
+        console.warn("Failed to render SVG to canvas for PNG conversion, falling back to raw SVG.");
+        resolve(svgDataUrl);
+      };
+      img.src = svgDataUrl;
+    });
   } catch (err) {
     console.error("Vectorization Error:", err);
     throw err;
