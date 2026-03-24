@@ -86,7 +86,7 @@ The JSON should have the following structure:
 
 Carefully identify the specific style, silhouette, and features of the garment in the image.
 Using the THREE provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like neck drops, sleeve lengths, and armholes) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
-Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the three anchors exactly as provided), 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
+Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the three anchors exactly as provided). CRITICAL: If the garment visually has a collar, you MUST recognize it and include precise collar dimensions (e.g., Collar Point Length, Collar Stand Height, Neck Drop, Neck Width) in the measurements. Include 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
 
     const parts: any[] = [prompt, frontPart];
     if (backImageUrl && backImageUrl.trim() !== '') {
