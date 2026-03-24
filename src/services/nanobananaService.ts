@@ -3,8 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): Promise<string> {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-1.5-pro-latest for best vision/SVG capabilities
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+    // Use nano-banana-pro-preview for best vision/SVG capabilities
+    const model = genAI.getGenerativeModel({ model: "nano-banana-pro-preview" });
 
     let base64Data = imageUrl;
     let mimeType = "image/jpeg";
