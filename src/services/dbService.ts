@@ -43,6 +43,13 @@ export const uploadGarmentImage = async (file: File, userId: string): Promise<st
   return await getDownloadURL(storageRef);
 };
 
+export const uploadBase64Image = async (base64String: string, userId: string): Promise<string> => {
+  const res = await fetch(base64String);
+  const blob = await res.blob();
+  const file = new File([blob], `techpack_asset_${Date.now()}.png`, { type: 'image/png' });
+  return await uploadGarmentImage(file, userId);
+};
+
 export const getUserTechPacks = async (userId: string) => {
   // Note: orderBy requires a composite index in Firestore if combined with where().
   // If the index isn't created, Firebase will throw an error with a link to create it.

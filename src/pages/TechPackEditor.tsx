@@ -5,7 +5,7 @@ import { Download, Save, ArrowLeft, Wand2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 
 const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
@@ -98,11 +98,22 @@ export function TechPackEditor() {
         annotatedImg = canvas.toDataURL('image/png');
       }
 
+      let finalVectorUrl = vectorImageUrl;
+      if (vectorImageUrl.startsWith('data:')) {
+        finalVectorUrl = await uploadBase64Image(vectorImageUrl, user.uid);
+        setVectorImageUrl(finalVectorUrl);
+      }
+
+      let finalAnnotatedUrl = '';
+      if (annotatedImg.startsWith('data:')) {
+        finalAnnotatedUrl = await uploadBase64Image(annotatedImg, user.uid);
+      }
+
       const techPackDataToSave = { ...data };
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
-      techPackDataToSave.images.vector = vectorImageUrl || techPackDataToSave.images.vector || '';
-      techPackDataToSave.images.annotated = annotatedImg;
+      techPackDataToSave.images.vector = finalVectorUrl || techPackDataToSave.images.vector || '';
+      techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       const existingId = id === 'draft' ? undefined : id;
       const savedId = await saveTechPack(user.uid, packName, imageUrl, techPackDataToSave, existingId);
