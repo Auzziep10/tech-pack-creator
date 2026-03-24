@@ -240,30 +240,44 @@ export function MobileScanner() {
                  {/* Native Lens Selection (0.5x, 1x, Front) */}
                  {videoDevices.length > 1 && (
                    <div className="absolute top-[-30px] left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-auto bg-black/70 p-1.5 rounded-full backdrop-blur-md border border-white/20 shadow-2xl">
-                      {videoDevices.map((device) => {
-                         const l = device.label.toLowerCase();
-                         let badge = '1x';
-                         if (l.includes('ultra wide') || l.includes('ultrawide') || l.includes('0.5')) badge = '0.5x';
-                         else if (l.includes('telephoto') || l.includes('2x')) badge = '2x';
-                         else if (l.includes('front')) badge = 'Front';
-                         else if (l.includes('back')) badge = '1x';
-                         else badge = 'Cam';
+                      {(() => {
+                        const uniqueBadges = new Map();
+                        videoDevices.forEach((device) => {
+                           const l = device.label.toLowerCase();
+                           let badge = '1x';
+                           if (l.includes('ultra wide') || l.includes('ultrawide') || l.includes('0.5')) badge = '0.5x';
+                           else if (l.includes('telephoto') || l.includes('2x')) badge = '2x';
+                           else if (l.includes('front')) badge = 'Front';
+                           else if (l.includes('back')) badge = '1x';
+                           else badge = 'Cam';
 
-                         // De-duplicate if there are multiple unnamed cameras, but for now we trust the labels
-                         return (
+                           // Prioritize pure "back camera" for 1x over "virtual" multi-camera arrays if seen
+                           if (!uniqueBadges.has(badge)) {
+                             uniqueBadges.set(badge, { ...device, badge });
+                           } else if (badge === '1x' && l === 'back camera') {
+                             uniqueBadges.set(badge, { ...device, badge });
+                           }
+                        });
+
+                        const sortedDevices = Array.from(uniqueBadges.values()).sort((a, b) => {
+                           const order: Record<string, number> = { 'Front': 0, '0.5x': 1, '1x': 2, '2x': 3, 'Cam': 4 };
+                           return order[a.badge] - order[b.badge];
+                        });
+
+                        return sortedDevices.map((d: any) => (
                            <button 
-                             key={device.deviceId}
-                             onClick={() => startCamera(device.deviceId)}
-                             className={`w-10 h-10 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
-                               activeDeviceId === device.deviceId 
+                             key={d.deviceId}
+                             onClick={() => startCamera(d.deviceId)}
+                             className={`w-12 h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
+                               activeDeviceId === d.deviceId 
                                  ? "bg-white text-black shadow-md scale-110" 
                                  : "bg-transparent text-white hover:bg-white/20"
                              }`}
                            >
-                              {badge}
+                              {d.badge}
                            </button>
-                         );
-                      })}
+                        ));
+                      })()}
                    </div>
                  )}
 
