@@ -44,7 +44,10 @@ export function TechPackEditor() {
   const [isVectorizing, setIsVectorizing] = useState(false);
 
   const handleVectorize = async () => {
-    const apiKey = window.prompt("Please enter your NanoBanana API Key to generate a clean vector. (You can securely save this later if it works!):");
+    let apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+    if (!apiKey) {
+      apiKey = window.prompt("Please enter your NanoBanana API Key to generate a clean vector.:");
+    }
     if (!apiKey) return;
     
     setIsVectorizing(true);
