@@ -31,7 +31,7 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
       base64Data = window.btoa(binary);
     }
 
-    const prompt = "Act as an expert technical CAD designer. Perform a meticulous vector image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint SVG representation of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually). Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. CRITICAL PERFORMANCE INSTRUCTION: Keep the SVG highly optimized and extremely concise for blazing fast generation. Use clean, continuous bezier curves and fewer than 50 distinct paths. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting and no other text.";
+    const prompt = "Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually). Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. CRITICAL PERFORMANCE INSTRUCTION: Keep the image output highly optimized. Return ONLY a valid base64 encoded raw PNG image representing the artwork, with absolutely no markdown formatting, no JSON, and no other text.";
 
     let result;
     try {
@@ -62,43 +62,24 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
       }
     }
     
-    let text = result.response.text();
-    text = text.replace(/```xml\n?/g, '').replace(/```svg\n?/g, '').replace(/```\n?/g, '').trim();
-    
-    const startIdx = text.indexOf("<svg");
-    if (startIdx !== -1) {
-      text = text.substring(startIdx);
-    }
-    const endIdx = text.lastIndexOf("</svg>");
-    if (endIdx !== -1) {
-      text = text.substring(0, endIdx + 6);
-    }
-
-    const encodedSvg = encodeURIComponent(text);
-    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
-
-    // Natively convert to PNG raster immediately
-    return new Promise<string>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1000;
-        canvas.height = 1000;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/png", 1.0));
-        } else {
-          resolve(svgDataUrl);
+    const candidates = result.response?.candidates;
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content.parts;
+      for (const part of parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
         }
-      };
-      img.onerror = () => {
-        resolve(svgDataUrl);
-      };
-      img.src = svgDataUrl;
-    });
+      }
+    }
+    
+    let text = result.response.text();
+    text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').trim();
+    
+    if (text.startsWith("data:image/")) {
+      return text;
+    }
+
+    return `data:image/png;base64,${text}`;
   } catch (err) {
     console.error("Vectorization Error:", err);
     throw err;
