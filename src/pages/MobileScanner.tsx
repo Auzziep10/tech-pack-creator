@@ -22,7 +22,7 @@ export function MobileScanner() {
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const startCamera = useCallback(async (deviceId?: string) => {
+  const startCamera = useCallback(async (deviceId?: string, targetBadge?: string) => {
     try {
       // 1. Force completely release the hardware track directly from the video DOM object
       if (videoRef.current && videoRef.current.srcObject) {
@@ -40,13 +40,31 @@ export function MobileScanner() {
       // 3. Apple's WebKit requires a tiny hardware flush window (100ms) to literally switch physical rear sensors!
       await new Promise(r => setTimeout(r, 100));
       
+      // Strip width/height on deviceId explicitly so resolutions don't force Safari to secretly regress to the main wide lens!
       const constraints: MediaStreamConstraints = {
         video: deviceId 
-          ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+          ? { deviceId: { exact: deviceId } }
           : { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
       };
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const track = mediaStream.getVideoTracks()[0];
+
+      // 4. Fallback execution: Force iOS to apply optical hardware zoom if it exposed a virtual camera
+      if (targetBadge && track && track.getCapabilities) {
+         const caps = track.getCapabilities() as any;
+         if (caps.zoom) {
+            let z = 1;
+            if (targetBadge === '0.5x') z = caps.zoom.min || 0.5;
+            if (targetBadge === '2x') z = caps.zoom.max ? Math.min(2, caps.zoom.max) : 2;
+            try {
+              await track.applyConstraints({ advanced: [{ zoom: z }] } as any);
+            } catch (e) {
+              console.warn("Failed to apply native optical zoom on track", e);
+            }
+         }
+      }
+
       setStream(mediaStream);
       setActiveDeviceId(deviceId || null);
       setHasCameraError(false);
@@ -89,9 +107,9 @@ export function MobileScanner() {
       // Safely snap onto the standard back camera to begin
       const backIdx = vDevs.findIndex(d => d.label.toLowerCase().includes('back') && !d.label.toLowerCase().includes('ultra') && !d.label.toLowerCase().includes('telephoto'));
       if (backIdx >= 0) {
-        startCamera(vDevs[backIdx].deviceId);
+        startCamera(vDevs[backIdx].deviceId, '1x');
       } else if (vDevs.length > 0) {
-        startCamera(vDevs[0].deviceId);
+        startCamera(vDevs[0].deviceId, '1x');
       } else {
         startCamera();
       }
@@ -281,7 +299,7 @@ export function MobileScanner() {
                         return sortedDevices.map((d: any) => (
                            <button 
                              key={d.deviceId}
-                             onClick={() => startCamera(d.deviceId)}
+                             onClick={() => startCamera(d.deviceId, d.badge)}
                              className={`w-12 h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
                                activeDeviceId === d.deviceId 
                                  ? "bg-white text-black shadow-md scale-110" 
