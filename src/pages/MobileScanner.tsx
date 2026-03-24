@@ -21,7 +21,6 @@ export function MobileScanner() {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
-  const [showXrPrompt, setShowXrPrompt] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isArMode, setIsArMode] = useState(false);
   const [arMeasurements, setArMeasurements] = useState<any[]>([]);
@@ -71,20 +70,12 @@ export function MobileScanner() {
   };
 
   useEffect(() => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isWebXRViewer = /WebXRViewer/i.test(navigator.userAgent);
-    
-    if (isIOS && !isWebXRViewer) {
-      setShowXrPrompt(true);
-    } else {
-      initDevices();
-    }
+    initDevices();
     setIsInitializing(false);
     
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
   const cycleCamera = () => {
@@ -174,41 +165,6 @@ export function MobileScanner() {
   }
 
   if (isInitializing) return <div className="min-h-screen bg-black" />;
-
-  if (showXrPrompt) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
-        <div className="bg-gray-900 p-8 rounded-3xl max-w-sm w-full border border-gray-800 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-6">
-            <Camera size={32} className="text-indigo-400" />
-          </div>
-          <h2 className="text-2xl font-serif font-bold text-white mb-3">Want 3D LiDAR Measurements?</h2>
-          <p className="text-gray-400 text-sm mb-8 leading-relaxed">
-            Apple restricts LiDAR mapping technology inside standard Safari browsers. To calculate hyper-accurate real world depth maps of this garment, you must open this scan link using the <b>WebXR Viewer</b> app natively built by Mozilla.
-          </p>
-          <div className="space-y-4">
-            <a 
-              href="https://apps.apple.com/us/app/webxr-viewer/id1298888090" 
-              target="_blank"
-              rel="noreferrer"
-              className="block w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
-            >
-              Get WebXR Viewer App
-            </a>
-            <button 
-              onClick={() => {
-                setShowXrPrompt(false);
-                initDevices();
-              }}
-              className="block w-full bg-transparent text-gray-400 font-bold py-3 rounded-xl border border-gray-700 hover:bg-gray-800 hover:text-white transition-colors"
-            >
-              Continue without LiDAR
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (isArMode) {
     return (
