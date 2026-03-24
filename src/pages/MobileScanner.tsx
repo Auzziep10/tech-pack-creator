@@ -24,9 +24,21 @@ export function MobileScanner() {
 
   const startCamera = useCallback(async (deviceId?: string) => {
     try {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      // 1. Force completely release the hardware track directly from the video DOM object
+      if (videoRef.current && videoRef.current.srcObject) {
+         const oldStream = videoRef.current.srcObject as MediaStream;
+         oldStream.getTracks().forEach(track => {
+            track.enabled = false;
+            track.stop();
+         });
+         videoRef.current.srcObject = null;
       }
+      
+      // 2. Clear massive memory locks in iOS Safari
+      setStream(null);
+
+      // 3. Apple's WebKit requires a tiny hardware flush window (100ms) to literally switch physical rear sensors!
+      await new Promise(r => setTimeout(r, 100));
       
       const constraints: MediaStreamConstraints = {
         video: deviceId 
@@ -38,14 +50,16 @@ export function MobileScanner() {
       setStream(mediaStream);
       setActiveDeviceId(deviceId || null);
       setHasCameraError(false);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        await videoRef.current.play().catch(e => console.error("Playback error", e));
       }
     } catch (err) {
-      console.error("Camera error:", err);
+      console.error("Failed to switch camera:", err);
       setHasCameraError(true);
     }
-  }, [stream]);
+  }, []);
 
   const initDevices = async () => {
     try {
