@@ -37,11 +37,14 @@ export function TechPackEditor() {
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>({ measurements: [], callouts: [], fabrication: [] });
   const [imageUrl, setImageUrl] = useState('');
+  const [vectorImageUrl, setVectorImageUrl] = useState('');
+  const [showVector, setShowVector] = useState(false);
   const [packName, setPackName] = useState('Untitled Garment');
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
+  const annotatorRef = useRef<HTMLDivElement>(null);
 
   const handleVectorize = async () => {
     let apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
@@ -54,7 +57,8 @@ export function TechPackEditor() {
     try {
       const { vectorizeGarmentImage } = await import('../services/nanobananaService');
       const newImageUrl = await vectorizeGarmentImage(imageUrl, apiKey);
-      setImageUrl(newImageUrl);
+      setVectorImageUrl(newImageUrl);
+      setShowVector(true);
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
     } finally {
@@ -65,14 +69,16 @@ export function TechPackEditor() {
   useEffect(() => {
     if (location.state?.techPack) {
       setData(location.state.techPack);
-      setImageUrl(location.state.image || '');
+      setImageUrl(location.state.techPack?.images?.original || location.state.image || '');
+      setVectorImageUrl(location.state.techPack?.images?.vector || '');
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
     } else if (id && id !== 'draft') {
       getTechPack(id).then((packInfo) => {
         if (packInfo) {
           setData(packInfo.techPack);
-          setImageUrl(packInfo.imageUrl);
+          setImageUrl(packInfo.techPack?.images?.original || packInfo.imageUrl);
+          setVectorImageUrl(packInfo.techPack?.images?.vector || '');
           setPackName(packInfo.name);
         }
         setIsLoading(false);
@@ -86,10 +92,22 @@ export function TechPackEditor() {
     if (!user) return alert("Must be logged in to save.");
     setIsSaving(true);
     try {
+      let annotatedImg = '';
+      if (annotatorRef.current) {
+        const canvas = await html2canvas(annotatorRef.current, { useCORS: true, scale: 2, logging: false });
+        annotatedImg = canvas.toDataURL('image/png');
+      }
+
+      const techPackDataToSave = { ...data };
+      if (!techPackDataToSave.images) techPackDataToSave.images = {};
+      techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
+      techPackDataToSave.images.vector = vectorImageUrl || techPackDataToSave.images.vector || '';
+      techPackDataToSave.images.annotated = annotatedImg;
+
       const existingId = id === 'draft' ? undefined : id;
-      const savedId = await saveTechPack(user.uid, packName, imageUrl, data, existingId);
+      const savedId = await saveTechPack(user.uid, packName, imageUrl, techPackDataToSave, existingId);
       if (id === 'draft') {
-        navigate(`/pack/${savedId}`, { replace: true, state: { techPack: data, image: imageUrl, name: packName } });
+        navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
       }
     } catch (e) {
       console.error(e);
@@ -200,12 +218,23 @@ export function TechPackEditor() {
             {/* Left Column: Image & Callouts */}
             <div className="col-span-5 space-y-8">
               {imageUrl ? (
-                <GarmentAnnotator 
-                  imageUrl={imageUrl} 
-                  measurements={data.measurements}
-                  onVectorize={handleVectorize}
-                  isVectorizing={isVectorizing}
-                />
+                <div>
+                  <div ref={annotatorRef} className="bg-white rounded-2xl">
+                    <GarmentAnnotator 
+                      imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
+                      measurements={data.measurements}
+                      onVectorize={!vectorImageUrl ? handleVectorize : undefined}
+                      isVectorizing={isVectorizing}
+                    />
+                  </div>
+                  {vectorImageUrl && (
+                    <div className="flex justify-center mt-3">
+                      <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-xs text-gray-600 bg-gray-100 hover:bg-gray-200">
+                        {showVector ? "View Original Image" : "View Vector Blueprint"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-6">
                   <div className="text-gray-400">No Image Provided</div>
