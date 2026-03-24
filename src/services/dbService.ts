@@ -87,24 +87,20 @@ export const createScanSession = async (userId: string) => {
   return docRef.id;
 };
 
-export const updateScanSessionFront = async (sessionId: string, frontImageUrl: string, measurements?: any[]) => {
+export const updateScanSessionFront = async (sessionId: string, frontImageUrl: string) => {
   const sessionRef = doc(db, 'scanSessions', sessionId);
-  const data: any = {
+  await updateDoc(sessionRef, {
     status: 'front_scanned',
     frontImageUrl,
     updatedAt: serverTimestamp()
-  };
-  if (measurements && measurements.length > 0) data.frontMeasurements = measurements;
-  await updateDoc(sessionRef, data);
+  });
 };
 
-export const completeScanSession = async (sessionId: string, backImageUrl: string, measurements?: any[]) => {
+export const completeScanSession = async (sessionId: string, backImageUrl: string) => {
   const sessionRef = doc(db, 'scanSessions', sessionId);
-  const data: any = {
+  await updateDoc(sessionRef, {
     status: 'completed',
     backImageUrl,
     updatedAt: serverTimestamp()
-  };
-  if (measurements && measurements.length > 0) data.backMeasurements = measurements;
-  await updateDoc(sessionRef, data);
+  });
 };
