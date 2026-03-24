@@ -78,7 +78,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
   return (
     <div className={
       isFullscreen 
-        ? "fixed inset-0 z-50 bg-gray-900/20 flex flex-col p-4 md:p-8 gap-4 md:gap-6 backdrop-blur-md animate-in fade-in"
+        ? "fixed inset-0 z-50 bg-gray-900/20 flex flex-col p-4 md:p-8 gap-4 md:gap-6 backdrop-blur-sm animate-in fade-in"
         : "flex flex-col gap-4"
     }>
       {/* Artboard Toolbar */}
