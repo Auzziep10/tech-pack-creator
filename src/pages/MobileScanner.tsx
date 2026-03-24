@@ -20,6 +20,7 @@ export function MobileScanner() {
   const [zoom, setZoom] = useState(1);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [showXrPrompt, setShowXrPrompt] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isArMode, setIsArMode] = useState(false);
@@ -39,6 +40,7 @@ export function MobileScanner() {
 
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
+      setActiveDeviceId(deviceId || null);
       setHasCameraError(false);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -262,26 +264,49 @@ export function MobileScanner() {
               {/* Footer Mask */}
               <div className="bg-black/50 backdrop-blur-sm h-40 flex flex-col items-center justify-center pb-8 border-t border-white/10 relative">
                  
-                 {/* Zoom Slider */}
-                 <div className="absolute top-[-40px] left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto">
-                    <span className="text-white text-xs font-bold">1x</span>
+                  {/* Zoom Slider (Digital Custom Cropping) */}
+                 <div className="absolute top-[-70px] left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10">
+                    <span className="text-white text-xs font-bold">Zoom</span>
                     <input 
                       type="range" 
                       min="1" max="3" step="0.1" 
                       value={zoom} 
                       onChange={(e) => setZoom(parseFloat(e.target.value))} 
-                      className="w-32"
+                      className="w-32 accent-white"
                     />
-                    <span className="text-white text-xs font-bold">3x</span>
                  </div>
 
-                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto">
-                   {/* Left side flip camera */}
-                   {videoDevices.length > 1 && (
-                     <button onClick={cycleCamera} className="absolute left-8 bg-white/20 p-3 rounded-full text-white active:scale-95 transition-transform">
-                        <RefreshCw size={24} />
-                     </button>
-                   )}
+                 {/* Native Lens Selection (0.5x, 1x, Front) */}
+                 {videoDevices.length > 1 && (
+                   <div className="absolute top-[-30px] left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-auto bg-black/70 p-1.5 rounded-full backdrop-blur-md border border-white/20 shadow-2xl">
+                      {videoDevices.map((device) => {
+                         const l = device.label.toLowerCase();
+                         let badge = '1x';
+                         if (l.includes('ultra wide') || l.includes('ultrawide') || l.includes('0.5')) badge = '0.5x';
+                         else if (l.includes('telephoto') || l.includes('2x')) badge = '2x';
+                         else if (l.includes('front')) badge = 'Front';
+                         else if (l.includes('back')) badge = '1x';
+                         else badge = 'Cam';
+
+                         // De-duplicate if there are multiple unnamed cameras, but for now we trust the labels
+                         return (
+                           <button 
+                             key={device.deviceId}
+                             onClick={() => startCamera(device.deviceId)}
+                             className={`w-10 h-10 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
+                               activeDeviceId === device.deviceId 
+                                 ? "bg-white text-black shadow-md scale-110" 
+                                 : "bg-transparent text-white hover:bg-white/20"
+                             }`}
+                           >
+                              {badge}
+                           </button>
+                         );
+                      })}
+                   </div>
+                 )}
+
+                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto mt-6">
                    
                    {/* Center Capture */}
                    {hasCameraError ? (
