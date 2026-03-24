@@ -49,19 +49,40 @@ export function MobileScanner() {
 
   const initDevices = async () => {
     try {
+      // 1. Apple Safari strictly restricts device enumeration until the user grants explicit camera permission.
+      // We must start a temporary video stream FIRST to trigger the native iOS permission popup!
+      let tempStream: MediaStream | null = null;
+      try {
+         tempStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      } catch (permissionError) {
+         console.warn("Could not get environment camera, requesting any video...");
+         tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      // 2. Now that permission is granted, iOS Safari will securely unlock all hardware lenses (Ultra Wide, Telephoto, Front)
       const devs = await navigator.mediaDevices.enumerateDevices();
-      const vDevs = devs.filter(d => d.kind === 'videoinput');
+      let vDevs = devs.filter(d => d.kind === 'videoinput');
+      
+      // Deduplicate any glitchy redundant lenses provided by Safari
+      vDevs = Array.from(new Map(vDevs.map(d => [d.label || d.deviceId, d])).values());
       setVideoDevices(vDevs);
       
-      // Find back camera index if possible
-      const backIdx = vDevs.findIndex(d => d.label.toLowerCase().includes('back'));
+      // Cleanup the temporary stream so we don't hold dual locks
+      if (tempStream) {
+        tempStream.getTracks().forEach(t => t.stop());
+      }
+      
+      // Safely snap onto the standard back camera to begin
+      const backIdx = vDevs.findIndex(d => d.label.toLowerCase().includes('back') && !d.label.toLowerCase().includes('ultra') && !d.label.toLowerCase().includes('telephoto'));
       if (backIdx >= 0) {
-        setCurrentDeviceIndex(backIdx);
         startCamera(vDevs[backIdx].deviceId);
+      } else if (vDevs.length > 0) {
+        startCamera(vDevs[0].deviceId);
       } else {
-        startCamera(vDevs[0]?.deviceId);
+        startCamera();
       }
     } catch (e) {
+      console.error(e);
       startCamera();
     }
   };
