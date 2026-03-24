@@ -33,15 +33,34 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
 
     const prompt = "Act as an expert technical CAD designer. Create a pristine, flat black-and-white vector technical line-art CAD blueprint SVG of the garment shown in the image. Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting and no other text.";
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType
+    let result;
+    try {
+      result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType
+          }
         }
+      ]);
+    } catch (apiErr: any) {
+      if (apiErr.message?.includes("503") || apiErr.status === 503 || apiErr.message?.includes("high demand")) {
+        console.warn("Nano Banana is at capacity. Falling back to gemini-3.1-pro-preview...");
+        const fallbackModel = genAI.getGenerativeModel({ model: "gemini-3.1-pro-preview" });
+        result = await fallbackModel.generateContent([
+          prompt,
+          {
+            inlineData: {
+               data: base64Data,
+               mimeType
+            }
+          }
+        ]);
+      } else {
+        throw apiErr;
       }
-    ]);
+    }
     
     let text = result.response.text();
     text = text.replace(/```xml\n?/g, '').replace(/```svg\n?/g, '').replace(/```\n?/g, '').trim();
