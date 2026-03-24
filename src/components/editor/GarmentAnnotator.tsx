@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2 } from 'lucide-react';
+import { Button } from '../ui/Button';
 
 interface Point {
   x: number;
@@ -16,9 +17,11 @@ interface Annotation {
 interface GarmentAnnotatorProps {
   imageUrl: string;
   measurements: any[];
+  onVectorize?: () => void;
+  isVectorizing?: boolean;
 }
 
-export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorProps) {
+export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVectorizing }: GarmentAnnotatorProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [selectedMeasurement, setSelectedMeasurement] = useState('');
@@ -79,7 +82,8 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
         : "flex flex-col gap-4"
     }>
       {/* Artboard Toolbar */}
-      <div className={`flex flex-wrap items-center gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-sm shrink-0 ${isFullscreen ? 'mx-auto w-full max-w-5xl' : ''}`}>
+      {isFullscreen && (
+        <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-sm shrink-0 mx-auto w-full max-w-5xl">
          <button 
            onClick={() => setIsBlueprintMode(!isBlueprintMode)}
            className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${isBlueprintMode ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
@@ -113,15 +117,29 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
          </button>
          
          <div className="flex-1" />
+
+         {onVectorize && (
+           <Button 
+             variant="secondary" 
+             size="sm" 
+             onClick={onVectorize} 
+             isLoading={isVectorizing}
+             className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm mx-2"
+           >
+             <Wand2 size={14} />
+             Vectorize Image (NanoBanana)
+           </Button>
+         )}
          
          <button 
-           onClick={() => setIsFullscreen(!isFullscreen)}
+           onClick={() => setIsFullscreen(false)}
            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors ml-auto"
-           title={isFullscreen ? "Exit Fullscreen" : "Edit in Fullscreen"}
+           title="Exit Fullscreen"
          >
-           {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+           <Minimize size={20} />
          </button>
       </div>
+      )}
 
       {/* Interactive Main Canvas */}
       <div 
@@ -194,6 +212,18 @@ export function GarmentAnnotator({ imageUrl, measurements }: GarmentAnnotatorPro
             />
           )}
         </svg>
+
+        {!isFullscreen && (
+          <div 
+            className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer" 
+            onClick={() => setIsFullscreen(true)}
+          >
+             <Button variant="secondary" onClick={() => setIsFullscreen(true)} className="shadow-xl gap-2 pointer-events-none">
+                <Maximize size={16} />
+                Edit & Annotate Image
+             </Button>
+          </div>
+        )}
       </div>
     </div>
   );

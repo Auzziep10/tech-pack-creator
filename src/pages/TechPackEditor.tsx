@@ -200,7 +200,12 @@ export function TechPackEditor() {
             {/* Left Column: Image & Callouts */}
             <div className="col-span-5 space-y-8">
               {imageUrl ? (
-                <GarmentAnnotator imageUrl={imageUrl} measurements={data.measurements} />
+                <GarmentAnnotator 
+                  imageUrl={imageUrl} 
+                  measurements={data.measurements}
+                  onVectorize={handleVectorize}
+                  isVectorizing={isVectorizing}
+                />
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-6">
                   <div className="text-gray-400">No Image Provided</div>
@@ -210,16 +215,6 @@ export function TechPackEditor() {
               <div>
                 <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4">
                   <h3 className="text-xl font-serif font-bold text-gray-900">Construction Details</h3>
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={handleVectorize} 
-                    isLoading={isVectorizing}
-                    className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
-                  >
-                    <Wand2 size={14} />
-                    Vectorize Image (NanoBanana)
-                  </Button>
                 </div>
                 <ol className="space-y-4 pl-5 list-decimal marker:text-black marker:font-bold text-gray-700">
                   {data.callouts.map((callout: any, i: number) => (
