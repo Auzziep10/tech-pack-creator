@@ -31,7 +31,7 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
       base64Data = window.btoa(binary);
     }
 
-    const prompt = "Act as an expert technical CAD designer. Create a pristine, flat black-and-white vector technical line-art CAD blueprint SVG of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually). Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting. IMPORTANT: Ensure the <svg> tag includes width=\"1000\" and height=\"1000\".";
+    const prompt = "Act as an expert technical CAD designer. Perform a meticulous vector image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white vector technical line-art CAD blueprint SVG of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually). Pure white background (or transparent), high contrast lines, no photorealistic shading, just structural geometry. Return ONLY the raw valid SVG code starting with <svg> and ending with </svg>, with no markdown formatting. IMPORTANT: Ensure the <svg> tag includes width=\"1000\" and height=\"1000\".";
 
     let result;
     try {
