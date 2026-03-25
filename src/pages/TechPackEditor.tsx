@@ -180,6 +180,13 @@ export function TechPackEditor() {
            word-break: break-word;
         }
         
+        /* Ensure headers stay attached to the content below them */
+        h1, h2, h3, h4, h5, h6, .print-header-avoid {
+           page-break-after: avoid !important;
+           break-after: avoid !important;
+           page-break-inside: avoid !important;
+        }
+        
         /* Force page breaks properly where we told it to */
         .page-break-avoid {
            page-break-inside: avoid;
@@ -267,7 +274,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8" style={{ pageBreakInside: 'avoid' }}>
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
                <div className="text-sm font-semibold">{data?.properties?.style || 'N/A'}</div>
@@ -318,12 +325,12 @@ export function TechPackEditor() {
               )}
 
               <div>
-                <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4 print-header-avoid">
                   <h3 className="text-xl font-serif font-bold text-gray-900">Construction Details</h3>
                 </div>
                 <ol className="space-y-4 pl-5 list-decimal marker:text-black marker:font-bold text-gray-700">
                   {data.callouts.map((callout: any, i: number) => (
-                    <li key={i} className="pl-2">
+                    <li key={i} className="pl-2" style={{ pageBreakInside: 'avoid' }}>
                       <AutoTextarea 
                         className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                         value={callout.description}
@@ -380,7 +387,7 @@ export function TechPackEditor() {
               </div>
 
               {/* Style BOM (Bill of Materials) Table */}
-              <div style={{ pageBreakInside: 'avoid' }}>
+              <div>
                 <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Style BOM (Bill of Materials)</h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-sm text-left">
