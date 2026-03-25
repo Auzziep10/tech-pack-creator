@@ -193,6 +193,13 @@ export function TechPackEditor() {
            break-inside: avoid;
         }
         
+        /* Force explicit new pages per section */
+        .print-force-new-page {
+           page-break-before: always !important;
+           break-before: page !important;
+           margin-top: 0 !important;
+        }
+        
         textarea {
            resize: none;
            overflow: hidden;
@@ -324,7 +331,7 @@ export function TechPackEditor() {
                 </div>
               )}
 
-              <div>
+              <div className="print-force-new-page">
                 <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4 print-header-avoid">
                   <h3 className="text-xl font-serif font-bold text-gray-900">Construction Details</h3>
                 </div>
@@ -345,7 +352,7 @@ export function TechPackEditor() {
             {/* Right Column: Measurements & Fabrication */}
             <div className="col-span-7 space-y-10">
               {/* Measurements Table */}
-              <div>
+              <div className="print-force-new-page">
                 <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900 flex items-center justify-between">
                   <span>Measurements</span>
                 </h3>
@@ -387,7 +394,7 @@ export function TechPackEditor() {
               </div>
 
               {/* Style BOM (Bill of Materials) Table */}
-              <div>
+              <div className="print-force-new-page">
                 <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Style BOM (Bill of Materials)</h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-sm text-left">
