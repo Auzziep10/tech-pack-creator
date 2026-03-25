@@ -158,6 +158,12 @@ export function TechPackEditor() {
            margin-bottom: 2rem !important;
         }
         
+        .print-image-wrapper > div {
+           aspect-ratio: auto !important;
+           height: 4.8in !important;
+           margin: 0 auto;
+        }
+        
         .print-properties-grid {
            display: grid !important;
            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
@@ -289,7 +295,7 @@ export function TechPackEditor() {
             <div className="col-span-5 space-y-8">
               {imageUrl ? (
                 <div>
-                  <div ref={annotatorRef} className="bg-white rounded-2xl">
+                  <div ref={annotatorRef} className="bg-white rounded-2xl print-image-wrapper">
                     <GarmentAnnotator 
                       imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
                       measurements={data.measurements}
