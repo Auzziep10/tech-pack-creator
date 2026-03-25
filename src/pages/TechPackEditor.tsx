@@ -148,14 +148,19 @@ export function TechPackEditor() {
         }
         /* Fix the grid constraint pushing elements off the right side */
         .print-container .grid-cols-12 {
-           display: flex;
-           flex-direction: column;
-           gap: 1.5rem !important;
+           display: block !important;
         }
         .print-container .col-span-5, 
         .print-container .col-span-7 {
            width: 100% !important;
            max-width: 100% !important;
+           display: block !important;
+           margin-bottom: 2rem !important;
+        }
+        
+        .print-properties-grid {
+           display: grid !important;
+           grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
         }
         
         /* Ensure tables stay within width */
@@ -256,7 +261,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8" style={{ pageBreakInside: 'avoid' }}>
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8" style={{ pageBreakInside: 'avoid' }}>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
                <div className="text-sm font-semibold">{data?.properties?.style || 'N/A'}</div>
