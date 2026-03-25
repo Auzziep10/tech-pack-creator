@@ -157,7 +157,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
         style={{ touchAction: 'none' }}
-        className={`bg-gray-50 rounded-2xl border flex items-center justify-center p-6 relative overflow-hidden group ${
+        className={`select-none bg-gray-50 rounded-2xl border flex items-center justify-center p-6 relative overflow-hidden group ${
           isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
         } ${
           isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5]'

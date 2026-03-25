@@ -55,15 +55,21 @@ export const uploadBase64Image = async (base64String: string, userId: string): P
 export const getCompanyTechPacks = async (companyId: string) => {
   const q = query(
     collection(db, 'techPacks'), 
-    where("companyId", "==", companyId),
-    orderBy("updatedAt", "desc")
+    where("companyId", "==", companyId)
   );
   
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
+  const results = querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
   })) as TechPackData[];
+  
+  return results.sort((a, b) => {
+    // Sort descending by updatedAt
+    const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+    const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+    return timeB - timeA;
+  });
 };
 
 export const getTechPack = async (id: string) => {

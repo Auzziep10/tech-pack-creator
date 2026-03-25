@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, PlusCircle, Settings, Layers, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { CompanySettingsModal } from '../ui/CompanySettingsModal';
 
 export function Sidebar() {
   const { logout, profile } = useAuth();
@@ -10,24 +11,10 @@ export function Sidebar() {
     { to: '/create', icon: PlusCircle, label: 'Create Tech Pack' },
   ];
 
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const handleSettings = async () => {
-    if (!profile) return;
-    const newCompanyId = window.prompt(
-      "Your current Company ID is below. Share this exact ID with team members so you can collaborate on the same Tech Packs. To join another company, paste their ID here:",
-      profile.companyId
-    );
-    if (newCompanyId && newCompanyId.trim() !== profile.companyId) {
-      try {
-        const { doc, updateDoc } = await import('firebase/firestore');
-        const { db } = await import('../../services/firebase');
-        await updateDoc(doc(db, 'users', profile.uid), { companyId: newCompanyId.trim() });
-        alert("Company ID updated successfully!");
-        window.location.reload();
-      } catch (err: any) {
-        console.error(err);
-        alert("Failed to update company ID");
-      }
-    }
+    setIsSettingsOpen(true);
   };
 
   return (
@@ -71,6 +58,10 @@ export function Sidebar() {
           Log Out
         </button>
       </div>
+
+      {isSettingsOpen && (
+        <CompanySettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      )}
     </aside>
   );
 }
