@@ -140,12 +140,37 @@ export function TechPackEditor() {
         logging: false
       });
       const imgData = canvas.toDataURL('image/png');
+      
       const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width / 2, canvas.height / 2]
+        orientation: 'landscape',
+        unit: 'in',
+        format: 'letter'
       });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
+      
+      const pageWidth = 11.0;
+      const pageHeight = 8.5;
+      const margin = 0.3; // 0.3 inch margins around the content
+      const safeWidth = pageWidth - (margin * 2); // 10.4
+      const safeHeight = pageHeight - (margin * 2); // 7.9
+      
+      const imgWidth = safeWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      // Page 1
+      pdf.addImage(imgData, 'PNG', margin, position + margin, imgWidth, imgHeight);
+      heightLeft -= safeHeight;
+      
+      // Subsequent Pages
+      while (heightLeft > 0) {
+        position = position - safeHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position + margin, imgWidth, imgHeight);
+        heightLeft -= safeHeight;
+      }
+      
       pdf.save(`${packName.replace(/\s+/g, '_')}_TechPack.pdf`);
     } catch (e) {
       console.error(e);
