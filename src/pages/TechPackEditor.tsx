@@ -31,7 +31,7 @@ export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +116,7 @@ export function TechPackEditor() {
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       const existingId = id === 'draft' ? undefined : id;
-      const savedId = await saveTechPack(user.uid, packName, imageUrl, techPackDataToSave, existingId);
+      const savedId = await saveTechPack(user.uid, profile?.companyId || user.uid, packName, imageUrl, techPackDataToSave, existingId);
       if (id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
       }

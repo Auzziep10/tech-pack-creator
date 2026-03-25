@@ -4,22 +4,22 @@ import { Button } from '../components/ui/Button';
 import { PlusCircle, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserTechPacks, TechPackData } from '../services/dbService';
+import { getCompanyTechPacks, TechPackData } from '../services/dbService';
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [techPacks, setTechPacks] = useState<TechPackData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      getUserTechPacks(user.uid)
+    if (user && profile?.companyId) {
+      getCompanyTechPacks(profile.companyId)
         .then(data => setTechPacks(data))
         .catch(err => console.error("Error fetching tech packs:", err))
         .finally(() => setLoading(false));
     }
-  }, [user]);
+  }, [user, profile]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">

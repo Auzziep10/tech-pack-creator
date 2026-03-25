@@ -5,6 +5,7 @@ import { db, storage } from './firebase';
 export interface TechPackData {
   id?: string;
   userId: string;
+  companyId?: string;
   name: string;
   imageUrl: string;
   updatedAt: any;
@@ -12,7 +13,7 @@ export interface TechPackData {
   techPack: any;
 }
 
-export const saveTechPack = async (userId: string, name: string, imageUrl: string, techPack: any, existingId?: string) => {
+export const saveTechPack = async (userId: string, companyId: string, name: string, imageUrl: string, techPack: any, existingId?: string) => {
   if (existingId) {
     const packRef = doc(db, 'techPacks', existingId);
     await updateDoc(packRef, {
@@ -25,6 +26,7 @@ export const saveTechPack = async (userId: string, name: string, imageUrl: strin
   } else {
     const docRef = await addDoc(collection(db, 'techPacks'), {
       userId,
+      companyId,
       name,
       imageUrl,
       techPack,
@@ -50,12 +52,10 @@ export const uploadBase64Image = async (base64String: string, userId: string): P
   return await uploadGarmentImage(file, userId);
 };
 
-export const getUserTechPacks = async (userId: string) => {
-  // Note: orderBy requires a composite index in Firestore if combined with where().
-  // If the index isn't created, Firebase will throw an error with a link to create it.
+export const getCompanyTechPacks = async (companyId: string) => {
   const q = query(
     collection(db, 'techPacks'), 
-    where("userId", "==", userId),
+    where("companyId", "==", companyId),
     orderBy("updatedAt", "desc")
   );
   
