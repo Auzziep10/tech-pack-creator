@@ -82,7 +82,7 @@ export async function vectorizeGarmentImage(imageUrl: string, apiKey: string): P
     }
     
     let text = result.response.text();
-    text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').trim();
+    text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').replace(/\s+/g, '').trim();
     
     if (text.startsWith("data:image/")) {
       return text;

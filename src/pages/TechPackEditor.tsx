@@ -35,7 +35,7 @@ export function TechPackEditor() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<any>({ measurements: [], callouts: [], fabrication: [] });
+  const [data, setData] = useState<any>({ properties: {}, measurements: [], callouts: [], bom: [] });
   const [imageUrl, setImageUrl] = useState('');
   const [vectorImageUrl, setVectorImageUrl] = useState('');
   const [showVector, setShowVector] = useState(false);
@@ -161,9 +161,10 @@ export function TechPackEditor() {
     setData(newData);
   };
 
-  const updateFabrication = (index: number, field: string, value: string) => {
+  const updateBOM = (index: number, field: string, value: string) => {
     const newData = { ...data };
-    newData.fabrication[index][field] = value;
+    if (!newData.bom) newData.bom = [];
+    newData.bom[index][field] = value;
     setData(newData);
   };
 
@@ -221,9 +222,33 @@ export function TechPackEditor() {
             </div>
             <div className="text-right">
               <div className="text-gray-500 text-sm">Date: {new Date().toLocaleDateString()}</div>
-              <div className="text-gray-500 text-sm mt-1">Ref: TP-{Math.floor(Math.random() * 10000)}</div>
+              <div className="text-gray-500 text-sm mt-1">Ref: {data?.properties?.style || `TP-${Math.floor(Math.random() * 10000)}`}</div>
             </div>
           </header>
+
+          {/* Properties Section */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
+             <div className="space-y-1">
+               <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
+               <div className="text-sm font-semibold">{data?.properties?.style || 'N/A'}</div>
+             </div>
+             <div className="space-y-1">
+               <div className="text-[10px] uppercase font-bold text-gray-400">Season</div>
+               <div className="text-sm font-semibold">{data?.properties?.season || 'N/A'}</div>
+             </div>
+             <div className="space-y-1">
+               <div className="text-[10px] uppercase font-bold text-gray-400">Category</div>
+               <div className="text-sm font-semibold">{data?.properties?.category || 'N/A'}</div>
+             </div>
+             <div className="space-y-1">
+               <div className="text-[10px] uppercase font-bold text-gray-400">Designer</div>
+               <div className="text-sm font-semibold">{data?.properties?.designer || 'N/A'}</div>
+             </div>
+             <div className="space-y-1">
+               <div className="text-[10px] uppercase font-bold text-gray-400">Gender</div>
+               <div className="text-sm font-semibold">{data?.properties?.gender || 'N/A'}</div>
+             </div>
+          </div>
 
           <div className="grid grid-cols-12 gap-10">
             {/* Left Column: Image & Callouts */}
@@ -281,26 +306,31 @@ export function TechPackEditor() {
                   <table className="w-full text-sm text-left">
                     <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
+                        <th className="px-4 py-3 font-medium">DIM (ID)</th>
                         <th className="px-4 py-3 font-medium">Point of Measure</th>
-                        <th className="px-4 py-3 font-medium">Description</th>
                         <th className="px-4 py-3 font-medium w-24">Spec</th>
-                        <th className="px-3 py-3 font-medium w-16">Tol.</th>
+                        <th className="px-2 py-3 font-medium w-16 text-center">Tol (-)</th>
+                        <th className="px-2 py-3 font-medium w-16 text-center">Tol (+)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.measurements.map((m: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={m.point} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
+                          <td className="px-4 py-3 align-top font-mono text-xs text-gray-500">
+                             <AutoTextarea className="w-full bg-transparent outline-none uppercase" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={m.description} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs mt-1" value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold" value={m.value} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold" value={m.value || ''} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
                           </td>
-                          <td className="px-3 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 font-mono text-[10px]" value={m.tolerance} onChange={e => updateMeasurement(i, 'tolerance', e.target.value)} />
+                          <td className="px-2 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-[10px] text-center" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
+                          </td>
+                          <td className="px-2 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-[10px] text-center" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
                           </td>
                         </tr>
                       ))}
@@ -309,33 +339,37 @@ export function TechPackEditor() {
                 </div>
               </div>
 
-              {/* Fabrication Table */}
+              {/* Style BOM (Bill of Materials) Table */}
               <div>
-                <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Fabrication / Materials</h3>
+                <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Style BOM (Bill of Materials)</h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-sm text-left">
                     <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 font-medium">Placement</th>
-                        <th className="px-4 py-3 font-medium">Material</th>
-                        <th className="px-4 py-3 font-medium">Weight</th>
-                        <th className="px-4 py-3 font-medium">Notes</th>
+                        <th className="px-4 py-3 font-medium">Category</th>
+                        <th className="px-4 py-3 font-medium">Component</th>
+                        <th className="px-4 py-3 font-medium">Positioning</th>
+                        <th className="px-4 py-3 font-medium">Comment</th>
+                        <th className="px-4 py-3 font-medium">Supplier</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {data.fabrication.map((f: any, i: number) => (
+                      {(data.bom || data.fabrication || []).map((f: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={f.placement} onChange={e => updateFabrication(i, 'placement', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900 uppercase text-[10px] tracking-wider" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 text-xs" value={f.material} onChange={e => updateFabrication(i, 'material', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 text-sm font-medium" value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.weight} onChange={e => updateFabrication(i, 'weight', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
                           </td>
                           <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 text-[10px]" value={f.notes} onChange={e => updateFabrication(i, 'notes', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 text-[10px]" value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
                           </td>
                         </tr>
                       ))}

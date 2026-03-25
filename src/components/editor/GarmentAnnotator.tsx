@@ -119,16 +119,24 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
          <div className="flex-1" />
 
          {onVectorize && (
-           <Button 
-             variant="secondary" 
-             size="sm" 
-             onClick={onVectorize} 
-             isLoading={isVectorizing}
-             className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm mx-2"
-           >
-             <Wand2 size={14} />
-             Vectorize Image (NanoBanana)
-           </Button>
+           <div className="relative flex items-center">
+             <Button 
+               variant="secondary" 
+               size="sm" 
+               onClick={onVectorize} 
+               isLoading={isVectorizing}
+               className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm mx-2 transition-all"
+             >
+               <Wand2 size={14} />
+               Vectorize Image (NanoBanana)
+             </Button>
+             {isVectorizing && (
+               <div className="absolute top-full mt-2 lg:mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-purple-100 text-purple-800 text-[11px] lg:text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg border border-purple-200 animate-pulse z-50 pointer-events-none">
+                 Feel free to do other things while this loads
+                 <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-100 border-l border-t border-purple-200 rotate-45"></div>
+               </div>
+             )}
+           </div>
          )}
          
          <button 

@@ -71,22 +71,38 @@ To permanently eliminate camera lens distortion (where the top of the garment is
 - **Shoulder Hem (Seam to Seam)**: ${shoulderWidth}
 
 Based on this image and these two exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
-The JSON should have the following structure:
+The JSON should have the exact following structure matching our official Tech Pack template guidelines:
 {
+  "properties": {
+    "style": "string (e.g., 200021-CL)",
+    "externalStyleName": "string",
+    "season": "string (e.g., FW25)",
+    "concept": "string",
+    "gender": "string",
+    "category": "string",
+    "description": "string",
+    "pd": "string",
+    "td": "string",
+    "designer": "string"
+  },
+  "bom": [
+    { "category": "Fabric", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
+    { "category": "Wash", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
+    { "category": "Trims", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
+    { "category": "Labels", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" }
+  ],
   "measurements": [
-    { "point": "string", "description": "string", "value": "string (with units)", "tolerance": "string" }
+    { "id": "string (e.g. BW003)", "point": "string", "description": "string", "value": "string", "tolMinus": "string", "tolPlus": "string" }
   ],
   "callouts": [
-    { "id": "number", "description": "string (construction details, stitching, hardware)" }
-  ],
-  "fabrication": [
-    { "placement": "string", "material": "string", "weight": "string", "notes": "string" }
+    { "id": "number", "description": "string (construction details like stitch density, embroidery, etc.)" }
   ]
 }
 
-Carefully identify the specific style, silhouette, and features of the garment in the image.
-Using the THREE provided geometric anchors, mathematically triangulate and scale the exact proportions of the remaining measurements (like neck drops, sleeve lengths, and armholes) to perfectly match the silhouette observed in the photo, completely voiding focal distortion from the camera tilt. 
-Ensure the resultant measurements are mathematically realistic. Include at least 6 key measurements (including echoing the three anchors exactly as provided). CRITICAL: If the garment visually has a collar, you MUST recognize it and include precise collar dimensions (e.g., Collar Point Length, Collar Stand Height, Neck Drop, Neck Width) in the measurements. Include 4 explicit callouts describing hems/stitches, and 1-2 fabrication details.`;
+Carefully identify the specific style, silhouette, and features of the garment in the image to populate the \`properties\` accurately.
+For \`bom\`, accurately guess the materials, washes, trims, and labels required to construct this specific garment.
+For \`measurements\`, use the THREE provided geometric anchors to mathematically triangulate and scale the exact proportions. Include at least 8-10 key measurements (including echoing the three anchors exactly as provided) using standard apparel IDs (like BW001, LEN246, SLV426, STY121). 
+For \`callouts\`, include 5-8 explicit detailed instructions numbered 1-9 as per the template.`;
 
     const parts: any[] = [prompt, frontPart];
     if (backImageUrl && backImageUrl.trim() !== '') {
