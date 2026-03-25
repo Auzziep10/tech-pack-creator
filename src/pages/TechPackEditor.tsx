@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Download, Save, ArrowLeft, Wand2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
+import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
@@ -128,57 +128,61 @@ export function TechPackEditor() {
     }
   };
 
-  const handleExport = async () => {
-    if (!exportRef.current) return;
-    setIsExporting(true);
-    try {
-      await new Promise(r => setTimeout(r, 100));
-      const canvas = await html2canvas(exportRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false
-      });
-      const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'in',
-        format: 'letter'
-      });
-      
-      const pageWidth = 11.0;
-      const pageHeight = 8.5;
-      const margin = 0.3; // 0.3 inch margins around the content
-      const safeWidth = pageWidth - (margin * 2); // 10.4
-      const safeHeight = pageHeight - (margin * 2); // 7.9
-      
-      const imgWidth = safeWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-      
-      // Page 1
-      pdf.addImage(imgData, 'PNG', margin, position + margin, imgWidth, imgHeight);
-      heightLeft -= safeHeight;
-      
-      // Subsequent Pages
-      while (heightLeft > 0) {
-        position = position - safeHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, position + margin, imgWidth, imgHeight);
-        heightLeft -= safeHeight;
+  const handleExport = useReactToPrint({
+    contentRef: exportRef,
+    documentTitle: `${packName.replace(/\s+/g, '_')}_TechPack`,
+    pageStyle: `
+      @page {
+        size: landscape;
+        margin: 0.5in;
       }
-      
-      pdf.save(`${packName.replace(/\s+/g, '_')}_TechPack.pdf`);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to export PDF');
-    } finally {
-      setIsExporting(false);
-    }
-  };
+      @media print {
+        body { 
+          -webkit-print-color-adjust: exact; 
+          print-color-adjust: exact; 
+        }
+        .print-container {
+           width: 100% !important;
+           max-width: none !important;
+           padding: 0 !important;
+        }
+        /* Fix the grid constraint pushing elements off the right side */
+        .print-container .grid-cols-12 {
+           display: flex;
+           flex-direction: column;
+           gap: 1.5rem !important;
+        }
+        .print-container .col-span-5, 
+        .print-container .col-span-7 {
+           width: 100% !important;
+           max-width: 100% !important;
+        }
+        
+        /* Ensure tables stay within width */
+        table {
+           width: 100% !important;
+           table-layout: fixed;
+           word-wrap: break-word;
+        }
+        th, td {
+           white-space: normal !important;
+           word-break: break-word;
+        }
+        
+        /* Force page breaks properly where we told it to */
+        .page-break-avoid {
+           page-break-inside: avoid;
+           break-inside: avoid;
+        }
+        
+        textarea {
+           resize: none;
+           overflow: hidden;
+           border: none;
+        }
+      }
+    `
+  });
 
   const updateMeasurement = (index: number, field: string, value: string) => {
     const newData = { ...data };
@@ -229,7 +233,7 @@ export function TechPackEditor() {
             <Save size={16} />
             Save Tech Pack
           </Button>
-          <Button onClick={handleExport} isLoading={isExporting} className="gap-2 shadow-md">
+          <Button onClick={() => handleExport()} className="gap-2 shadow-md">
             <Download size={16} />
             Export Presentation
           </Button>
@@ -252,7 +256,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8" style={{ pageBreakInside: 'avoid' }}>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
                <div className="text-sm font-semibold">{data?.properties?.style || 'N/A'}</div>
@@ -340,7 +344,7 @@ export function TechPackEditor() {
                     </thead>
                     <tbody>
                       {data.measurements.map((m: any, i: number) => (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
                           <td className="px-4 py-3 align-top font-mono text-xs text-gray-500">
                              <AutoTextarea className="w-full bg-transparent outline-none uppercase" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
                           </td>
@@ -365,7 +369,7 @@ export function TechPackEditor() {
               </div>
 
               {/* Style BOM (Bill of Materials) Table */}
-              <div>
+              <div style={{ pageBreakInside: 'avoid' }}>
                 <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Style BOM (Bill of Materials)</h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-sm text-left">
@@ -380,7 +384,7 @@ export function TechPackEditor() {
                     </thead>
                     <tbody>
                       {(data.bom || data.fabrication || []).map((f: any, i: number) => (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
                           <td className="px-4 py-3 align-top">
                              <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900 uppercase text-[10px] tracking-wider" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
                           </td>
