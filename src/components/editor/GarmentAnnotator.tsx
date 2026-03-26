@@ -128,7 +128,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
                className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm mx-2 transition-all"
              >
                <Wand2 size={14} />
-               Vectorize Image (NanoBanana)
+               Generate Vector Blueprint (AI)
              </Button>
              {isVectorizing && (
                <div className="absolute top-full mt-2 lg:mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-purple-100 text-purple-800 text-[11px] lg:text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg border border-purple-200 animate-pulse z-50 pointer-events-none">

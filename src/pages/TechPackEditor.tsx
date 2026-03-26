@@ -453,7 +453,7 @@ export function TechPackEditor() {
                       <GarmentAnnotator 
                         imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
                         measurements={data.measurements}
-                        onVectorize={!vectorImageUrl ? handleVectorize : undefined}
+                        onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                       />
                     </div>
@@ -464,9 +464,12 @@ export function TechPackEditor() {
                     )}
                   </div>
                   {vectorImageUrl && (
-                    <div className="flex justify-center mt-2 print:hidden">
+                    <div className="flex justify-center items-center gap-2 mt-2 print:hidden">
                        <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-[10px] py-1 h-auto text-gray-600 bg-gray-100 hover:bg-gray-200">
                         {showVector ? "View Original Image" : "View Vector Blueprint"}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={handleVectorize} isLoading={isVectorizing} className="text-[10px] w-7 h-7 p-0 shrink-0 flex items-center justify-center text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-colors" title="Regenerate Vector Blueprint">
+                        <Wand2 size={12} />
                       </Button>
                     </div>
                   )}
