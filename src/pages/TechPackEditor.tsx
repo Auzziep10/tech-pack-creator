@@ -65,10 +65,10 @@ const RichTextCallouts = ({ value, onChange, className }: { value: string, onCha
   const renderRichText = (text: string) => {
     if (!text) return <span className="text-gray-400 italic">Click to add construction details...</span>;
     return text.split('\n').map((line, i) => {
-      const isHeader = /^\d+\.\s/.test(line);
+      const isHeader = /^\d+\.\s/.test(line.trim());
       const isBullet = line.trim().startsWith('-');
-      if (isHeader) return <div key={i} className="font-bold text-gray-900 mt-5 mb-2 print:mt-3 print:mb-1 first:mt-0">{line}</div>;
-      if (isBullet) return <div key={i} className="ml-4 pl-3 relative before:content-[''] before:w-1.5 before:h-1.5 print:before:w-1 print:before:h-1 before:bg-gray-500 before:rounded-full before:absolute before:left-[-3px] before:top-2 print:before:top-1.5 text-gray-700 mb-1">{line.replace(/^-/, '').trim()}</div>;
+      if (isHeader) return <div key={i} className="font-bold text-gray-900 mt-5 mb-2 print:mt-3 print:mb-1 first:mt-0">{line.trim()}</div>;
+      if (isBullet) return <div key={i} className="ml-4 pl-3 relative before:content-[''] before:w-1.5 before:h-1.5 print:before:w-1 print:before:h-1 before:bg-gray-500 before:rounded-full before:absolute before:left-[-3px] before:top-2 print:before:top-1.5 text-gray-700 mb-1">{line.replace(/^\s*-\s*/, '')}</div>;
       if (line.trim() === '') return <div key={i} className="h-3 print:h-2"></div>;
       return <div key={i} className="text-gray-700 mb-1">{line}</div>;
     });
