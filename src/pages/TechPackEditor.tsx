@@ -28,6 +28,12 @@ const AutoTextarea = ({ value, onChange, className }: { value: string, onChange:
   );
 };
 
+const formatName = (email?: string | null) => {
+  if (!email) return 'Unknown';
+  const namePart = email.split('@')[0];
+  return namePart.split(/[\.\-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+};
+
 export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -538,10 +544,10 @@ export function TechPackEditor() {
                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><History size={18} /> History</h3>
                <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-black transition-colors"><X size={20}/></button>
             </div>
-            <div className="space-y-4">
+             <div className="space-y-4">
                {data.activityLog?.length ? [...data.activityLog].reverse().map((log: any, i: number) => (
                  <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
-                    <div className="font-bold text-gray-900 text-sm truncate">{log.user?.split('@')[0]}</div>
+                    <div className="font-bold text-gray-900 text-sm truncate">{formatName(log.user)}</div>
                     <div className="text-gray-400 text-xs mt-0.5">{new Date(log.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</div>
                     <div className="text-gray-700 mt-2 text-[13px]">{log.message}</div>
                  </div>

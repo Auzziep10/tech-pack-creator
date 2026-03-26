@@ -8,6 +8,12 @@ import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService'
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc } from 'firebase/firestore';
 
+const formatName = (email?: string | null) => {
+  if (!email) return 'Teammate';
+  const namePart = email.split('@')[0];
+  return namePart.split(/[\.\-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+};
+
 export function Dashboard() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
@@ -123,7 +129,7 @@ export function Dashboard() {
                 </div>
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-[10px] text-gray-400 font-medium truncate pr-2">
-                    By: {pack.creatorEmail ? pack.creatorEmail : (pack.userId === user?.uid ? (user?.email || 'You') : 'Teammate')}
+                    By: {pack.userId === user?.uid ? 'You' : formatName(pack.creatorEmail)}
                   </p>
                   <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide shrink-0">
                     {pack.updatedAt?.toDate ? pack.updatedAt.toDate().toLocaleDateString() : 'Just now'}
