@@ -5,6 +5,8 @@ import { PlusCircle, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
+import { db } from '../services/firebase';
+import { writeBatch, doc } from 'firebase/firestore';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -15,7 +17,27 @@ export function Dashboard() {
   useEffect(() => {
     if (user && profile?.companyId) {
       getUserAndCompanyTechPacks(user.uid, profile.companyId)
-        .then(data => setTechPacks(data))
+        .then(async data => {
+          setTechPacks(data);
+
+          // Auto-migrate orphaned packs that user securely owns but aren't currently bound to the active team
+          const orphanedPacks = data.filter(p => p.userId === user.uid && p.companyId !== profile.companyId);
+          if (orphanedPacks.length > 0) {
+            try {
+              const batch = writeBatch(db);
+              let count = 0;
+              orphanedPacks.forEach(p => {
+                if (p.id) {
+                   batch.update(doc(db, 'techPacks', p.id), { companyId: profile.companyId });
+                   count++;
+                }
+              });
+              if (count > 0) await batch.commit();
+            } catch(e) {
+              console.error("Auto-migration failed:", e);
+            }
+          }
+        })
         .catch(err => console.error("Error fetching tech packs:", err))
         .finally(() => setLoading(false));
     }

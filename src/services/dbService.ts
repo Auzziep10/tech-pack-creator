@@ -38,6 +38,7 @@ export const saveTechPack = async (
   if (existingId) {
     const packRef = doc(db, 'techPacks', existingId);
     await updateDoc(packRef, {
+      companyId,
       name,
       imageUrl,
       techPack,
