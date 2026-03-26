@@ -115,7 +115,20 @@ export function TechPackEditor() {
 
   const toggleTeamEditable = () => {
     if (!isCreator) return;
-    setData((prev: any) => ({ ...prev, isTeamEditable: !(prev.isTeamEditable ?? true) }));
+    const isLocking = data?.isTeamEditable ?? true;
+    pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing');
+    setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
+  };
+
+  const pushLog = (message: string) => {
+    setData((prev: any) => ({
+      ...prev,
+      activityLog: [...(prev.activityLog || []), {
+        timestamp: new Date().toISOString(),
+        message,
+        user: user?.email || 'Unknown'
+      }]
+    }));
   };
 
   const handleVectorize = async () => {
@@ -125,6 +138,7 @@ export function TechPackEditor() {
       const newImageUrl = await vectorizeGarmentImage(imageUrl);
       setVectorImageUrl(newImageUrl);
       setShowVector(true);
+      pushLog('Generated Vector Blueprint (AI)');
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
     } finally {
@@ -168,6 +182,14 @@ export function TechPackEditor() {
     if (!user) return alert("Must be logged in to save.");
     setIsSaving(true);
     try {
+      const saveLog = {
+        timestamp: new Date().toISOString(),
+        message: 'Saved Tech Pack',
+        user: user.email || 'Unknown'
+      };
+      const finalActivityLog = [...(data.activityLog || []), saveLog];
+      setData((prev: any) => ({ ...prev, activityLog: finalActivityLog }));
+
       let annotatedImg = '';
       if (annotatorRef.current) {
         const canvas = await html2canvas(annotatorRef.current, { useCORS: true, scale: 2, logging: false });
@@ -208,7 +230,7 @@ export function TechPackEditor() {
         techPackDataToSave, 
         user.email || 'Unknown',
         existingId,
-        data.activityLog || [],
+        finalActivityLog,
         data.isTeamEditable ?? true
       );
       if (id === 'draft') {
@@ -370,7 +392,7 @@ export function TechPackEditor() {
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
-          <Button onClick={() => handleExport()} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
+          <Button onClick={() => { pushLog('Exported Tech Pack to PDF'); handleExport(); }} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
             <div className="flex items-center gap-2 text-sm">
               <Download size={16} />
               <span className="hidden sm:inline font-semibold">Export</span>
@@ -604,7 +626,12 @@ export function TechPackEditor() {
                       </div>
                       {vectorImageUrl && (
                          <Button 
-                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setData({...data, patternImage: vectorImageUrl}); }} 
+                           onClick={(e) => { 
+                              e.preventDefault(); 
+                              e.stopPropagation(); 
+                              setData({...data, patternImage: vectorImageUrl}); 
+                              pushLog('Applied Vector Blueprint to Specs');
+                           }} 
                            size="sm" 
                            variant="secondary" 
                            className="mt-4 text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"

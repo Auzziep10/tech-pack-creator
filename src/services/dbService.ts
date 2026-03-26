@@ -27,13 +27,15 @@ export const saveTechPack = async (
   existingLog?: any[],
   isTeamEditable: boolean = true
 ) => {
-  const newLogEntry = {
-    timestamp: new Date().toISOString(),
-    message: existingId ? 'Updated Tech Pack' : 'Created Tech Pack',
-    user: creatorEmail
-  };
+  let updatedLog = [...(existingLog || [])];
   
-  const updatedLog = existingLog ? [...existingLog, newLogEntry] : [newLogEntry];
+  if (!existingId) {
+    updatedLog.unshift({
+      timestamp: new Date().toISOString(),
+      message: 'Created Tech Pack',
+      user: creatorEmail
+    });
+  }
 
   if (existingId) {
     const packRef = doc(db, 'techPacks', existingId);
