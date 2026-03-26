@@ -102,8 +102,8 @@ export async function generateTechPack(frontImageUrl: string, backImageUrl: stri
 
     const { data } = await res.json();
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error details:", error);
-    throw new Error("AI Generation Failed. Your API key might be missing, invalid, or encountering an issue.");
+    throw new Error(error.message || "AI Generation Failed due to an unknown issue.");
   }
 }
