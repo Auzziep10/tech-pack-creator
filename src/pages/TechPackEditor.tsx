@@ -67,10 +67,10 @@ const RichTextCallouts = ({ value, onChange, className }: { value: string, onCha
     return text.split('\n').map((line, i) => {
       const isHeader = /^\d+\.\s/.test(line.trim());
       const isBullet = line.trim().startsWith('-');
-      if (isHeader) return <div key={i} className="font-bold text-gray-900 mt-5 mb-2 print:mt-3 print:mb-1 first:mt-0">{line.trim()}</div>;
-      if (isBullet) return <div key={i} className="ml-4 pl-3 relative before:content-[''] before:w-1.5 before:h-1.5 print:before:w-1 print:before:h-1 before:bg-gray-500 before:rounded-full before:absolute before:left-[-3px] before:top-2 print:before:top-1.5 text-gray-700 mb-1">{line.replace(/^\s*-\s*/, '')}</div>;
+      if (isHeader) return <div key={i} className="font-bold text-gray-900 mt-5 mb-2 print:mt-3 print:mb-1 first:mt-0 print:break-after-avoid">{line.trim()}</div>;
+      if (isBullet) return <div key={i} className="ml-4 pl-3 relative before:content-[''] before:w-1.5 before:h-1.5 print:before:w-1 print:before:h-1 before:bg-gray-500 before:rounded-full before:absolute before:left-[-3px] before:top-2 print:before:top-1.5 text-gray-700 mb-1 print:break-inside-avoid">{line.replace(/^\s*-\s*/, '')}</div>;
       if (line.trim() === '') return <div key={i} className="h-3 print:h-2"></div>;
-      return <div key={i} className="text-gray-700 mb-1">{line}</div>;
+      return <div key={i} className="text-gray-700 mb-1 print:break-inside-avoid">{line}</div>;
     });
   };
 
@@ -485,9 +485,9 @@ export function TechPackEditor() {
                 <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
                   <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                 </div>
-                <div className="text-xs print:text-[10px] text-gray-700 w-full" style={{ pageBreakInside: 'avoid' }}>
+                <div className="text-xs print:text-[10px] text-gray-700 w-full block">
                   <RichTextCallouts 
-                    className="w-full bg-transparent rounded-lg p-2 -ml-2 outline-none leading-relaxed min-h-[150px]"
+                    className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
                     value={
                       typeof data.callouts === 'string' 
                         ? data.callouts 
@@ -512,7 +512,7 @@ export function TechPackEditor() {
                   <table className="w-full text-xs print:text-[10px] text-left">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-2 py-1 font-medium">DIM (ID)</th>
+                        <th className="px-2 py-1 font-medium w-24">DIM (ID)</th>
                         <th className="px-2 py-1 font-medium">Point of Measure</th>
                         <th className="px-2 py-1 font-medium w-20">Spec</th>
                         <th className="px-1 py-1 font-medium w-12 text-center">Tol (-)</th>
@@ -552,7 +552,7 @@ export function TechPackEditor() {
                   <table className="w-full text-xs print:text-[10px] text-left">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-2 py-1 font-medium">Category</th>
+                        <th className="px-2 py-1 font-medium w-28">Category</th>
                         <th className="px-2 py-1 font-medium">Component</th>
                         <th className="px-2 py-1 font-medium">Positioning</th>
                         <th className="px-2 py-1 font-medium">Comment</th>
