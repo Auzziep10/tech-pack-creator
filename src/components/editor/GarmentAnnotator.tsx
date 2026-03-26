@@ -154,29 +154,30 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
 
       {/* Interactive Main Canvas */}
       <div 
-        className={`select-none bg-white rounded-2xl border flex items-center justify-center p-6 relative overflow-hidden group ${
+        className={`select-none bg-white rounded-2xl border relative overflow-hidden group ${
           isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
         } ${
           isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5]'
         }`}
       >
-        <div 
-          ref={containerRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          style={{ touchAction: 'none' }}
-          className={`relative inline-flex items-center justify-center max-w-full max-h-full ${isDrawingMode ? 'cursor-crosshair' : ''}`}
-        >
-        <img 
-          src={imageUrl} 
-          alt="Garment Artboard" 
-          draggable={false}
-          className={`max-w-full max-h-full object-contain pointer-events-none transition-all duration-700 ${
-            isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
-          }`}
-        />
+        <div className="absolute inset-6 flex items-center justify-center pointer-events-none">
+          <div 
+            ref={containerRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            style={{ touchAction: 'none' }}
+            className={`relative flex max-w-full max-h-full pointer-events-auto ${isDrawingMode ? 'cursor-crosshair' : ''}`}
+          >
+            <img 
+              src={imageUrl} 
+              alt="Garment Artboard" 
+              draggable={false}
+              className={`max-w-full max-h-full object-contain pointer-events-none transition-all duration-700 ${
+                isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
+              }`}
+            />
         
         {/* SVG Drawing Layer */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -227,8 +228,9 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
             )}
           </svg>
         </div>
+      </div>
 
-        {!isFullscreen && (
+      {!isFullscreen && (
           <div 
             className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer" 
             onClick={() => setIsFullscreen(true)}
