@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle2, Building, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -72,6 +72,16 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
         const userRef = doc(db, 'users', profile.uid);
         await updateDoc(userRef, { companyId: newCompanyId });
         
+        // Bring user's existing tech packs into the new team's workspace
+        const qUserPacks = query(collection(db, 'techPacks'), where("userId", "==", profile.uid));
+        const userPacksSnap = await getDocs(qUserPacks);
+        
+        const batch = writeBatch(db);
+        userPacksSnap.docs.forEach(d => {
+            batch.update(d.ref, { companyId: newCompanyId });
+        });
+        await batch.commit();
+        
         alert("Success! You've joined the team.");
         window.location.reload(); // Refresh the app to flush caching
       }
@@ -129,6 +139,17 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                     onClick={async () => {
                       const userRef = doc(db, 'users', profile.uid);
                       await updateDoc(userRef, { companyId: profile.uid });
+
+                      // Take user's existing tech packs out of the team's workspace
+                      const qUserPacks = query(collection(db, 'techPacks'), where("userId", "==", profile.uid));
+                      const userPacksSnap = await getDocs(qUserPacks);
+                      
+                      const batch = writeBatch(db);
+                      userPacksSnap.docs.forEach(d => {
+                          batch.update(d.ref, { companyId: profile.uid });
+                      });
+                      await batch.commit();
+
                       alert("Successfully disconnected from team.");
                       window.location.reload();
                     }}
