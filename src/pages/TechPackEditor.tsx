@@ -211,6 +211,9 @@ export function TechPackEditor() {
       if (techPackDataToSave.patternImage?.startsWith('data:')) {
         techPackDataToSave.patternImage = await uploadBase64Image(techPackDataToSave.patternImage, user.uid);
       }
+      if (techPackDataToSave.lineSheetImage?.startsWith('data:')) {
+        techPackDataToSave.lineSheetImage = await uploadBase64Image(techPackDataToSave.lineSheetImage, user.uid);
+      }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
       techPackDataToSave.images.vector = finalVectorUrl || techPackDataToSave.images.vector || '';
@@ -657,7 +660,7 @@ export function TechPackEditor() {
                        value={data?.developmentComments || ''} 
                        onChange={v => setData({...data, developmentComments: v})} 
                      />
-                  </div>
+
                   <div className="space-y-1 mt-2 flex items-center gap-2">
                      <div className="text-xs print:text-[10px] font-bold text-gray-900 shrink-0">Shell:</div>
                      <AutoTextarea className="flex-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.shell || ''} onChange={e => setData({...data, shell: e.target.value})} />
@@ -677,6 +680,88 @@ export function TechPackEditor() {
                   </div>
                </div>
             </div>
+          </div>
+
+          {/* Wholesale Line Sheet Section */}
+          <div className="print-force-new-page pt-4 mt-8 print:mt-0 print:pt-0">
+             <h3 className="text-lg font-serif font-bold text-gray-900 border-b border-gray-200 pb-1 mb-4 leading-tight">Wholesale Line Sheet</h3>
+             <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
+                <div className="col-span-12 md:col-span-6 print:col-span-6 space-y-4">
+                   {data?.lineSheetImage ? (
+                     <div className="relative group w-full">
+                        <img src={data.lineSheetImage} alt="Line Sheet Garment" className="w-full object-contain bg-transparent print:mix-blend-multiply" />
+                        <button onClick={() => setData({...data, lineSheetImage: ''})} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><X size={16} /></button>
+                     </div>
+                   ) : (
+                     <label className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden p-4 text-center">
+                       <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                          <span className="text-2xl leading-none">+</span>
+                          <span>Upload Line Sheet Render</span>
+                       </div>
+                       {vectorImageUrl && (
+                          <Button 
+                            onClick={(e) => { 
+                               e.preventDefault(); 
+                               e.stopPropagation(); 
+                               setData({...data, lineSheetImage: vectorImageUrl}); 
+                               pushLog('Applied Vector Blueprint to Line Sheet');
+                            }} 
+                            size="sm" 
+                            variant="secondary" 
+                            className="mt-4 text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"
+                          >
+                             Use Vector Blueprint
+                          </Button>
+                       )}
+                       <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                             const reader = new FileReader();
+                             reader.onload = (ev) => setData({...data, lineSheetImage: ev.target?.result as string});
+                             reader.readAsDataURL(e.target.files[0]);
+                          }
+                       }} />
+                     </label>
+                   )}
+                </div>
+                
+                <div className="col-span-12 md:col-span-6 print:col-span-6 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">
+                   <div className="space-y-1">
+                      <div className="text-xs print:text-[10px] uppercase font-bold text-gray-900 underline">Sales Description</div>
+                      <RichTextCallouts 
+                        className="w-full bg-transparent outline-none min-h-[40px] text-xs print:text-[10px]" 
+                        value={data?.lineSheetDescription || ''} 
+                        onChange={v => setData({...data, lineSheetDescription: v})} 
+                      />
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-4 mt-6 print:mt-4">
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">MSRP (Retail)</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-sm print:text-xs font-bold text-gray-900" value={data?.msrp || ''} onChange={e => setData({...data, msrp: e.target.value})} />
+                      </div>
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">WHSL (Wholesale)</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-sm print:text-xs font-bold text-gray-900" value={data?.wholesale || ''} onChange={e => setData({...data, wholesale: e.target.value})} />
+                      </div>
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">Available Colors</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.availableColors || ''} onChange={e => setData({...data, availableColors: e.target.value})} />
+                      </div>
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">Minimum Order (MOQ)</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.moq || ''} onChange={e => setData({...data, moq: e.target.value})} />
+                      </div>
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">Size Run</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.sizeRun || ''} onChange={e => setData({...data, sizeRun: e.target.value})} />
+                      </div>
+                      <div className="space-y-1 border-b border-gray-100 pb-2">
+                         <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400">Delivery Window</div>
+                         <AutoTextarea className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.deliveryWindow || ''} onChange={e => setData({...data, deliveryWindow: e.target.value})} />
+                      </div>
+                   </div>
+                </div>
+             </div>
           </div>
           
         </div>
