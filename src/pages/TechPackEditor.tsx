@@ -100,7 +100,8 @@ export function TechPackEditor() {
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>({ properties: {}, measurements: [], callouts: [], bom: [] });
   const [imageUrl, setImageUrl] = useState('');
-  const [vectorImageUrl, setVectorImageUrl] = useState('');
+  const [vectorMap, setVectorMap] = useState<Record<string, string>>({});
+  const vectorImageUrl = vectorMap[imageUrl] || '';
   const [showVector, setShowVector] = useState(false);
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
@@ -138,9 +139,9 @@ export function TechPackEditor() {
     try {
       const { vectorizeGarmentImage } = await import('../services/nanobananaService');
       const newImageUrl = await vectorizeGarmentImage(imageUrl);
-      setVectorImageUrl(newImageUrl);
+      setVectorMap(prev => ({ ...prev, [imageUrl]: newImageUrl }));
       setShowVector(true);
-      pushLog('Generated Vector Blueprint (AI)');
+      pushLog(`Generated Vector Blueprint (AI) for photo`);
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
     } finally {
@@ -158,7 +159,10 @@ export function TechPackEditor() {
       });
       const initialImage = location.state.techPack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
-      setVectorImageUrl(location.state.techPack?.images?.vector || '');
+      
+      const legacyVector = location.state.techPack?.images?.vector;
+      const initialVectors = location.state.techPack?.images?.vectors || (legacyVector ? { [initialImage]: legacyVector } : {});
+      setVectorMap(initialVectors);
       
       const initialGallery = location.state.techPack?.gallery || [];
       if (initialImage && !initialGallery.includes(initialImage)) {
@@ -179,7 +183,10 @@ export function TechPackEditor() {
           });
           const initialImage = packInfo.techPack?.images?.original || packInfo.imageUrl;
           setImageUrl(initialImage);
-          setVectorImageUrl(packInfo.techPack?.images?.vector || '');
+          
+          const legacyVector = packInfo.techPack?.images?.vector;
+          const initialVectors = packInfo.techPack?.images?.vectors || (legacyVector ? { [initialImage]: legacyVector } : {});
+          setVectorMap(initialVectors);
           
           const initialGallery = packInfo.techPack?.gallery || [];
           if (initialImage && !initialGallery.includes(initialImage)) {
@@ -214,12 +221,6 @@ export function TechPackEditor() {
         annotatedImg = canvas.toDataURL('image/png');
       }
 
-      let finalVectorUrl = vectorImageUrl;
-      if (vectorImageUrl.startsWith('data:')) {
-        finalVectorUrl = await uploadBase64Image(vectorImageUrl, user.uid);
-        setVectorImageUrl(finalVectorUrl);
-      }
-
       let finalAnnotatedUrl = '';
       if (annotatedImg.startsWith('data:')) {
         finalAnnotatedUrl = await uploadBase64Image(annotatedImg, user.uid);
@@ -228,14 +229,25 @@ export function TechPackEditor() {
       const techPackDataToSave = { ...data };
 
       let finalGalleryImages = [];
+      let finalVectorMap: Record<string, string> = {};
+
       for (const gImg of galleryImages) {
+         let finalUrl = gImg;
          if (gImg.startsWith('data:')) {
-            finalGalleryImages.push(await uploadBase64Image(gImg, user.uid));
-         } else {
-            finalGalleryImages.push(gImg);
+            finalUrl = await uploadBase64Image(gImg, user.uid);
+         }
+         finalGalleryImages.push(finalUrl);
+
+         if (vectorMap[gImg]) {
+             let vecUrl = vectorMap[gImg];
+             if (vecUrl.startsWith('data:')) {
+                vecUrl = await uploadBase64Image(vecUrl, user.uid);
+             }
+             finalVectorMap[finalUrl] = vecUrl;
          }
       }
       setGalleryImages(finalGalleryImages);
+      setVectorMap(finalVectorMap);
       techPackDataToSave.gallery = finalGalleryImages;
 
       if (techPackDataToSave.patternImage?.startsWith('data:')) {
@@ -246,7 +258,8 @@ export function TechPackEditor() {
       }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
-      techPackDataToSave.images.vector = finalVectorUrl || techPackDataToSave.images.vector || '';
+      techPackDataToSave.images.vectors = finalVectorMap;
+      techPackDataToSave.images.vector = finalVectorMap[finalGalleryImages[0]] || ''; // Retain for legacy compat
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       // Strip root properties that were temporarily injected for the editor UI logic to avoid Firebase undefined nesting errors

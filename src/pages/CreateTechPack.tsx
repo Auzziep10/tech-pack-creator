@@ -96,6 +96,13 @@ export function CreateTechPack() {
          }
       }
 
+      // Automatically add both front and back photos into the editor's initial gallery array
+      const initialGallery = [finalImageUrl];
+      if (images.backUrl) {
+         initialGallery.push(images.backUrl);
+      }
+      if (!data.gallery) data.gallery = initialGallery;
+
       setStep('done');
       navigate('/pack/draft', { state: { image: finalImageUrl, techPack: data } });
     } catch (e: any) {
