@@ -10,21 +10,21 @@ import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-      ref.current.style.height = ref.current.scrollHeight + 'px';
-    }
-  }, [value]);
   return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={onChange}
-      className={`resize-none overflow-hidden block ${className}`}
-      rows={1}
-    />
+    <div className="grid w-full relative">
+      <textarea
+        value={value}
+        onChange={onChange}
+        className={`resize-none overflow-hidden col-start-1 row-start-1 w-full h-full ${className}`}
+        rows={1}
+      />
+      <div 
+        className={`invisible whitespace-pre-wrap col-start-1 row-start-1 w-full break-words pointer-events-none ${className}`} 
+        aria-hidden="true"
+      >
+        {value + ' '}
+      </div>
+    </div>
   );
 };
 
