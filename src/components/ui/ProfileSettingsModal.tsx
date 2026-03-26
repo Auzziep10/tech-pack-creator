@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from './Modal';
 import { Button } from './Button';
+import { Input } from './Input';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateProfile, updateEmail, updatePassword } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { User, Mail, Lock } from 'lucide-react';
+import { User, X } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -28,6 +28,8 @@ export function ProfileSettingsModal({ isOpen, onClose }: Props) {
       setMessage({ type: '', text: '' });
     }
   }, [isOpen, user, profile]);
+
+  if (!isOpen || !user) return null;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,61 +86,53 @@ export function ProfileSettingsModal({ isOpen, onClose }: Props) {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Profile Settings">
-      <form onSubmit={handleSave} className="space-y-4">
-        {message.text && (
-           <div className={`p-4 rounded-xl text-sm border ${message.type === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
-             {message.text}
-           </div>
-        )}
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300">
+        <header className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-xl font-serif font-bold text-gray-900 flex items-center gap-2">
+            <User className="text-gray-900 bg-gray-100 p-1.5 rounded-lg" size={28} />
+            Profile Settings
+          </h2>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100">
+            <X size={20} />
+          </button>
+        </header>
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium text-gray-400 ml-1 mb-1.5 block">Full Name</label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input 
-                 type="text"
-                 value={name} 
-                 onChange={e => setName(e.target.value)} 
-                 className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-white/30 focus:bg-white/10 transition-all font-medium"
-              />
-            </div>
+        <form onSubmit={handleSave} className="p-6 space-y-6">
+          {message.text && (
+             <div className={`p-4 rounded-xl text-sm border font-medium ${message.type === 'error' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-700 border-green-100'}`}>
+               {message.text}
+             </div>
+          )}
+
+          <div className="space-y-4">
+             <Input 
+                label="Full Name" 
+                type="text"
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+             />
+             <Input 
+                label="Email Address" 
+                type="email"
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+             />
+             <Input 
+                label="New Password" 
+                type="password"
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                placeholder="Leave blank to keep current password"
+             />
           </div>
           
-          <div>
-            <label className="text-sm font-medium text-gray-400 ml-1 mb-1.5 block">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input 
-                 type="email"
-                 value={email} 
-                 onChange={e => setEmail(e.target.value)} 
-                 className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-white/30 focus:bg-white/10 transition-all font-medium"
-              />
-            </div>
+          <div className="pt-2 flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={onClose} className="w-24 border-gray-200 hover:bg-gray-50">Cancel</Button>
+            <Button type="submit" isLoading={isLoading} className="w-32 bg-black hover:bg-gray-800 text-white border-transparent">Save Changes</Button>
           </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-400 ml-1 mb-1.5 block">New Password <span className="text-gray-600 font-normal ml-1">(Optional)</span></label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-              <input 
-                 type="password"
-                 value={password} 
-                 onChange={e => setPassword(e.target.value)} 
-                 placeholder="Leave blank to keep current password"
-                 className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-white/30 focus:bg-white/10 transition-all font-medium placeholder:text-gray-600"
-              />
-            </div>
-          </div>
-        </div>
-        
-        <div className="pt-6 pb-2 flex justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={onClose} className="bg-white/5 text-gray-300 hover:bg-white/10 border-white/10 w-24">Cancel</Button>
-          <Button type="submit" isLoading={isLoading} className="w-32">Save Changes</Button>
-        </div>
-      </form>
-    </Modal>
+        </form>
+      </div>
+    </div>
   );
 }
