@@ -252,9 +252,9 @@ export function TechPackEditor() {
     setData(newData);
   };
 
-  const updateCallout = (index: number, value: string) => {
+  const updateConstruction = (val: string) => {
     const newData = { ...data };
-    newData.callouts[index].description = value;
+    newData.callouts = val;
     setData(newData);
   };
 
@@ -421,17 +421,19 @@ export function TechPackEditor() {
                 <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
                   <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                 </div>
-                <ol className="space-y-1 pl-4 list-decimal marker:text-black marker:font-bold text-gray-700 text-[11px]">
-                  {data.callouts.map((callout: any, i: number) => (
-                    <li key={i} className="pl-1" style={{ pageBreakInside: 'avoid' }}>
-                      <AutoTextarea 
-                        className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors leading-tight"
-                        value={callout.description}
-                        onChange={(e) => updateCallout(i, e.target.value)}
-                      />
-                    </li>
-                  ))}
-                </ol>
+                <div className="text-[11px] text-gray-700 w-full" style={{ pageBreakInside: 'avoid' }}>
+                  <AutoTextarea 
+                    className="w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-black rounded-lg p-2 -ml-2 outline-none transition-colors leading-relaxed whitespace-pre-wrap min-h-[150px]"
+                    value={
+                      typeof data.callouts === 'string' 
+                        ? data.callouts 
+                        : (Array.isArray(data.callouts) && data.callouts.length > 0)
+                          ? data.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
+                          : ''
+                    }
+                    onChange={(e) => updateConstruction(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
 
