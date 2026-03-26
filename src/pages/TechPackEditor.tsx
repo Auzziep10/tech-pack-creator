@@ -119,16 +119,10 @@ export function TechPackEditor() {
   };
 
   const handleVectorize = async () => {
-    let apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
-    if (!apiKey) {
-      apiKey = window.prompt("Please enter your NanoBanana API Key to generate a clean vector.:");
-    }
-    if (!apiKey) return;
-    
     setIsVectorizing(true);
     try {
       const { vectorizeGarmentImage } = await import('../services/nanobananaService');
-      const newImageUrl = await vectorizeGarmentImage(imageUrl, apiKey);
+      const newImageUrl = await vectorizeGarmentImage(imageUrl);
       setVectorImageUrl(newImageUrl);
       setShowVector(true);
     } catch (e: any) {
