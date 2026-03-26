@@ -280,34 +280,38 @@ export function TechPackEditor() {
             placeholder="Garment Name"
           />
         </div>
-        <div className="flex items-center gap-2 md:gap-3">
+        <div className="flex items-center gap-2">
           {isCreator && (
             <Button 
                onClick={toggleTeamEditable} 
                variant="secondary" 
-               className={`gap-2 ${data?.isTeamEditable === false ? 'text-red-600 bg-red-50' : 'text-gray-600'}`}
+               className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 ${data?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
                title={data?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
             >
                {data?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
             </Button>
           )}
           {!canEdit && (
-            <div className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hidden sm:flex">
+            <div className="bg-orange-50 border border-orange-200 text-orange-600 px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-2 hidden sm:flex shrink-0">
                <Lock size={14} /> View Only
             </div>
           )}
           {canEdit && (
-            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="gap-2">
-              <Save size={16} />
-              <span className="hidden sm:inline">Save</span>
+            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="px-3 md:px-4 h-9 shrink-0">
+              <div className="flex items-center gap-2 text-sm">
+                <Save size={16} />
+                <span className="hidden sm:inline font-semibold">Save</span>
+              </div>
             </Button>
           )}
-          <Button onClick={() => setShowHistory(true)} variant="secondary" className="px-3" title="Activity Log">
+          <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
-          <Button onClick={() => handleExport()} className="gap-2 shadow-md">
-            <Download size={16} />
-            <span className="hidden sm:inline">Export</span>
+          <Button onClick={() => handleExport()} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
+            <div className="flex items-center gap-2 text-sm">
+              <Download size={16} />
+              <span className="hidden sm:inline font-semibold">Export</span>
+            </div>
           </Button>
         </div>
       </div>
