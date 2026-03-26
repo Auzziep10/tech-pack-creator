@@ -186,6 +186,9 @@ export function TechPackEditor() {
       }
 
       const techPackDataToSave = { ...data };
+      if (techPackDataToSave.patternImage?.startsWith('data:')) {
+        techPackDataToSave.patternImage = await uploadBase64Image(techPackDataToSave.patternImage, user.uid);
+      }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
       techPackDataToSave.images.vector = finalVectorUrl || techPackDataToSave.images.vector || '';
@@ -581,6 +584,62 @@ export function TechPackEditor() {
                 </div>
               </div>
 
+            </div>
+          </div>
+
+          {/* Pattern & Making Section */}
+          <div className="print-force-new-page pt-4 mt-8 print:mt-0 print:pt-0">
+            <h3 className="text-lg font-serif font-bold text-gray-900 border-b border-gray-200 pb-1 mb-4 leading-tight">Construction Sketches & Pattern Specs</h3>
+            <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
+               <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
+                  {data?.patternImage ? (
+                    <div className="relative group w-full">
+                       <img src={data.patternImage} alt="Pattern Details" className="w-full object-contain bg-transparent print:mix-blend-multiply" />
+                       <button onClick={() => setData({...data, patternImage: ''})} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><X size={16} /></button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden">
+                      <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                         <span className="text-2xl">+</span>
+                         Upload Pattern / Detail Sketches
+                      </div>
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                         if (e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setData({...data, patternImage: ev.target?.result as string});
+                            reader.readAsDataURL(e.target.files[0]);
+                         }
+                      }} />
+                    </label>
+                  )}
+               </div>
+               <div className="col-span-12 md:col-span-5 print:col-span-4 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">
+                  <div className="space-y-1">
+                     <div className="text-xs print:text-[10px] uppercase font-bold text-gray-900 underline">Development Comments</div>
+                     <RichTextCallouts 
+                       className="w-full bg-transparent outline-none min-h-[40px] text-xs print:text-[10px]" 
+                       value={data?.developmentComments || ''} 
+                       onChange={v => setData({...data, developmentComments: v})} 
+                     />
+                  </div>
+                  <div className="space-y-1 mt-2 flex items-center gap-2">
+                     <div className="text-xs print:text-[10px] font-bold text-gray-900 shrink-0">Shell:</div>
+                     <AutoTextarea className="flex-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.shell || ''} onChange={e => setData({...data, shell: e.target.value})} />
+                  </div>
+                  <div className="space-y-1 flex items-center gap-2">
+                     <div className="text-xs print:text-[10px] font-bold text-gray-900 shrink-0">Garment Treatment:</div>
+                     <AutoTextarea className="flex-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none text-xs print:text-[10px] font-medium" value={data?.garmentTreatment || ''} onChange={e => setData({...data, garmentTreatment: e.target.value})} />
+                  </div>
+                  <div className="border-t border-gray-200 print:border-black my-4 print:my-2 w-full"></div>
+                  <div className="space-y-1">
+                     <div className="text-xs print:text-[10px] uppercase font-bold text-gray-900 underline mb-2">Making</div>
+                     <RichTextCallouts 
+                       className="w-full bg-transparent outline-none min-h-[250px] text-xs print:text-[10px]" 
+                       value={typeof data?.making === 'string' ? data.making : ''} 
+                       onChange={v => setData({...data, making: v})} 
+                     />
+                  </div>
+               </div>
             </div>
           </div>
           
