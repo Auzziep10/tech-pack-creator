@@ -2,7 +2,36 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
-import { GlassCard } from '../components/ui/GlassCard';
+import Cropper from 'react-easy-crop';
+
+// Helper function to extract the visually cropped portion of the image into a neat JPEG
+const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+  const image = new Image();
+  image.src = imageSrc;
+  await new Promise(resolve => image.onload = resolve);
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return imageSrc;
+
+  canvas.width = pixelCrop.width;
+  canvas.height = pixelCrop.height;
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
+  );
+
+  return canvas.toDataURL('image/jpeg', 1.0);
+};
 
 export function MobileScanner() {
   const { sessionId } = useParams();
@@ -16,15 +45,20 @@ export function MobileScanner() {
   const [success, setSuccess] = useState(false);
   const [hasCameraError, setHasCameraError] = useState(false);
 
-  const [zoom, setZoom] = useState(1);
+  // Digital Pre-Crop Zoom
+  const [preZoom, setPreZoom] = useState(1);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // Post-Capture Cropper States
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [postZoom, setPostZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+
   const startCamera = useCallback(async (deviceId?: string, targetBadge?: string) => {
     try {
-      // 1. Force completely release the hardware track directly from the video DOM object
       if (videoRef.current && videoRef.current.srcObject) {
          const oldStream = videoRef.current.srcObject as MediaStream;
          oldStream.getTracks().forEach(track => {
@@ -33,14 +67,9 @@ export function MobileScanner() {
          });
          videoRef.current.srcObject = null;
       }
-      
-      // 2. Clear massive memory locks in iOS Safari
       setStream(null);
-
-      // 3. Apple's WebKit requires a tiny hardware flush window (100ms) to literally switch physical rear sensors!
       await new Promise(r => setTimeout(r, 100));
       
-      // Strip width/height on deviceId explicitly so resolutions don't force Safari to secretly regress to the main wide lens!
       const constraints: MediaStreamConstraints = {
         video: deviceId 
           ? { deviceId: { exact: deviceId } }
@@ -50,7 +79,6 @@ export function MobileScanner() {
       const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       const track = mediaStream.getVideoTracks()[0];
 
-      // 4. Fallback execution: Force iOS to apply optical hardware zoom if it exposed a virtual camera
       if (targetBadge && track && track.getCapabilities) {
          const caps = track.getCapabilities() as any;
          if (caps.zoom) {
@@ -81,8 +109,6 @@ export function MobileScanner() {
 
   const initDevices = async () => {
     try {
-      // 1. Apple Safari strictly restricts device enumeration until the user grants explicit camera permission.
-      // We must start a temporary video stream FIRST to trigger the native iOS permission popup!
       let tempStream: MediaStream | null = null;
       try {
          tempStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -91,20 +117,15 @@ export function MobileScanner() {
          tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
-      // 2. Now that permission is granted, iOS Safari will securely unlock all hardware lenses (Ultra Wide, Telephoto, Front)
       const devs = await navigator.mediaDevices.enumerateDevices();
       let vDevs = devs.filter(d => d.kind === 'videoinput');
-      
-      // Deduplicate any glitchy redundant lenses provided by Safari
       vDevs = Array.from(new Map(vDevs.map(d => [d.label || d.deviceId, d])).values());
       setVideoDevices(vDevs);
       
-      // Cleanup the temporary stream so we don't hold dual locks
       if (tempStream) {
         tempStream.getTracks().forEach(t => t.stop());
       }
       
-      // Safely snap onto the standard back camera to begin
       const backIdx = vDevs.findIndex(d => d.label.toLowerCase().includes('back') && !d.label.toLowerCase().includes('ultra') && !d.label.toLowerCase().includes('telephoto'));
       if (backIdx >= 0) {
         startCamera(vDevs[backIdx].deviceId, '1x');
@@ -126,7 +147,7 @@ export function MobileScanner() {
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
-  }, []); // Only run once on mount
+  }, []);
 
   const cycleCamera = () => {
     if (videoDevices.length > 1) {
@@ -150,8 +171,8 @@ export function MobileScanner() {
       
       const fw = video.videoWidth;
       const fh = video.videoHeight;
-      const cropW = fw / zoom;
-      const cropH = fh / zoom;
+      const cropW = fw / preZoom;
+      const cropH = fh / preZoom;
       const cropX = (fw - cropW) / 2;
       const cropY = (fh - cropH) / 2;
 
@@ -159,10 +180,12 @@ export function MobileScanner() {
       canvas.height = cropH;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Draw the zoomed sub-rectangle onto the tight canvas
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-        const dataUrl = canvas.toDataURL('image/jpeg', 1.0); // 100% Quality
+        const dataUrl = canvas.toDataURL('image/jpeg', 1.0); 
         setCapturedImage(dataUrl);
+        // Reset cropper config for new image
+        setCrop({ x: 0, y: 0 });
+        setPostZoom(1);
       }
     }
   };
@@ -172,15 +195,16 @@ export function MobileScanner() {
   };
 
   const submitPhoto = async () => {
-    if (!capturedImage || !sessionId) return;
+    if (!capturedImage || !sessionId || !croppedAreaPixels) return;
     setIsUploading(true);
     try {
-       // Convert base64 to file
-       const res = await fetch(capturedImage);
+       // Bake the users crop settings into a final flat image URL
+       const finalCroppedImageDataUrl = await getCroppedImg(capturedImage, croppedAreaPixels);
+
+       const res = await fetch(finalCroppedImageDataUrl);
        const blob = await res.blob();
        const file = new File([blob], `scan_${sessionId}_${scanSide}.jpg`, { type: 'image/jpeg' });
        
-       // Upload to firebase (using sessionId as dummy userId for folder isolation)
        const uploadedUrl = await uploadGarmentImage(file, `${sessionId}_${scanSide}`);
        
        if (scanSide === 'front') {
@@ -217,7 +241,6 @@ export function MobileScanner() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col overflow-hidden relative font-sans">
-       {/* Scanner UI */}
        {!capturedImage ? (
          <>
            <video 
@@ -225,14 +248,12 @@ export function MobileScanner() {
              autoPlay 
              playsInline 
              muted 
-             style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+             style={{ transform: `scale(${preZoom})`, transformOrigin: 'center center' }}
              className="w-full h-full object-cover absolute inset-0"
              onLoadedMetadata={() => videoRef.current?.play()}
            />
            
-           {/* Overlays to simulate "check scanner" AI detection boundary */}
            <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
-              {/* Header Mask */}
               <div className="bg-black/50 backdrop-blur-sm h-32 flex items-center justify-center pt-8 px-6">
                  <div className="text-center">
                    <h2 className="text-white font-serif text-xl font-bold tracking-wide uppercase">Scan {scanSide} of Garment</h2>
@@ -240,13 +261,9 @@ export function MobileScanner() {
                  </div>
               </div>
               
-              {/* Frame target */}
               <div className="flex-1 flex items-center justify-center p-8">
                  <div className="w-full h-3/4 max-h-[500px] max-w-md relative">
-                   {/* Scanning Laser Animation */}
                    <div className="absolute top-0 left-0 w-full h-1 bg-green-400 shadow-[0_0_15px_#4ade80] animate-scan-laser z-20" />
-                   
-                   {/* Corner Borders */}
                    <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-xl" />
                    <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-xl" />
                    <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-xl" />
@@ -254,22 +271,18 @@ export function MobileScanner() {
                  </div>
               </div>
               
-              {/* Footer Mask */}
               <div className="bg-black/50 backdrop-blur-sm h-40 flex flex-col items-center justify-center pb-8 border-t border-white/10 relative">
-                 
-                  {/* Zoom Slider (Digital Custom Cropping) */}
                  <div className="absolute top-[-70px] left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10">
                     <span className="text-white text-xs font-bold">Zoom</span>
                     <input 
                       type="range" 
                       min="1" max="3" step="0.1" 
-                      value={zoom} 
-                      onChange={(e) => setZoom(parseFloat(e.target.value))} 
+                      value={preZoom} 
+                      onChange={(e) => setPreZoom(parseFloat(e.target.value))} 
                       className="w-32 accent-white"
                     />
                  </div>
 
-                 {/* Native Lens Selection (0.5x, 1x, Front) */}
                  {videoDevices.length > 1 && (
                    <div className="absolute top-[-30px] left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-auto bg-black/70 p-1.5 rounded-full backdrop-blur-md border border-white/20 shadow-2xl">
                       {(() => {
@@ -283,7 +296,6 @@ export function MobileScanner() {
                            else if (l.includes('back')) badge = '1x';
                            else badge = 'Cam';
 
-                           // Prioritize pure "back camera" for 1x over "virtual" multi-camera arrays if seen
                            if (!uniqueBadges.has(badge)) {
                              uniqueBadges.set(badge, { ...device, badge });
                            } else if (badge === '1x' && l === 'back camera') {
@@ -314,8 +326,6 @@ export function MobileScanner() {
                  )}
 
                  <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto mt-6">
-                   
-                   {/* Center Capture */}
                    {hasCameraError ? (
                      <button onClick={() => startCamera()} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg">Retry Camera</button>
                    ) : (
@@ -326,43 +336,62 @@ export function MobileScanner() {
                         <div className="w-full h-full bg-white rounded-full shadow-lg" />
                      </button>
                    )}
-
                  </div>
               </div>
            </div>
          </>
        ) : (
-         /* Review UI */
+         /* Review & Crop UI */
          <div className="flex-1 flex flex-col bg-black absolute inset-0 z-20">
-           <div className="flex-1 relative p-4 flex items-center justify-center bg-gray-900">
-             <img src={capturedImage} alt="Captured garment" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+           {/* Header Mask */}
+           <div className="bg-black/90 backdrop-blur-sm h-28 flex items-center justify-center pt-8 px-6 z-30 pointer-events-none">
+              <div className="text-center">
+                <h2 className="text-white font-serif text-xl font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
+                <p className="text-white/80 text-sm mt-1">Pinch to zoom and drag to adjust perfectly</p>
+              </div>
            </div>
-           <div className="h-32 bg-white flex items-center justify-around px-6 rounded-t-3xl border-t border-gray-200">
-             <button 
-               onClick={retakePhoto}
-               disabled={isUploading}
-               className="flex flex-col items-center justify-center text-gray-500 font-medium py-2 px-4 disabled:opacity-50"
-             >
-               <RefreshCw size={24} className="mb-1" />
-               Retake
-             </button>
-             <button 
-               onClick={submitPhoto}
-               disabled={isUploading}
-               className="bg-black text-white px-10 py-4 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50"
-             >
-               {isUploading ? (
-                 <>
-                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                   {scanSide === 'front' ? 'Saving...' : 'Sending to Desktop...'}
-                 </>
-               ) : (
-                 <>
-                   <Camera size={20} />
-                   {scanSide === 'front' ? 'Accept Front Image' : 'Finish & Upload'}
-                 </>
-               )}
-             </button>
+
+           <div className="flex-1 relative bg-gray-900 w-full h-full">
+             <Cropper
+               image={capturedImage}
+               crop={crop}
+               zoom={postZoom}
+               aspect={4 / 5}
+               onCropChange={setCrop}
+               onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)}
+               onZoomChange={setPostZoom}
+               classes={{ containerClassName: "!relative !w-full !h-full" }}
+             />
+           </div>
+
+           <div className="h-40 bg-white flex flex-col items-center px-6 rounded-t-3xl border-t border-gray-200 z-30 pt-6 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+             <div className="flex items-center justify-around w-full max-w-md">
+               <button 
+                 onClick={retakePhoto}
+                 disabled={isUploading}
+                 className="flex flex-col items-center justify-center text-gray-500 font-medium py-2 px-4 disabled:opacity-50"
+               >
+                 <RefreshCw size={24} className="mb-1" />
+                 Retake
+               </button>
+               <button 
+                 onClick={submitPhoto}
+                 disabled={isUploading}
+                 className="bg-black text-white px-10 py-4 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50"
+               >
+                 {isUploading ? (
+                   <>
+                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                     {scanSide === 'front' ? 'Processing...' : 'Sending to Desktop...'}
+                   </>
+                 ) : (
+                   <>
+                     <Camera size={20} />
+                     {scanSide === 'front' ? 'Proceed to Back' : 'Finish & Upload'}
+                   </>
+                 )}
+               </button>
+             </div>
            </div>
          </div>
        )}
