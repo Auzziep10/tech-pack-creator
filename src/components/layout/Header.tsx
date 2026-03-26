@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Bell, Search, LogOut, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { ProfileSettingsModal } from '../ui/ProfileSettingsModal';
 
 export function Header() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const getInitials = () => {
     if (user?.displayName) return user.displayName.substring(0, 2).toUpperCase();
@@ -60,7 +62,7 @@ export function Header() {
                <p className="font-bold text-gray-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis">{user?.displayName || 'Designer'}</p>
                <p className="text-gray-500 text-xs truncate">{user?.email}</p>
              </div>
-             <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left" onClick={() => setShowProfile(false)}>
+             <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left" onClick={() => { setShowProfile(false); setShowSettingsModal(true); }}>
                <User size={16} className="text-gray-400" /> View Profile
              </button>
              <button onClick={handleSignOut} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left font-medium mt-1">
@@ -69,6 +71,8 @@ export function Header() {
            </div>
         )}
       </div>
+
+      <ProfileSettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
     </header>
   );
 }
