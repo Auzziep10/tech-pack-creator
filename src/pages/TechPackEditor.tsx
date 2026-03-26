@@ -459,16 +459,23 @@ export function TechPackEditor() {
             <div className="col-span-5 space-y-4">
               {imageUrl ? (
                 <div>
-                  <div ref={annotatorRef} className="bg-white rounded-2xl print-image-wrapper">
-                    <GarmentAnnotator 
-                      imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
-                      measurements={data.measurements}
-                      onVectorize={!vectorImageUrl ? handleVectorize : undefined}
-                      isVectorizing={isVectorizing}
-                    />
+                  <div className={`bg-white rounded-2xl ${vectorImageUrl ? 'print:flex print:gap-4 print:items-center' : ''} print-image-wrapper`}>
+                    <div ref={annotatorRef} className="w-full">
+                      <GarmentAnnotator 
+                        imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
+                        measurements={data.measurements}
+                        onVectorize={!vectorImageUrl ? handleVectorize : undefined}
+                        isVectorizing={isVectorizing}
+                      />
+                    </div>
+                    {vectorImageUrl && (
+                      <div className="hidden print:block w-full h-full relative">
+                         <img src={showVector ? imageUrl : vectorImageUrl} alt="Garment View" className="w-full h-full object-contain absolute inset-0" />
+                      </div>
+                    )}
                   </div>
                   {vectorImageUrl && (
-                    <div className="flex justify-center mt-2">
+                    <div className="flex justify-center mt-2 print:hidden">
                        <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-[10px] py-1 h-auto text-gray-600 bg-gray-100 hover:bg-gray-200">
                         {showVector ? "View Original Image" : "View Vector Blueprint"}
                       </Button>
@@ -598,11 +605,21 @@ export function TechPackEditor() {
                        <button onClick={() => setData({...data, patternImage: ''})} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><X size={16} /></button>
                     </div>
                   ) : (
-                    <label className="flex items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden">
+                    <label className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden p-4 text-center">
                       <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
-                         <span className="text-2xl">+</span>
-                         Upload Pattern / Detail Sketches
+                         <span className="text-2xl leading-none">+</span>
+                         <span>Upload Pattern / Detail Sketches</span>
                       </div>
+                      {vectorImageUrl && (
+                         <Button 
+                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setData({...data, patternImage: vectorImageUrl}); }} 
+                           size="sm" 
+                           variant="secondary" 
+                           className="mt-4 text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"
+                         >
+                            Use Vector Blueprint
+                         </Button>
+                      )}
                       <input type="file" className="hidden" accept="image/*" onChange={(e) => {
                          if (e.target.files && e.target.files[0]) {
                             const reader = new FileReader();
