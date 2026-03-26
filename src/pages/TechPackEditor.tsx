@@ -276,59 +276,59 @@ export function TechPackEditor() {
         {/* Export Container */}
         <div ref={exportRef} className="p-10 w-full bg-white text-gray-900 print-container">
           
-          <header className="border-b border-gray-200 pb-6 mb-8 flex justify-between items-end">
+          <header className="border-b border-gray-200 pb-2 mb-2 flex justify-between items-end">
             <div>
-              <h1 className="text-4xl font-serif font-extrabold tracking-tight">TECH PACK</h1>
-              <div className="text-gray-500 font-sans font-medium tracking-widest text-sm mt-2 uppercase">GARMENT SPECIFICATION</div>
+              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none">TECH PACK</h1>
+              <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">GARMENT SPECIFICATION</div>
             </div>
             <div className="text-right">
-              <div className="text-gray-500 text-sm">Date: {new Date().toLocaleDateString()}</div>
-              <div className="text-gray-500 text-sm mt-1">Ref: {data?.properties?.style || `TP-${Math.floor(Math.random() * 10000)}`}</div>
+              <div className="text-gray-500 text-[11px]">Date: {new Date().toLocaleDateString()}</div>
+              <div className="text-gray-500 text-[11px] mt-0.5">Ref: {data?.properties?.style || `TP-${Math.floor(Math.random() * 10000)}`}</div>
             </div>
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
-             <div className="space-y-1">
-               <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
+             <div className="space-y-0.5">
+               <div className="text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
-                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={data?.properties?.style || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('style', e.target.value)}
                />
              </div>
-             <div className="space-y-1">
-               <div className="text-[10px] uppercase font-bold text-gray-400">Season</div>
+             <div className="space-y-0.5">
+               <div className="text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
                <input 
-                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={data?.properties?.season || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('season', e.target.value)}
                />
              </div>
-             <div className="space-y-1">
-               <div className="text-[10px] uppercase font-bold text-gray-400">Category</div>
+             <div className="space-y-0.5">
+               <div className="text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
                <input 
-                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={data?.properties?.category || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('category', e.target.value)}
                />
              </div>
-             <div className="space-y-1">
-               <div className="text-[10px] uppercase font-bold text-gray-400">Designer</div>
+             <div className="space-y-0.5">
+               <div className="text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
                <input 
-                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={data?.properties?.designer || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('designer', e.target.value)}
                />
              </div>
-             <div className="space-y-1">
-               <div className="text-[10px] uppercase font-bold text-gray-400">Gender</div>
+             <div className="space-y-0.5">
+               <div className="text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
                <input 
-                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={data?.properties?.gender || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('gender', e.target.value)}
@@ -336,9 +336,9 @@ export function TechPackEditor() {
              </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-10">
+          <div className="grid grid-cols-12 gap-4">
             {/* Left Column: Image & Callouts */}
-            <div className="col-span-5 space-y-8">
+            <div className="col-span-5 space-y-4">
               {imageUrl ? (
                 <div>
                   <div ref={annotatorRef} className="bg-white rounded-2xl print-image-wrapper">
@@ -350,28 +350,28 @@ export function TechPackEditor() {
                     />
                   </div>
                   {vectorImageUrl && (
-                    <div className="flex justify-center mt-3">
-                      <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-xs text-gray-600 bg-gray-100 hover:bg-gray-200">
+                    <div className="flex justify-center mt-2">
+                       <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-[10px] py-1 h-auto text-gray-600 bg-gray-100 hover:bg-gray-200">
                         {showVector ? "View Original Image" : "View Vector Blueprint"}
                       </Button>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-6">
-                  <div className="text-gray-400">No Image Provided</div>
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-2">
+                  <div className="text-gray-400 text-xs">No Image Provided</div>
                 </div>
               )}
 
               <div className="print-force-new-page">
-                <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-4 print-header-avoid">
-                  <h3 className="text-xl font-serif font-bold text-gray-900">Construction Details</h3>
+                <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
+                  <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                 </div>
-                <ol className="space-y-4 pl-5 list-decimal marker:text-black marker:font-bold text-gray-700">
+                <ol className="space-y-1 pl-4 list-decimal marker:text-black marker:font-bold text-gray-700 text-[11px]">
                   {data.callouts.map((callout: any, i: number) => (
-                    <li key={i} className="pl-2" style={{ pageBreakInside: 'avoid' }}>
+                    <li key={i} className="pl-1" style={{ pageBreakInside: 'avoid' }}>
                       <AutoTextarea 
-                        className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                        className="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors leading-tight"
                         value={callout.description}
                         onChange={(e) => updateCallout(i, e.target.value)}
                       />
@@ -382,41 +382,41 @@ export function TechPackEditor() {
             </div>
 
             {/* Right Column: Measurements & Fabrication */}
-            <div className="col-span-7 space-y-10">
+            <div className="col-span-7 space-y-4">
               {/* Measurements Table */}
               <div className="print-force-new-page">
-                <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900 flex items-center justify-between">
+                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
                   <span>Measurements</span>
                 </h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
+                  <table className="w-full text-[11px] text-left">
+                    <thead className="text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 font-medium">DIM (ID)</th>
-                        <th className="px-4 py-3 font-medium">Point of Measure</th>
-                        <th className="px-4 py-3 font-medium w-24">Spec</th>
-                        <th className="px-2 py-3 font-medium w-16 text-center">Tol (-)</th>
-                        <th className="px-2 py-3 font-medium w-16 text-center">Tol (+)</th>
+                        <th className="px-2 py-1 font-medium">DIM (ID)</th>
+                        <th className="px-2 py-1 font-medium">Point of Measure</th>
+                        <th className="px-2 py-1 font-medium w-20">Spec</th>
+                        <th className="px-1 py-1 font-medium w-12 text-center">Tol (-)</th>
+                        <th className="px-1 py-1 font-medium w-12 text-center">Tol (+)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.measurements.map((m: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
-                          <td className="px-4 py-3 align-top font-mono text-xs text-gray-500">
-                             <AutoTextarea className="w-full bg-transparent outline-none uppercase" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
+                          <td className="px-2 py-1 align-top font-mono text-[10px] text-gray-500">
+                             <AutoTextarea className="w-full bg-transparent outline-none uppercase leading-tight" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900" value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs mt-1" value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900 leading-tight" value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-[10px] leading-tight" value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold" value={m.value || ''} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-semibold leading-tight" value={m.value || ''} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
                           </td>
-                          <td className="px-2 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-[10px] text-center" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
+                          <td className="px-1 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-[10px] text-center leading-none" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
                           </td>
-                          <td className="px-2 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-[10px] text-center" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
+                          <td className="px-1 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-[10px] text-center leading-none" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
                           </td>
                         </tr>
                       ))}
@@ -427,35 +427,35 @@ export function TechPackEditor() {
 
               {/* Style BOM (Bill of Materials) Table */}
               <div className="print-force-new-page">
-                <h3 className="text-xl font-serif font-bold border-b border-gray-200 pb-2 mb-4 text-gray-900">Style BOM (Bill of Materials)</h3>
+                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 leading-tight">Style BOM (Bill of Materials)</h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
+                  <table className="w-full text-[11px] text-left">
+                    <thead className="text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="px-4 py-3 font-medium">Category</th>
-                        <th className="px-4 py-3 font-medium">Component</th>
-                        <th className="px-4 py-3 font-medium">Positioning</th>
-                        <th className="px-4 py-3 font-medium">Comment</th>
-                        <th className="px-4 py-3 font-medium">Supplier</th>
+                        <th className="px-2 py-1 font-medium">Category</th>
+                        <th className="px-2 py-1 font-medium">Component</th>
+                        <th className="px-2 py-1 font-medium">Positioning</th>
+                        <th className="px-2 py-1 font-medium">Comment</th>
+                        <th className="px-2 py-1 font-medium">Supplier</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(data.bom || data.fabrication || []).map((f: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900 uppercase text-[10px] tracking-wider" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none font-medium text-gray-900 uppercase text-[10px] tracking-wider leading-tight" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 text-sm font-medium" value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-medium leading-tight" value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 leading-tight" value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs" value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 leading-tight" value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
                           </td>
-                          <td className="px-4 py-3 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 text-[10px]" value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
+                          <td className="px-2 py-1 align-top">
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-400 text-[10px] leading-tight" value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
                           </td>
                         </tr>
                       ))}

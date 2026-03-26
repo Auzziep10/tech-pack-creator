@@ -119,9 +119,25 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
           {/* Join Another Company Section */}
           <div className="space-y-4">
             <div>
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                <Users size={16} /> Join a Team
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                  <Users size={16} /> Join a Team
+                </h3>
+                {profile.companyId !== profile.uid && (
+                  <Button 
+                    variant="secondary" 
+                    onClick={async () => {
+                      const userRef = doc(db, 'users', profile.uid);
+                      await updateDoc(userRef, { companyId: profile.uid });
+                      alert("Successfully disconnected from team.");
+                      window.location.reload();
+                    }}
+                    className="bg-red-50 text-red-600 hover:bg-red-100 border-transparent hover:border-red-200 shrink-0 text-xs px-3 py-1.5 h-auto transition-colors"
+                  >
+                    Disconnect
+                  </Button>
+                )}
+              </div>
               <p className="text-sm text-gray-500 mt-1">Have an invite code from a colleague? Enter it below to seamlessly switch your active workplace.</p>
             </div>
 

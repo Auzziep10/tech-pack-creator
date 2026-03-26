@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { PlusCircle, Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getCompanyTechPacks, TechPackData } from '../services/dbService';
+import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -14,7 +14,7 @@ export function Dashboard() {
 
   useEffect(() => {
     if (user && profile?.companyId) {
-      getCompanyTechPacks(profile.companyId)
+      getUserAndCompanyTechPacks(user.uid, profile.companyId)
         .then(data => setTechPacks(data))
         .catch(err => console.error("Error fetching tech packs:", err))
         .finally(() => setLoading(false));
