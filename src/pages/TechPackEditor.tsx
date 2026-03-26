@@ -103,6 +103,7 @@ export function TechPackEditor() {
   const [vectorImageUrl, setVectorImageUrl] = useState('');
   const [showVector, setShowVector] = useState(false);
   const [packName, setPackName] = useState('Untitled Garment');
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -155,8 +156,16 @@ export function TechPackEditor() {
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
       });
-      setImageUrl(location.state.techPack?.images?.original || location.state.image || '');
+      const initialImage = location.state.techPack?.images?.original || location.state.image || '';
+      setImageUrl(initialImage);
       setVectorImageUrl(location.state.techPack?.images?.vector || '');
+      
+      const initialGallery = location.state.techPack?.gallery || [];
+      if (initialImage && !initialGallery.includes(initialImage)) {
+         initialGallery.unshift(initialImage);
+      }
+      setGalleryImages(initialGallery);
+
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
     } else if (id && id !== 'draft') {
@@ -168,8 +177,16 @@ export function TechPackEditor() {
             isTeamEditable: packInfo.isTeamEditable,
             activityLog: packInfo.activityLog
           });
-          setImageUrl(packInfo.techPack?.images?.original || packInfo.imageUrl);
+          const initialImage = packInfo.techPack?.images?.original || packInfo.imageUrl;
+          setImageUrl(initialImage);
           setVectorImageUrl(packInfo.techPack?.images?.vector || '');
+          
+          const initialGallery = packInfo.techPack?.gallery || [];
+          if (initialImage && !initialGallery.includes(initialImage)) {
+             initialGallery.unshift(initialImage);
+          }
+          setGalleryImages(initialGallery);
+
           setPackName(packInfo.name);
         }
         setIsLoading(false);
@@ -209,6 +226,18 @@ export function TechPackEditor() {
       }
 
       const techPackDataToSave = { ...data };
+
+      let finalGalleryImages = [];
+      for (const gImg of galleryImages) {
+         if (gImg.startsWith('data:')) {
+            finalGalleryImages.push(await uploadBase64Image(gImg, user.uid));
+         } else {
+            finalGalleryImages.push(gImg);
+         }
+      }
+      setGalleryImages(finalGalleryImages);
+      techPackDataToSave.gallery = finalGalleryImages;
+
       if (techPackDataToSave.patternImage?.startsWith('data:')) {
         techPackDataToSave.patternImage = await uploadBase64Image(techPackDataToSave.patternImage, user.uid);
       }
@@ -518,10 +547,57 @@ export function TechPackEditor() {
                       </Button>
                     </div>
                   )}
+
+                  {/* Photo Gallery Strip */}
+                  <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
+                     {galleryImages.map((gImg, idx) => (
+                       <div 
+                          key={idx} 
+                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg && !showVector ? 'border-black scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          onClick={() => {
+                            setImageUrl(gImg);
+                            setShowVector(false); // Reset to original image view when picking a new one
+                          }}
+                       >
+                          <img src={gImg} className="w-full h-full object-cover" alt="Gallery thumbnail" />
+                       </div>
+                     ))}
+                     <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
+                        <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
+                           if (e.target.files) {
+                              const files = Array.from(e.target.files);
+                              const promises = files.map(file => new Promise<string>((res) => {
+                                 const r = new FileReader(); r.onload = (ev) => res(ev.target?.result as string); r.readAsDataURL(file);
+                              }));
+                              const newImages = await Promise.all(promises);
+                              const newGallery = [...galleryImages, ...newImages];
+                              setGalleryImages(newGallery);
+                              if (!imageUrl && newImages.length > 0) setImageUrl(newImages[0]);
+                           }
+                        }} />
+                     </label>
+                  </div>
                 </div>
               ) : (
-                <div className="bg-gray-50 rounded-2xl border border-gray-200 aspect-[4/5] flex items-center justify-center p-2">
-                  <div className="text-gray-400 text-xs">No Image Provided</div>
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
+                  <label className="cursor-pointer group flex flex-col items-center gap-4">
+                     <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
+                        <span className="text-2xl leading-none font-bold">+</span>
+                     </div>
+                     <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
+                     <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
+                         if (e.target.files && e.target.files.length > 0) {
+                            const files = Array.from(e.target.files);
+                            const promises = files.map(file => new Promise<string>((res) => {
+                               const r = new FileReader(); r.onload = (ev) => res(ev.target?.result as string); r.readAsDataURL(file);
+                            }));
+                            const newImages = await Promise.all(promises);
+                            setGalleryImages(newImages);
+                            setImageUrl(newImages[0]);
+                         }
+                      }} />
+                  </label>
                 </div>
               )}
 
