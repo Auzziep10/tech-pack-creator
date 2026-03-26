@@ -14,9 +14,9 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const apiKey = process.env.NANOBANANA_API_KEY;
+    const apiKey = process.env.NANOBANANA_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'Server is missing API key configuration.' });
+      return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY configuration.' });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
