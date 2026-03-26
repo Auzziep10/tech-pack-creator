@@ -15,15 +15,31 @@ export function Sidebar({ isCollapsed = false, setIsCollapsed = () => {} }: { is
 
   return (
     <aside className={`h-screen shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 fixed left-0 top-0 z-30 transition-all duration-300 ${isCollapsed ? 'w-20 items-center' : 'w-64'}`}>
-      <div className={`flex items-center mb-8 mt-2 ${isCollapsed ? 'justify-center w-full' : 'gap-3 px-2'}`}>
+      <div className={`flex items-center mb-8 mt-2 ${isCollapsed ? 'justify-center w-full' : 'w-full px-2 justify-between'}`}>
         {isCollapsed ? (
-          <div className="font-serif font-bold text-xl text-white flex items-center justify-center bg-black rounded-lg w-10 h-10 shrink-0 select-none">
+          <button 
+             onClick={() => setIsCollapsed(false)} 
+             className="font-serif font-bold text-xl text-white flex items-center justify-center bg-black rounded-lg w-10 h-10 hover:bg-gray-800 transition-colors shrink-0 select-none text-center relative group"
+             title="Expand Sidebar"
+          >
              T
-          </div>
+             <div className="absolute -right-3 p-0.5 bg-white shadow-sm border border-gray-200 rounded-full text-black opacity-0 group-hover:opacity-100 transition-opacity translate-x-1">
+               <ChevronRight size={12} strokeWidth={3} />
+             </div>
+          </button>
         ) : (
-          <h1 className="font-serif font-bold text-2xl tracking-tight text-gray-900 truncate select-none">
-            TechPack<span className="text-gray-400 font-sans text-xs ml-1.5 tracking-normal uppercase font-semibold">Gen</span>
-          </h1>
+          <>
+            <h1 className="font-serif font-bold text-2xl tracking-tight text-gray-900 truncate select-none">
+              TechPack<span className="text-gray-400 font-sans text-xs ml-1.5 tracking-normal uppercase font-semibold">Gen</span>
+            </h1>
+            <button 
+              onClick={() => setIsCollapsed(true)} 
+              className="p-1.5 -mr-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Collapse Sidebar"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          </>
         )}
       </div>
 
@@ -61,12 +77,6 @@ export function Sidebar({ isCollapsed = false, setIsCollapsed = () => {} }: { is
           {!isCollapsed && <span>Log Out</span>}
         </button>
 
-        <div className="w-full pt-4 border-t border-gray-100 flex justify-center">
-           <button onClick={() => setIsCollapsed(!isCollapsed)} className={`flex items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all text-sm ${isCollapsed ? 'justify-center p-3 w-12' : 'gap-3 px-4 py-2 w-full justify-start'}`}>
-              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-              {!isCollapsed && <span>Collapse</span>}
-           </button>
-        </div>
       </div>
 
       {isSettingsOpen && (
