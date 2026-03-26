@@ -6,6 +6,7 @@ import { auth, db } from '../services/firebase';
 export interface UserProfile {
   uid: string;
   email: string | null;
+  name?: string;
   companyId: string;
 }
 
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const newProfile: UserProfile = {
             uid: u.uid,
             email: u.email,
+            name: u.displayName || undefined,
             companyId: u.uid, // Default company
           };
           await setDoc(userRef, newProfile);
