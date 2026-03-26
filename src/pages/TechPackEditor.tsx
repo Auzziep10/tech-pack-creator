@@ -240,17 +240,6 @@ export function TechPackEditor() {
            max-width: none !important;
            padding: 0 !important;
         }
-        /* Fix the grid constraint pushing elements off the right side */
-        .print-container .grid-cols-12 {
-           display: block !important;
-        }
-        .print-container .col-span-5, 
-        .print-container .col-span-7 {
-           width: 100% !important;
-           max-width: 100% !important;
-           display: block !important;
-           margin-bottom: 2rem !important;
-        }
         
         .print-image-wrapper > div {
            aspect-ratio: auto !important;
@@ -454,9 +443,9 @@ export function TechPackEditor() {
              </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-4">
+          <div className="grid grid-cols-12 gap-4 print:flex print:flex-col">
             {/* Left Column: Image & Callouts */}
-            <div className="col-span-5 space-y-4">
+            <div className="col-span-5 print:w-full print:mb-8 space-y-4">
               {imageUrl ? (
                 <div>
                   <div className={`bg-white rounded-2xl ${vectorImageUrl ? 'print:flex print:gap-4 print:items-center' : ''} print-image-wrapper`}>
@@ -509,7 +498,7 @@ export function TechPackEditor() {
             </div>
 
             {/* Right Column: Measurements & Fabrication */}
-            <div className="col-span-7 space-y-4">
+            <div className="col-span-7 print:w-full space-y-4">
               {/* Measurements Table */}
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
