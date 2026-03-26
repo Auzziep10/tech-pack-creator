@@ -715,34 +715,43 @@ export function TechPackEditor() {
                         <button onClick={() => setData({...data, lineSheetImage: ''})} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"><X size={16} /></button>
                      </div>
                    ) : (
-                     <label className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden p-4 text-center">
-                       <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
-                          <span className="text-2xl leading-none">+</span>
-                          <span>Upload Line Sheet Render</span>
-                       </div>
-                       {vectorImageUrl && (
-                          <Button 
-                            onClick={(e) => { 
-                               e.preventDefault(); 
-                               e.stopPropagation(); 
-                               setData({...data, lineSheetImage: vectorImageUrl}); 
-                               pushLog('Applied Vector Blueprint to Line Sheet');
-                            }} 
-                            size="sm" 
-                            variant="secondary" 
-                            className="mt-4 text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"
-                          >
-                             Use Vector Blueprint
-                          </Button>
-                       )}
-                       <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                             const reader = new FileReader();
-                             reader.onload = (ev) => setData({...data, lineSheetImage: ev.target?.result as string});
-                             reader.readAsDataURL(e.target.files[0]);
-                          }
-                       }} />
-                     </label>
+                      <div className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl transition-colors print:hidden p-4 text-center">
+                        <label className="cursor-pointer hover:bg-white px-6 py-4 rounded-xl border border-transparent shadow-sm hover:border-gray-200 hover:shadow-md transition-all flex flex-col items-center gap-2 group">
+                           <div className="text-gray-400 group-hover:text-blue-600 transition-colors text-xs font-semibold flex flex-col items-center gap-2">
+                              <span className="text-2xl leading-none">+</span>
+                              <span>Upload Line Sheet Render</span>
+                           </div>
+                           <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                 const reader = new FileReader();
+                                 reader.onload = (ev) => setData({...data, lineSheetImage: ev.target?.result as string});
+                                 reader.readAsDataURL(e.target.files[0]);
+                              }
+                           }} />
+                        </label>
+                        
+                        {vectorImageUrl && (
+                           <>
+                             <div className="flex items-center gap-4 w-full max-w-[150px] mt-4 mb-4">
+                                <div className="h-px bg-gray-200 flex-1"></div>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase">OR</span>
+                                <div className="h-px bg-gray-200 flex-1"></div>
+                             </div>
+                             <Button 
+                               onClick={(e) => { 
+                                  e.preventDefault(); 
+                                  setData({...data, lineSheetImage: vectorImageUrl}); 
+                                  pushLog('Applied Vector Blueprint to Line Sheet');
+                               }} 
+                               size="sm" 
+                               variant="secondary" 
+                               className="text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"
+                             >
+                                Use Vector Blueprint
+                             </Button>
+                           </>
+                        )}
+                      </div>
                    )}
                 </div>
                 

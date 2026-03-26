@@ -163,22 +163,25 @@ export function ComboLineSheet() {
                         <td className="w-32 print:w-24 border border-gray-100 p-2 bg-gray-50/50 font-bold align-middle text-center text-gray-400 uppercase text-xs tracking-wider">
                            Design
                         </td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-6 align-middle relative h-48 print:h-44">
-                             {pack.lineSheetImage || pack.images?.vector || pack.images?.original || pack.imageUrl ? (
-                               <img 
-                                 src={pack.lineSheetImage || pack.images?.vector || pack.images?.original || pack.imageUrl} 
-                                 alt={pack.name} 
-                                 className="w-full h-full object-contain mix-blend-multiply"
-                               />
-                             ) : (
-                               <div className="w-full h-full bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 text-xs">No Image</div>
-                             )}
-                          </td>
-                        ))}
+                         {chunk.map((pack, chunkIndex) => {
+                          const img = pack.techPack?.lineSheetImage || pack.techPack?.images?.vector || pack.techPack?.images?.original || pack.imageUrl;
+                          return (
+                            <td key={chunkIndex} className="border border-gray-100 p-6 align-middle relative h-[320px] print:h-[4.5in]">
+                               {img ? (
+                                 <img 
+                                   src={img} 
+                                   alt={pack.name} 
+                                   className="w-full h-full object-contain mix-blend-multiply scale-110"
+                                 />
+                               ) : (
+                                 <div className="w-full h-full bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                               )}
+                            </td>
+                          );
+                        })}
                         {/* Pad empty cells if chunk < 4 */}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-img-${i}`} className="border border-gray-100 p-4 align-middle h-48 print:h-44 bg-gray-50/30"></td>
+                          <td key={`empty-img-${i}`} className="border border-gray-100 p-4 align-middle h-[320px] print:h-[4.5in] bg-gray-50/30"></td>
                         ))}
                      </tr>
 
@@ -200,7 +203,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Style</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 font-mono text-gray-900">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-mono" value={pack.properties?.style || ''} onChange={e => updatePropertyField(pageIndex * maxItemsPerPage + chunkIndex, 'style', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-mono" value={pack.techPack?.properties?.style || pack.properties?.style || ''} onChange={e => updatePropertyField(pageIndex * maxItemsPerPage + chunkIndex, 'style', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -213,7 +216,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Sizes</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.sizeRun || 'S, M, L, XL'} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'sizeRun', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.sizeRun || pack.sizeRun || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'sizeRun', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -226,7 +229,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Material</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.shell || pack.fabrication?.[0]?.material || pack.bom?.[0]?.component || '100% Cotton'} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'shell', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.shell || pack.techPack?.fabrication?.[0]?.material || pack.techPack?.bom?.[0]?.component || pack.shell || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'shell', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -239,7 +242,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">RRP / MSRP</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-bold">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.msrp || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'msrp', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.techPack?.msrp || pack.msrp || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'msrp', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -252,7 +255,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Wholesale Price</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-bold">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.wholesale || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'wholesale', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.techPack?.wholesale || pack.wholesale || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'wholesale', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -265,7 +268,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Min Order Qty</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.moq || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'moq', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.moq || pack.moq || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'moq', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -278,7 +281,7 @@ export function ComboLineSheet() {
                         <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Delivery Window</td>
                         {chunk.map((pack, chunkIndex) => (
                           <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.deliveryWindow || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'deliveryWindow', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.deliveryWindow || pack.deliveryWindow || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'deliveryWindow', e.target.value)} />
                           </td>
                         ))}
                         {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
@@ -294,7 +297,7 @@ export function ComboLineSheet() {
                              <div className="text-[9px] print:text-[8px] uppercase font-bold text-gray-400 mb-1 border-b border-gray-100 pb-0.5">Colors & SKU</div>
                              <AutoTextarea 
                                className="w-full bg-transparent outline-none text-[11px] print:text-[10px] leading-relaxed font-medium" 
-                               value={pack.availableColors || 'Default Color'} 
+                               value={pack.techPack?.availableColors || pack.availableColors || ''} 
                                onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'availableColors', e.target.value)} 
                              />
                           </td>
