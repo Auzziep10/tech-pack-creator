@@ -28,8 +28,15 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
-    const prompt = "Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually).\n\nCRITICAL SPECIFICATIONS:\n1. The garment MUST look PERFECTLY IRONED AND FLAT. Do NOT draw any internal lines that represent wrinkles, fabric folds, or draping. ONLY draw actual physical seams, stitches, and structural boundaries.\n2. If the garment has a hood, the hood MUST be drawn UP and prominently visible, mimicking its exact structure from the photo.\n3. The completely blank space around the garment MUST BE PURE WHITE (#FFFFFF). Do NOT render a light grey background. Do not render drop shadows. THE BACKGROUND CAN ONLY BE PURE WHITE.\n\nKeep the output purely structural. Pure #FFFFFF white background, high contrast lines, no photorealistic shading. Return ONLY a valid base64 encoded raw PNG image representing the artwork, with absolutely no markdown formatting, no JSON, and no other text.";
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const prompt = `Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST output your design STRICTLY as a valid, raw HTML <svg> element.
+2. The <svg> MUST contain highly detailed <path> elements with stroke="black" and fill="none" representing every contour, seam, pocket, and boundary of the exact garment in the photo.
+3. Use a viewBox representing a clean square (e.g., viewBox="0 0 1000 1000") and scale your paths accordingly.
+4. ONLY draw actual physical seams, stitches, and structural boundaries. No wrinkles, shading, or background.
+5. DO NOT wrap your response in markdown blocks like \`\`\`svg. Output ONLY the raw <svg> string from start to finish.`;
 
     const result = await model.generateContent([
       prompt,
@@ -52,13 +59,11 @@ export default async function handler(req: any, res: any) {
     }
     
     let text = result.response.text();
-    text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').replace(/\s+/g, '').trim();
-    
-    if (text.startsWith("data:image/")) {
-      return res.status(200).json({ data: text });
-    }
+    text = text.replace(/```svg\n?/gi, '').replace(/```\n?/g, '').trim();
 
-    return res.status(200).json({ data: `data:image/png;base64,${text}` });
+    // Standardize to a safe base64 encoded SVG data URL
+    const svgBase64 = Buffer.from(text).toString('base64');
+    return res.status(200).json({ data: `data:image/svg+xml;base64,${svgBase64}` });
 
   } catch (err: any) {
     console.error("Vectorization Error:", err);

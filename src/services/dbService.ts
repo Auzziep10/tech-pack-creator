@@ -77,7 +77,10 @@ export const uploadGarmentImage = async (file: File, userId: string): Promise<st
 export const uploadBase64Image = async (base64String: string, userId: string): Promise<string> => {
   const res = await fetch(base64String);
   const blob = await res.blob();
-  const file = new File([blob], `techpack_asset_${Date.now()}.png`, { type: 'image/png' });
+  let ext = 'png';
+  if (blob.type === 'image/svg+xml') ext = 'svg';
+  if (blob.type === 'image/jpeg') ext = 'jpg';
+  const file = new File([blob], `techpack_asset_${Date.now()}.${ext}`, { type: blob.type });
   return await uploadGarmentImage(file, userId);
 };
 
