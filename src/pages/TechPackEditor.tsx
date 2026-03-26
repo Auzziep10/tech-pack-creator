@@ -141,6 +141,11 @@ export function TechPackEditor() {
       techPackDataToSave.images.vector = finalVectorUrl || techPackDataToSave.images.vector || '';
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
+      // Strip root properties that were temporarily injected for the editor UI logic to avoid Firebase undefined nesting errors
+      delete techPackDataToSave.userId;
+      delete techPackDataToSave.isTeamEditable;
+      delete techPackDataToSave.activityLog;
+
       const existingId = id === 'draft' ? undefined : id;
       const savedId = await saveTechPack(
         user.uid, 
