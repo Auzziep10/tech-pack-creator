@@ -50,7 +50,7 @@ async function urlToGenerativePart(urlOrBase64: string, maxSize = 1440): Promise
   });
 }
 
-export async function analyzeGarmentForMeasurement(frontImageUrl: string, backImageUrl?: string): Promise<string> {
+export async function analyzeGarmentForMeasurement(frontImageUrl: string, backImageUrl?: string): Promise<{ type: string, anchors: { id: string, label: string, description: string }[] }> {
   try {
     const frontPart = await urlToGenerativePart(frontImageUrl);
     let backPart = null;
@@ -71,16 +71,25 @@ export async function analyzeGarmentForMeasurement(frontImageUrl: string, backIm
     }
 
     const { data } = await res.json();
-    return data || "Chest Width";
+    return data || { 
+      type: "T-Shirt / Basic Garment", 
+      anchors: [{id: 'chest', label: 'Chest Width (cm)', description: ''}, {id: 'length', label: 'Body Length (cm)', description: ''}] 
+    };
   } catch (error) {
     console.warn("Gemini API Error (likely using stub key). Falling back to default.");
     // Simulate network delay
     await new Promise(r => setTimeout(r, 1500));
-    return "T-Shirt / Basic Garment";
+    return { 
+      type: "T-Shirt / Basic Garment", 
+      anchors: [
+        { id: 'chest', label: 'Chest Width (cm)', description: 'Measure across the chest' },
+        { id: 'length', label: 'Body Length (cm)', description: 'Measure from highest point of shoulder to hem' }
+      ] 
+    };
   }
 }
 
-export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, chestWidth: string, bodyLength: string, shoulderWidth: string, baseSize: string, garmentType: string) {
+export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, anchors: any[], anchorValues: Record<string, string>, baseSize: string, garmentType: string) {
   try {
     const frontPart = await urlToGenerativePart(frontImageUrl);
     let backPart = null;
@@ -92,7 +101,7 @@ export async function generateTechPack(frontImageUrl: string, backImageUrl: stri
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frontPart, backPart, chestWidth, bodyLength, shoulderWidth, baseSize, garmentType })
+      body: JSON.stringify({ frontPart, backPart, anchors, anchorValues, baseSize, garmentType })
     });
 
     if (!res.ok) {

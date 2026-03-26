@@ -30,10 +30,19 @@ export default async function handler(req: any, res: any) {
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
-    const prompt = `You are an expert technical apparel designer.
-Analyze this garment mockup. 
-What is the specific type and style of this garment? (e.g., "Drop-Hem Short Sleeve T-Shirt", "Oversized Hoodie", "Crewneck Sweater").
-Respond ONLY with the crisp name of the garment style, nothing else.`;
+    const prompt = `You are an expert technical product designer.
+Analyze this product mockup. 
+Identify the specific type and style of this product (e.g., "Drop-Hem Short Sleeve T-Shirt", "Oversized Hoodie", "Hiking Backpack", "Canvas Tote Bag", "Cargo Pants").
+Then, determine exactly 2 critical, easily measurable anchor dimensions that a user should physically measure on this specific product to establish its foundational scale and proportion (e.g., for a T-Shirt: "Chest Width (cm)" and "Front Body Length (cm)"; for a Backpack: "Total Height (cm)" and "Total Width at Base (cm)"; for Pants: "Waist Width (cm)" and "Inseam (cm)").
+
+Respond ONLY with a valid JSON object in this exact format, with no markdown wrappers:
+{
+  "type": "string",
+  "anchors": [
+    { "id": "anchor1", "label": "string", "description": "string (brief instruction on where to measure)" },
+    { "id": "anchor2", "label": "string", "description": "string" }
+  ]
+}`;
 
     const parts: any[] = [prompt, frontPart];
     if (backPart) {
@@ -42,8 +51,11 @@ Respond ONLY with the crisp name of the garment style, nothing else.`;
     }
 
     const result = await model.generateContent(parts);
-    const response = result.response.text().trim();
-    return res.status(200).json({ data: response || "Chest Width" });
+    let text = result.response.text().trim();
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const data = JSON.parse(text);
+    return res.status(200).json({ data });
 
   } catch (err: any) {
     console.error("Gemini API Error details:", err);

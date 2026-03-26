@@ -22,7 +22,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { frontPart, backPart, chestWidth, bodyLength, shoulderWidth, baseSize, garmentType } = req.body;
+    const { frontPart, backPart, anchors, anchorValues, baseSize, garmentType } = req.body;
 
     if (!frontPart) {
        return res.status(400).json({ error: 'Missing frontPart image data.' });
@@ -30,14 +30,13 @@ export default async function handler(req: any, res: any) {
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
-    const prompt = `You are an expert technical apparel designer.
-Analyze this garment mockup. The AI previously classified it as a "${garmentType}".
-To permanently eliminate camera lens distortion (where the top of the garment is closer to the lens than the bottom in flat-lays), the user has provided three precise geometric anchors for a size ${baseSize}:
-- **Chest Width**: ${chestWidth}
-- **Front Body Length (HPS to Hem)**: ${bodyLength}
-- **Shoulder Hem (Seam to Seam)**: ${shoulderWidth}
+    const prompt = `You are an expert technical product designer.
+Analyze this product mockup. The AI previously classified it as a "${garmentType}".
+To permanently eliminate camera lens distortion (where the top of the product is closer to the lens than the bottom in flat-lays), the user has provided the following precise geometric anchors for a size ${baseSize}:
 
-Based on this image and these two exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
+${anchors.map((a: any) => `- **${a.label}**: ${anchorValues[a.id]}`).join('\n')}
+
+Based on this image and these exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
 The JSON should have the exact following structure matching our official Tech Pack template guidelines:
 {
   "properties": {
@@ -64,10 +63,10 @@ The JSON should have the exact following structure matching our official Tech Pa
   "callouts": "string (A detailed, systematic outline formatting the garment's construction from beginning to end. e.g., '1. Cutting & Prep\\n - Detail...\\n2. Body Assembly\\n - Detail...'. Ensure \\n are used for breaks. Must be a single large string.)"
 }
 
-Carefully identify the specific style, silhouette, and features of the garment in the image to populate the \`properties\` accurately.
-For \`bom\`, accurately guess the materials, washes, trims, and labels required to construct this specific garment.
-For \`measurements\`, use the THREE provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON. Include at least 8-10 key measurements (cm only) using standard apparel IDs (like BW001, LEN246, SLV426, STY121). 
-For \`callouts\`, write a comprehensive, systematic outline detailing how the garment is constructed from beginning to end (e.g., proper sequence from Cutting => Assembly => Finishing). Use rigorous bullet points and line breaks.`;
+Carefully identify the specific style, silhouette, and features of the product in the image to populate the \`properties\` accurately.
+For \`bom\`, accurately guess the materials, washes, hardware, trims, and labels required to construct this specific product.
+For \`measurements\`, use the provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON. Include at least 6-10 key measurements (cm only) using standard technical IDs (like BW001, LEN246, SLV426, HGT121, WID001). 
+For \`callouts\`, write a comprehensive, systematic outline detailing how the product is constructed from beginning to end (e.g., proper sequence from Cutting => Assembly => Finishing). Use rigorous bullet points and line breaks.`;
 
     const parts: any[] = [prompt, frontPart];
     if (backPart) {

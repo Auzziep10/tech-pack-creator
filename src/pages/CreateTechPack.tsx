@@ -20,10 +20,9 @@ export function CreateTechPack() {
   const [step, setStep] = useState<FlowStep>('upload');
   const [images, setImages] = useState<{file: File | null, frontUrl: string, backUrl: string} | null>(null);
   
-  const [garmentType, setGarmentType] = useState('Garment');
-  const [chestWidth, setChestWidth] = useState('');
-  const [bodyLength, setBodyLength] = useState('');
-  const [shoulderWidth, setShoulderWidth] = useState('');
+  const [garmentType, setGarmentType] = useState('Product');
+  const [anchors, setAnchors] = useState<any[]>([]);
+  const [anchorValues, setAnchorValues] = useState<Record<string, string>>({});
   const [baseSize, setBaseSize] = useState('Medium');
   const [sessionId, setSessionId] = useState<string | null>(null);
 
@@ -63,21 +62,30 @@ export function CreateTechPack() {
   const startAnalysis = async (frontUrl: string, backUrl: string) => {
     setStep('analyzing');
     try {
-      const type = await analyzeGarmentForMeasurement(frontUrl, backUrl);
-      setGarmentType(type);
+      const result = await analyzeGarmentForMeasurement(frontUrl, backUrl);
+      setGarmentType(result.type || 'Product');
+      setAnchors(result.anchors && result.anchors.length > 0 ? result.anchors : [
+        { id: 'chest', label: 'Chest Width (cm)', description: 'Measure straight across from 2.5cm below the armhole seam to opposite side.'},
+        { id: 'length', label: 'Front Body Length (cm)', description: 'Measure straight down from High Point Shoulder (HPS) seam to bottom edge.'}
+      ]);
+      setAnchorValues({});
       setStep('requestMeasurement');
     } catch (e) {
       console.error(e);
       setGarmentType('T-Shirt / Basic Garment');
+      setAnchors([
+        { id: 'chest', label: 'Chest Width (cm)', description: 'Measure straight across from 2.5cm below the armhole seam to opposite side.'},
+        { id: 'length', label: 'Front Body Length (cm)', description: 'Measure straight down from High Point Shoulder (HPS) seam to bottom edge.'}
+      ]);
       setStep('requestMeasurement');
     }
   };
 
   const handleGenerateTechPack = async () => {
-    if (!images || !chestWidth || !bodyLength || !shoulderWidth) return;
+    if (!images || anchors.some(a => !anchorValues[a.id]?.trim())) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(images.frontUrl, images.backUrl, chestWidth, bodyLength, shoulderWidth, baseSize, garmentType);
+      const data = await generateTechPack(images.frontUrl, images.backUrl, anchors, anchorValues, baseSize, garmentType);
       
       let finalImageUrl = images.frontUrl;
       if (images.file && user) {
@@ -202,7 +210,7 @@ export function CreateTechPack() {
                      </p>
                    </div>
                    
-                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                      <div className="space-y-2">
                        <label className="text-sm font-medium text-gray-700 block">Base Size</label>
                        <div className="relative">
@@ -211,53 +219,33 @@ export function CreateTechPack() {
                            onChange={(e) => setBaseSize(e.target.value)}
                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black transition-colors appearance-none cursor-pointer h-10"
                          >
-                           {['XS', 'Small', 'Medium', 'Large', 'XL', '2XL', '3XL'].map(size => (
+                           {['XS', 'Small', 'Medium', 'Large', 'XL', '2XL', '3XL', 'One Size', 'Other'].map(size => (
                              <option key={size} value={size}>{size}</option>
                            ))}
                          </select>
                          <svg className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                        </div>
                      </div>
-                     <div className="space-y-2">
-                       <Input 
-                         label={`Chest Width (cm)`}
-                         placeholder="e.g. 55"
-                         value={chestWidth}
-                         onChange={e => setChestWidth(e.target.value)}
-                         autoFocus
-                       />
-                       <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight across from 2.5cm below the armhole seam to opposite side.
-                       </p>
-                     </div>
-                     <div className="space-y-2">
-                       <Input 
-                         label={`Front Body Length (cm)`}
-                         placeholder="e.g. 71"
-                         value={bodyLength}
-                         onChange={e => setBodyLength(e.target.value)}
-                       />
-                       <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight down from High Point Shoulder (HPS) seam to bottom edge.
-                       </p>
-                     </div>
-                     <div className="space-y-2">
-                       <Input 
-                         label={`Shoulder Hem (cm)`}
-                         placeholder="e.g. 47"
-                         value={shoulderWidth}
-                         onChange={e => setShoulderWidth(e.target.value)}
-                       />
-                       <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight across the BACK from shoulder seam to shoulder seam.
-                       </p>
-                     </div>
+                     {anchors.map((anchor, i) => (
+                       <div key={anchor.id} className="space-y-2">
+                         <Input 
+                           label={anchor.label}
+                           placeholder="e.g. 55"
+                           value={anchorValues[anchor.id] || ''}
+                           onChange={e => setAnchorValues(prev => ({...prev, [anchor.id]: e.target.value}))}
+                           autoFocus={i === 0}
+                         />
+                         <p className="text-[11px] text-gray-500 leading-snug">
+                           {anchor.description}
+                         </p>
+                       </div>
+                     ))}
                    </div>
                    
                    <div className="pt-4 flex justify-end">
                      <Button 
                        onClick={handleGenerateTechPack} 
-                       disabled={!chestWidth.trim() || !bodyLength.trim() || !shoulderWidth.trim()} 
+                       disabled={anchors.some(a => !anchorValues[a.id]?.trim()) || anchors.length === 0} 
                        size="lg" 
                        className="gap-2 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
                      >
