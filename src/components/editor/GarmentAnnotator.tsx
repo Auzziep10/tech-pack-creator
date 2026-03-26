@@ -99,9 +99,12 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
            className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none w-48 font-medium"
          >
            <option value="">Select Measurement...</option>
-           {measurements.map((m: any, i: number) => (
-             <option key={i} value={m.point}>{m.point}</option>
-           ))}
+           {measurements.map((m: any, i: number) => {
+             const label = m.id || (i + 1).toString();
+             return (
+               <option key={i} value={label}>{label} - {m.point}</option>
+             );
+           })}
          </select>
          
          <button 
@@ -151,23 +154,26 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
 
       {/* Interactive Main Canvas */}
       <div 
-        ref={containerRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        style={{ touchAction: 'none' }}
         className={`select-none bg-white rounded-2xl border flex items-center justify-center p-6 relative overflow-hidden group ${
-          isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
+          isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
         } ${
           isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5]'
         }`}
       >
+        <div 
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          style={{ touchAction: 'none' }}
+          className={`relative inline-flex items-center justify-center max-w-full max-h-full ${isDrawingMode ? 'cursor-crosshair' : ''}`}
+        >
         <img 
           src={imageUrl} 
           alt="Garment Artboard" 
           draggable={false}
-          className={`w-full h-full object-contain pointer-events-none transition-all duration-700 ${
+          className={`max-w-full max-h-full object-contain pointer-events-none transition-all duration-700 ${
             isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
           }`}
         />
@@ -218,8 +224,9 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
               strokeWidth="2" 
               strokeDasharray="4 4"
             />
-          )}
-        </svg>
+            )}
+          </svg>
+        </div>
 
         {!isFullscreen && (
           <div 

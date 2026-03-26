@@ -269,7 +269,7 @@ export function TechPackEditor() {
         
         .print-image-wrapper > div {
            aspect-ratio: auto !important;
-           height: 4.8in !important;
+           height: 4in !important;
            margin: 0 auto;
         }
         
@@ -480,20 +480,33 @@ export function TechPackEditor() {
             <div className="col-span-5 print:w-full print:mb-8 space-y-4">
               {imageUrl ? (
                 <div>
-                  <div className={`bg-white rounded-2xl ${vectorImageUrl ? 'print:flex print:gap-4 print:items-center' : ''} print-image-wrapper`}>
-                    <div ref={annotatorRef} className="w-full">
+                  <div className={`bg-white rounded-2xl ${vectorImageUrl ? 'print:grid print:grid-cols-3 print:gap-4 print:items-end' : ''} print-image-wrapper`}>
+                    
+                    {/* Explicitly Printed Images (Hidden in UI) */}
+                    {vectorImageUrl && (
+                      <div className="hidden print:flex flex-col w-full h-full relative">
+                         <img src={imageUrl} alt="Initial View" className="w-full flex-1 object-contain mx-auto" style={{ maxHeight: '100%' }} />
+                         <div className="text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Initial Image</div>
+                      </div>
+                    )}
+                    
+                    {vectorImageUrl && (
+                      <div className="hidden print:flex flex-col w-full h-full relative">
+                         <img src={vectorImageUrl} alt="Vector Blueprint" className="w-full flex-1 object-contain mx-auto" style={{ maxHeight: '100%' }} />
+                         <div className="text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Vector Blueprint</div>
+                      </div>
+                    )}
+
+                    {/* Interactive UI and Annotated Print */}
+                    <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
                         imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
                         measurements={data.measurements}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                       />
+                      <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Vector With Callouts</div>
                     </div>
-                    {vectorImageUrl && (
-                      <div className="hidden print:block w-full h-full relative">
-                         <img src={showVector ? imageUrl : vectorImageUrl} alt="Garment View" className="w-full h-full object-contain absolute inset-0" />
-                      </div>
-                    )}
                   </div>
                   {vectorImageUrl && (
                     <div className="flex justify-center items-center gap-2 mt-2 print:hidden">
