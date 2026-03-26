@@ -108,6 +108,7 @@ export function TechPackEditor() {
   const [isSaving, setIsSaving] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
 
   const isCreator = !data?.userId || user?.uid === data?.userId;
@@ -369,6 +370,10 @@ export function TechPackEditor() {
           />
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex bg-gray-100 p-1 rounded-xl mr-2 print:hidden hidden sm:flex shrink-0">
+             <button onClick={() => setViewMode('techpack')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
+             <button onClick={() => setViewMode('linesheet')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
+          </div>
           {isCreator && (
             <Button 
                onClick={toggleTeamEditable} 
@@ -395,7 +400,7 @@ export function TechPackEditor() {
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
-          <Button onClick={() => { pushLog('Exported Tech Pack to PDF'); handleExport(); }} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
+          <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
             <div className="flex items-center gap-2 text-sm">
               <Download size={16} />
               <span className="hidden sm:inline font-semibold">Export</span>
@@ -410,8 +415,8 @@ export function TechPackEditor() {
           
           <header className="border-b border-gray-200 pb-2 mb-2 flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none">TECH PACK</h1>
-              <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">GARMENT SPECIFICATION</div>
+              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none">{viewMode === 'linesheet' ? 'LINE SHEET' : 'TECH PACK'}</h1>
+              <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">{viewMode === 'linesheet' ? 'WHOLESALE SUMMARY' : 'GARMENT SPECIFICATION'}</div>
             </div>
             <div className="text-right">
               <div className="text-gray-500 text-xs print:text-[10px]">Date: {new Date().toLocaleDateString()}</div>
@@ -468,7 +473,9 @@ export function TechPackEditor() {
              </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-4 print:flex print:flex-col">
+          {viewMode === 'techpack' ? (
+            <>
+              <div className="grid grid-cols-12 gap-4 print:flex print:flex-col">
             {/* Left Column: Image & Callouts */}
             <div className="col-span-5 print:w-full print:mb-8 space-y-4">
               {imageUrl ? (
@@ -660,6 +667,7 @@ export function TechPackEditor() {
                        value={data?.developmentComments || ''} 
                        onChange={v => setData({...data, developmentComments: v})} 
                      />
+                  </div>
 
                   <div className="space-y-1 mt-2 flex items-center gap-2">
                      <div className="text-xs print:text-[10px] font-bold text-gray-900 shrink-0">Shell:</div>
@@ -681,10 +689,11 @@ export function TechPackEditor() {
                </div>
             </div>
           </div>
-
+          </>
+          ) : (
+          <>
           {/* Wholesale Line Sheet Section */}
-          <div className="print-force-new-page pt-4 mt-8 print:mt-0 print:pt-0">
-             <h3 className="text-lg font-serif font-bold text-gray-900 border-b border-gray-200 pb-1 mb-4 leading-tight">Wholesale Line Sheet</h3>
+          <div className="pt-2 mt-2 animate-in fade-in duration-300">
              <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
                 <div className="col-span-12 md:col-span-6 print:col-span-6 space-y-4">
                    {data?.lineSheetImage ? (
@@ -763,7 +772,9 @@ export function TechPackEditor() {
                 </div>
              </div>
           </div>
-          
+          </>
+          )}
+
         </div>
       </div>
 
