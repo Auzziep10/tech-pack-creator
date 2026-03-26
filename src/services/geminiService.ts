@@ -99,7 +99,7 @@ The JSON should have the exact following structure matching our official Tech Pa
 
 Carefully identify the specific style, silhouette, and features of the garment in the image to populate the \`properties\` accurately.
 For \`bom\`, accurately guess the materials, washes, trims, and labels required to construct this specific garment.
-For \`measurements\`, use the THREE provided geometric anchors to mathematically triangulate and scale the exact proportions. Include at least 8-10 key measurements (including echoing the three anchors exactly as provided) using standard apparel IDs (like BW001, LEN246, SLV426, STY121). 
+For \`measurements\`, use the THREE provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON. Include at least 8-10 key measurements (cm only) using standard apparel IDs (like BW001, LEN246, SLV426, STY121). 
 For \`callouts\`, write a comprehensive, systematic outline detailing how the garment is constructed from beginning to end (e.g., proper sequence from Cutting => Assembly => Finishing). Use rigorous bullet points and line breaks.`;
 
     const parts: any[] = [prompt, frontPart];

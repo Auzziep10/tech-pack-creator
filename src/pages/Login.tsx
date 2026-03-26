@@ -33,7 +33,7 @@ export function Login() {
            email: email,
            name: name,
            companyId: cred.user.uid
-        });
+        }, { merge: true });
       }
       navigate('/');
     } catch (err: any) {

@@ -220,20 +220,20 @@ export function CreateTechPack() {
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Chest Width`}
-                         placeholder="e.g. 21.5&quot;"
+                         label={`Chest Width (cm)`}
+                         placeholder="e.g. 55"
                          value={chestWidth}
                          onChange={e => setChestWidth(e.target.value)}
                          autoFocus
                        />
                        <p className="text-[11px] text-gray-500 leading-snug">
-                         Measure straight across from 1" below the armhole seam to opposite side.
+                         Measure straight across from 2.5cm below the armhole seam to opposite side.
                        </p>
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Front Body Length`}
-                         placeholder="e.g. 28&quot;"
+                         label={`Front Body Length (cm)`}
+                         placeholder="e.g. 71"
                          value={bodyLength}
                          onChange={e => setBodyLength(e.target.value)}
                        />
@@ -243,8 +243,8 @@ export function CreateTechPack() {
                      </div>
                      <div className="space-y-2">
                        <Input 
-                         label={`Shoulder Hem`}
-                         placeholder="e.g. 18.5&quot;"
+                         label={`Shoulder Hem (cm)`}
+                         placeholder="e.g. 47"
                          value={shoulderWidth}
                          onChange={e => setShoulderWidth(e.target.value)}
                        />

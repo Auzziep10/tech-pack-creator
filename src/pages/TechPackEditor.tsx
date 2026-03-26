@@ -288,7 +288,7 @@ export function TechPackEditor() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1000px] mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors">

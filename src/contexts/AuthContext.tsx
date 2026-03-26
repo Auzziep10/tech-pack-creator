@@ -50,13 +50,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await setDoc(userRef, newProfile);
           setProfile(newProfile);
         } else {
-          setProfile(snap.data() as UserProfile);
+          // Bulletproof patch preventing accidental legacy account team unbinding
+          const data = snap.data() as UserProfile;
+          if (!data.companyId) {
+             data.companyId = u.uid;
+             await setDoc(userRef, data, { merge: true });
+          }
+          setProfile(data);
         }
 
         // Listen for live updates (e.g., when they join a company)
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const liveData = docSnap.data() as UserProfile;
+            if (!liveData.companyId) liveData.companyId = u.uid;
+            setProfile(liveData);
           }
         });
       } else {
