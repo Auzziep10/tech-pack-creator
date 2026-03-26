@@ -78,7 +78,12 @@ export function TechPackEditor() {
 
   useEffect(() => {
     if (location.state?.techPack) {
-      setData(location.state.techPack);
+      setData({
+        ...location.state.techPack,
+        userId: location.state.userId,
+        isTeamEditable: location.state.isTeamEditable,
+        activityLog: location.state.activityLog
+      });
       setImageUrl(location.state.techPack?.images?.original || location.state.image || '');
       setVectorImageUrl(location.state.techPack?.images?.vector || '');
       if (location.state.name) setPackName(location.state.name);
@@ -86,7 +91,12 @@ export function TechPackEditor() {
     } else if (id && id !== 'draft') {
       getTechPack(id).then((packInfo) => {
         if (packInfo) {
-          setData(packInfo.techPack);
+          setData({
+            ...packInfo.techPack,
+            userId: packInfo.userId,
+            isTeamEditable: packInfo.isTeamEditable,
+            activityLog: packInfo.activityLog
+          });
           setImageUrl(packInfo.techPack?.images?.original || packInfo.imageUrl);
           setVectorImageUrl(packInfo.techPack?.images?.vector || '');
           setPackName(packInfo.name);
