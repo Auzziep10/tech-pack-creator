@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 import { db } from '../services/firebase';
-import { writeBatch, doc, deleteDoc } from 'firebase/firestore';
+import { writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
 
 const formatName = (email?: string | null) => {
   if (!email) return 'Teammate';
@@ -41,6 +41,39 @@ export function Dashboard() {
               if (count > 0) await batch.commit();
             } catch(e) {
               console.error("Auto-migration failed:", e);
+            }
+          }
+          // Fetch and auto-hydrate missing author emails for legacy collaborative tech packs
+          const missingEmailUsers = Array.from(new Set(data.filter(p => !p.creatorEmail && p.userId).map(p => p.userId)));
+          if (missingEmailUsers.length > 0) {
+            try {
+              const userDocs = await Promise.all(missingEmailUsers.map(uid => getDoc(doc(db, 'users', uid))));
+              const emailMap: Record<string, string> = {};
+              userDocs.forEach(d => {
+                if (d.exists() && d.data().email) emailMap[d.id] = d.data().email;
+              });
+
+              let hydrated = false;
+              const batch = writeBatch(db);
+              let batchCount = 0;
+
+              data.forEach(p => {
+                if (!p.creatorEmail && emailMap[p.userId]) {
+                  p.creatorEmail = emailMap[p.userId];
+                  hydrated = true;
+                  if (p.id) {
+                    batch.update(doc(db, 'techPacks', p.id), { creatorEmail: emailMap[p.userId] });
+                    batchCount++;
+                  }
+                }
+              });
+
+              if (hydrated) {
+                setTechPacks([...data]);
+                if (batchCount > 0) await batch.commit();
+              }
+            } catch (e) {
+              console.error("Email hydration failed:", e);
             }
           }
         })
