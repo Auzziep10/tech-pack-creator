@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
-import { PlusCircle, Image as ImageIcon } from 'lucide-react';
+import { PlusCircle, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 import { db } from '../services/firebase';
-import { writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc, deleteDoc } from 'firebase/firestore';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -43,6 +43,21 @@ export function Dashboard() {
     }
   }, [user, profile]);
 
+  const handleDelete = async (e: React.MouseEvent, packId?: string) => {
+    e.stopPropagation(); // prevent card click
+    if (!packId) return;
+    
+    if (window.confirm("Are you sure you want to permanently delete this Tech Pack?")) {
+      try {
+        await deleteDoc(doc(db, 'techPacks', packId));
+        setTechPacks(prev => prev.filter(p => p.id !== packId));
+      } catch (err) {
+        console.error("Error deleting tech pack:", err);
+        alert("Failed to delete. You might not be authorized.");
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -76,6 +91,17 @@ export function Dashboard() {
               className="p-0 group cursor-pointer hover:border-gray-400 transition-all flex flex-col hover:shadow-md"
             >
               <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
+                {(pack.userId === user?.uid) && (
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                     <button 
+                       onClick={(e) => handleDelete(e, pack.id)}
+                       className="bg-white/90 backdrop-blur-sm shadow-sm hover:bg-red-50 text-gray-400 hover:text-red-500 p-2 rounded-xl transition-colors border border-gray-100 hover:border-red-200"
+                       title="Delete Tech Pack"
+                     >
+                       <Trash2 size={16} />
+                     </button>
+                  </div>
+                )}
                 {pack.imageUrl ? (
                   <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-contain" />
                 ) : (
@@ -97,7 +123,7 @@ export function Dashboard() {
                 </div>
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-[10px] text-gray-400 font-medium truncate pr-2">
-                    By: {pack.creatorEmail ? pack.creatorEmail : 'Unknown'}
+                    By: {pack.creatorEmail ? pack.creatorEmail : (pack.userId === user?.uid ? (user?.email || 'You') : 'Teammate')}
                   </p>
                   <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide shrink-0">
                     {pack.updatedAt?.toDate ? pack.updatedAt.toDate().toLocaleDateString() : 'Just now'}
