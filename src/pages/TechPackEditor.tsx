@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2 } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -44,7 +45,16 @@ export function TechPackEditor() {
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const annotatorRef = useRef<HTMLDivElement>(null);
+
+  const isCreator = !data?.userId || user?.uid === data?.userId;
+  const canEdit = isCreator || (data?.isTeamEditable !== false);
+
+  const toggleTeamEditable = () => {
+    if (!isCreator) return;
+    setData((prev: any) => ({ ...prev, isTeamEditable: !(prev.isTeamEditable ?? true) }));
+  };
 
   const handleVectorize = async () => {
     let apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
@@ -116,7 +126,17 @@ export function TechPackEditor() {
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       const existingId = id === 'draft' ? undefined : id;
-      const savedId = await saveTechPack(user.uid, profile?.companyId || user.uid, packName, imageUrl, techPackDataToSave, existingId);
+      const savedId = await saveTechPack(
+        user.uid, 
+        profile?.companyId || user.uid, 
+        packName, 
+        imageUrl, 
+        techPackDataToSave, 
+        user.email || 'Unknown',
+        existingId,
+        data.activityLog || [],
+        data.isTeamEditable ?? true
+      );
       if (id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
       }
@@ -260,14 +280,34 @@ export function TechPackEditor() {
             placeholder="Garment Name"
           />
         </div>
-        <div className="flex items-center gap-3">
-          <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="gap-2">
-            <Save size={16} />
-            Save Tech Pack
+        <div className="flex items-center gap-2 md:gap-3">
+          {isCreator && (
+            <Button 
+               onClick={toggleTeamEditable} 
+               variant="secondary" 
+               className={`gap-2 ${data?.isTeamEditable === false ? 'text-red-600 bg-red-50' : 'text-gray-600'}`}
+               title={data?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
+            >
+               {data?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
+            </Button>
+          )}
+          {!canEdit && (
+            <div className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hidden sm:flex">
+               <Lock size={14} /> View Only
+            </div>
+          )}
+          {canEdit && (
+            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="gap-2">
+              <Save size={16} />
+              <span className="hidden sm:inline">Save</span>
+            </Button>
+          )}
+          <Button onClick={() => setShowHistory(true)} variant="secondary" className="px-3" title="Activity Log">
+             <History size={16} />
           </Button>
           <Button onClick={() => handleExport()} className="gap-2 shadow-md">
             <Download size={16} />
-            Export Presentation
+            <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
       </div>
@@ -469,6 +509,31 @@ export function TechPackEditor() {
           
         </div>
       </div>
+
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div 
+             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+             transition={{ type: "spring", stiffness: 300, damping: 30 }}
+             className="fixed right-0 top-0 bottom-0 w-80 bg-white shadow-2xl z-50 p-6 overflow-y-auto border-l border-gray-200"
+             style={{ display: 'block' }} // Ensuring it's not hidden by print classes globally implicitly
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
+               <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><History size={18} /> History</h3>
+               <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-black transition-colors"><X size={20}/></button>
+            </div>
+            <div className="space-y-4">
+               {data.activityLog?.length ? [...data.activityLog].reverse().map((log: any, i: number) => (
+                 <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                    <div className="font-bold text-gray-900 text-sm truncate">{log.user?.split('@')[0]}</div>
+                    <div className="text-gray-400 text-xs mt-0.5">{new Date(log.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</div>
+                    <div className="text-gray-700 mt-2 text-[13px]">{log.message}</div>
+                 </div>
+               )) : <p className="text-gray-500 text-sm">No activity recorded yet.</p>}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

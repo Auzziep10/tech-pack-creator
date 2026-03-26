@@ -73,9 +73,14 @@ export function Dashboard() {
                   </div>
                   <span className="text-xs font-semibold text-gray-500">100%</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-3 font-medium uppercase tracking-wide">
-                  {pack.updatedAt?.toDate ? pack.updatedAt.toDate().toLocaleDateString() : 'Just now'}
-                </p>
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-[10px] text-gray-400 font-medium truncate pr-2">
+                    By: {pack.creatorEmail ? pack.creatorEmail : 'Unknown'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide shrink-0">
+                    {pack.updatedAt?.toDate ? pack.updatedAt.toDate().toLocaleDateString() : 'Just now'}
+                  </p>
+                </div>
               </div>
             </GlassCard>
           ))}

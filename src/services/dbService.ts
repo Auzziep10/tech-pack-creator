@@ -6,32 +6,58 @@ export interface TechPackData {
   id?: string;
   userId: string;
   companyId?: string;
+  creatorEmail?: string;
   name: string;
   imageUrl: string;
   updatedAt: any;
   createdAt?: any;
   techPack: any;
+  activityLog?: any[];
+  isTeamEditable?: boolean;
 }
 
-export const saveTechPack = async (userId: string, companyId: string, name: string, imageUrl: string, techPack: any, existingId?: string) => {
+export const saveTechPack = async (
+  userId: string, 
+  companyId: string, 
+  name: string, 
+  imageUrl: string, 
+  techPack: any, 
+  creatorEmail: string,
+  existingId?: string,
+  existingLog?: any[],
+  isTeamEditable: boolean = true
+) => {
+  const newLogEntry = {
+    timestamp: new Date().toISOString(),
+    message: existingId ? 'Updated Tech Pack' : 'Created Tech Pack',
+    user: creatorEmail
+  };
+  
+  const updatedLog = existingLog ? [...existingLog, newLogEntry] : [newLogEntry];
+
   if (existingId) {
     const packRef = doc(db, 'techPacks', existingId);
     await updateDoc(packRef, {
       name,
       imageUrl,
       techPack,
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      activityLog: updatedLog,
+      isTeamEditable
     });
     return existingId;
   } else {
     const docRef = await addDoc(collection(db, 'techPacks'), {
       userId,
       companyId,
+      creatorEmail,
       name,
       imageUrl,
       techPack,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      updatedAt: serverTimestamp(),
+      activityLog: updatedLog,
+      isTeamEditable
     });
     return docRef.id;
   }
