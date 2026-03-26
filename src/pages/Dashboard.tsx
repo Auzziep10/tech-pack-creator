@@ -19,6 +19,8 @@ export function Dashboard() {
   const { user, profile } = useAuth();
   const [techPacks, setTechPacks] = useState<TechPackData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
 
   useEffect(() => {
     if (user && profile?.companyId) {
@@ -104,10 +106,35 @@ export function Dashboard() {
           <h1 className="text-4xl font-serif text-gray-900">Tech Pack Pipeline</h1>
           <p className="text-gray-500 mt-2">Manage Garment Technical Specifications.</p>
         </div>
-        <Button onClick={() => navigate('/create')} className="gap-2 shrink-0 rounded-full px-6">
-          <PlusCircle size={18} />
-          New Tech Pack
-        </Button>
+        <div className="flex items-center gap-3">
+          {isSelectMode ? (
+            <>
+              <Button onClick={() => { setIsSelectMode(false); setSelectedPacks([]); }} variant="secondary" className="rounded-full px-6">
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  const selectedData = techPacks.filter(p => p.id && selectedPacks.includes(p.id));
+                  navigate('/combo-linesheet', { state: { packs: selectedData } });
+                }} 
+                disabled={selectedPacks.length === 0}
+                className="gap-2 shrink-0 rounded-full px-6 bg-black text-white"
+              >
+                Generate Combo Line Sheet ({selectedPacks.length})
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setIsSelectMode(true)} variant="secondary" className="rounded-full px-6 hidden sm:block">
+                Select Multiple
+              </Button>
+              <Button onClick={() => navigate('/create')} className="gap-2 shrink-0 rounded-full px-6">
+                <PlusCircle size={18} />
+                New Tech Pack
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -123,14 +150,27 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
-          {techPacks.map(pack => (
-            <GlassCard 
-              key={pack.id} 
-              onClick={() => navigate(`/pack/${pack.id}`, { state: pack })}
-              className="p-0 group cursor-pointer hover:border-gray-400 transition-all flex flex-col hover:shadow-md"
-            >
-              <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
-                {(pack.userId === user?.uid) && (
+          {techPacks.map(pack => {
+            const isSelected = pack.id ? selectedPacks.includes(pack.id) : false;
+            return (
+              <GlassCard 
+                key={pack.id} 
+                onClick={() => {
+                  if (isSelectMode && pack.id) {
+                    setSelectedPacks(prev => isSelected ? prev.filter(id => id !== pack.id) : [...prev, pack.id as string]);
+                  } else {
+                    navigate(`/pack/${pack.id}`, { state: pack });
+                  }
+                }}
+                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md ${isSelectMode ? 'hover:border-blue-400' : 'hover:border-gray-400'} ${isSelected ? 'border-2 border-black ring-4 ring-black/10' : ''}`}
+              >
+                <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
+                  {isSelectMode && (
+                    <div className={`absolute top-3 left-3 w-6 h-6 rounded-full border-2 flex items-center justify-center z-20 transition-colors ${isSelected ? 'bg-black border-black text-white' : 'bg-white border-gray-300 shadow-sm'}`}>
+                       {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                    </div>
+                  )}
+                  {(!isSelectMode && pack.userId === user?.uid) && (
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                      <button 
                        onClick={(e) => handleDelete(e, pack.id)}
@@ -170,7 +210,8 @@ export function Dashboard() {
                 </div>
               </div>
             </GlassCard>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
