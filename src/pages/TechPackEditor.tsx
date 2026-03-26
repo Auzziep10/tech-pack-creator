@@ -228,6 +228,13 @@ export function TechPackEditor() {
     setData(newData);
   };
 
+  const updateProperty = (field: string, value: string) => {
+    const newData = { ...data };
+    if (!newData.properties) newData.properties = {};
+    newData.properties[field] = value;
+    setData(newData);
+  };
+
   if (isLoading) return <div className="py-20 text-center text-gray-500">Loading...</div>;
 
   if (!data?.measurements?.length) {
@@ -284,23 +291,48 @@ export function TechPackEditor() {
           <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8">
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Style Number</div>
-               <div className="text-sm font-semibold">{data?.properties?.style || 'N/A'}</div>
+               <input 
+                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={data?.properties?.style || ''}
+                 placeholder="N/A"
+                 onChange={(e) => updateProperty('style', e.target.value)}
+               />
              </div>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Season</div>
-               <div className="text-sm font-semibold">{data?.properties?.season || 'N/A'}</div>
+               <input 
+                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={data?.properties?.season || ''}
+                 placeholder="N/A"
+                 onChange={(e) => updateProperty('season', e.target.value)}
+               />
              </div>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Category</div>
-               <div className="text-sm font-semibold">{data?.properties?.category || 'N/A'}</div>
+               <input 
+                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={data?.properties?.category || ''}
+                 placeholder="N/A"
+                 onChange={(e) => updateProperty('category', e.target.value)}
+               />
              </div>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Designer</div>
-               <div className="text-sm font-semibold">{data?.properties?.designer || 'N/A'}</div>
+               <input 
+                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={data?.properties?.designer || ''}
+                 placeholder="N/A"
+                 onChange={(e) => updateProperty('designer', e.target.value)}
+               />
              </div>
              <div className="space-y-1">
                <div className="text-[10px] uppercase font-bold text-gray-400">Gender</div>
-               <div className="text-sm font-semibold">{data?.properties?.gender || 'N/A'}</div>
+               <input 
+                 className="w-full text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={data?.properties?.gender || ''}
+                 placeholder="N/A"
+                 onChange={(e) => updateProperty('gender', e.target.value)}
+               />
              </div>
           </div>
 
