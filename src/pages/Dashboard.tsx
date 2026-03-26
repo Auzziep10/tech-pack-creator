@@ -118,7 +118,7 @@ export function Dashboard() {
                   navigate('/combo-linesheet', { state: { packs: selectedData } });
                 }} 
                 disabled={selectedPacks.length === 0}
-                className="gap-2 shrink-0 rounded-full px-6 bg-black text-white h-10 font-bold"
+                className="shrink-0 rounded-full px-6 bg-black text-white h-10 font-bold"
               >
                 Generate Combo Line Sheet ({selectedPacks.length})
               </Button>
@@ -128,9 +128,11 @@ export function Dashboard() {
               <Button onClick={() => setIsSelectMode(true)} variant="secondary" className="rounded-full px-6 hidden sm:block h-10 font-bold">
                 Select Multiple
               </Button>
-              <Button onClick={() => navigate('/create')} className="gap-2 shrink-0 rounded-full px-6 h-10 font-bold">
-                <PlusCircle size={18} />
-                New Tech Pack
+              <Button onClick={() => navigate('/create')} className="shrink-0 rounded-full px-6 h-10 font-bold">
+                <div className="flex items-center gap-2">
+                  <PlusCircle size={18} />
+                  <span>New Tech Pack</span>
+                </div>
               </Button>
             </>
           )}
