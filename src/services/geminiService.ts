@@ -89,7 +89,7 @@ export async function analyzeGarmentForMeasurement(frontImageUrl: string, backIm
   }
 }
 
-export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, anchors: any[], anchorValues: Record<string, string>, baseSize: string, garmentType: string) {
+export async function generateTechPack(frontImageUrl: string, backImageUrl: string | undefined, anchors: any[], anchorValues: Record<string, string>, baseSize: string, garmentType: string, wovnMetadata?: any) {
   try {
     const frontPart = await urlToGenerativePart(frontImageUrl);
     let backPart = null;
@@ -101,7 +101,7 @@ export async function generateTechPack(frontImageUrl: string, backImageUrl: stri
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frontPart, backPart, anchors, anchorValues, baseSize, garmentType })
+      body: JSON.stringify({ frontPart, backPart, anchors, anchorValues, baseSize, garmentType, wovnMetadata })
     });
 
     if (!res.ok) {

@@ -18,6 +18,12 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // New State for Company Profile Editing
+  const [companyName, setCompanyName] = useState('');
+  const [wovnCustomerId, setWovnCustomerId] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
 
   useEffect(() => {
     if (isOpen && profile?.companyId) {
@@ -27,17 +33,22 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
         const snap = await getDoc(companyRef);
         
         if (snap.exists()) {
-          setJoinCode(snap.data().joinCode || '');
+          const data = snap.data();
+          setJoinCode(data.joinCode || '');
+          setCompanyName(data.name || '');
+          setWovnCustomerId(data.wovnCustomerId || '');
         } else {
           // Backward compatibility: If the user has a profile but no company document exists, create it
           const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const defaultName = `${user?.displayName || 'My'} Company`;
           await setDoc(companyRef, {
-            name: `${user?.displayName || 'My'} Company`,
+            name: defaultName,
             adminUid: profile.uid,
             joinCode: newJoinCode,
             createdAt: new Date()
           });
           setJoinCode(newJoinCode);
+          setCompanyName(defaultName);
         }
       };
       
@@ -93,6 +104,24 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
     }
   };
 
+  const handleSaveCompanyProfile = async () => {
+    if (!profile.companyId) return;
+    setIsSaving(true);
+    try {
+      const companyRef = doc(db, 'companies', profile.companyId);
+      await updateDoc(companyRef, {
+        name: companyName,
+        wovnCustomerId: wovnCustomerId
+      });
+      alert('Company settings saved successfully.');
+    } catch (e: any) {
+      console.error(e);
+      alert('Error saving company profile.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300">
@@ -106,7 +135,35 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
           </button>
         </header>
 
-        <div className="p-6 space-y-8">
+        <div className="p-6 space-y-8 overflow-y-auto max-h-[80vh]">
+          {/* Edit Company Details Section */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Company Profile</h3>
+              <p className="text-sm text-gray-500 mt-1">Configure your company identity and integrations.</p>
+            </div>
+            
+            <Input 
+              label="Company Name" 
+              value={companyName}
+              onChange={e => setCompanyName(e.target.value)}
+              placeholder="e.g. Acme Apparel"
+            />
+            
+            <Input 
+              label="WOVN Catalog Connection (Customer ID)" 
+              value={wovnCustomerId}
+              onChange={e => setWovnCustomerId(e.target.value)}
+              placeholder="e.g. 170942"
+            />
+            
+            <Button onClick={handleSaveCompanyProfile} disabled={isSaving} className="w-full bg-black text-white hover:bg-gray-800">
+              {isSaving ? 'Saving...' : 'Save Profile Settings'}
+            </Button>
+          </div>
+
+          <div className="w-full h-px bg-gray-100" />
+
           {/* Invite Team Section */}
           <div className="space-y-3">
             <div>

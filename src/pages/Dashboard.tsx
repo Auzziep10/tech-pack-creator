@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { getCompanyGarmentQueue } from '../services/wovnService';
+import { WovnImportModal } from '../components/ui/WovnImportModal';
 
 const formatName = (email?: string | null) => {
   if (!email) return 'Teammate';
@@ -21,6 +23,20 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
+  
+  // Wovn Queue State
+  const [wovnCustomerId, setWovnCustomerId] = useState<string | null>(null);
+  const [queueItems, setQueueItems] = useState<any[]>([]);
+  const [isWovnModalOpen, setIsWovnModalOpen] = useState(false);
+
+  const loadQueue = async (companyId: string) => {
+    try {
+      const items = await getCompanyGarmentQueue(companyId);
+      setQueueItems(items);
+    } catch (err) {
+      console.error("Error loading queue:", err);
+    }
+  };
 
   useEffect(() => {
     if (user && profile?.companyId) {
@@ -81,6 +97,14 @@ export function Dashboard() {
         })
         .catch(err => console.error("Error fetching tech packs:", err))
         .finally(() => setLoading(false));
+
+      // Fetch company doc for wovn integration
+      getDoc(doc(db, 'companies', profile.companyId)).then(snap => {
+        if (snap.exists() && snap.data().wovnCustomerId) {
+          setWovnCustomerId(snap.data().wovnCustomerId);
+          loadQueue(profile.companyId);
+        }
+      });
     }
   }, [user, profile]);
 
@@ -138,6 +162,56 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {wovnCustomerId && queueItems.length > 0 && (
+        <div className="mb-10 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-serif font-bold text-gray-900 border-b-2 border-black inline-block pb-1">Pending Wovn Scans ({queueItems.length})</h2>
+            <Button onClick={() => setIsWovnModalOpen(true)} variant="secondary" className="text-xs shrink-0 rounded-full px-4 h-8">
+              + Import More
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {queueItems.map(item => (
+              <GlassCard 
+                key={item.id} 
+                className="p-3 cursor-pointer hover:shadow-md hover:border-gray-800 transition-all flex flex-col group bg-amber-50/30 border-amber-200/50"
+                onClick={() => navigate('/create', { state: { queueItem: item } })}
+              >
+                <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center mb-3">
+                  {item.wovnItem?.mock_image ? (
+                    <img src={item.wovnItem.mock_image} className="w-full h-full object-contain" />
+                  ) : (
+                    <ImageIcon size={24} className="text-gray-300" />
+                  )}
+                </div>
+                <h4 className="font-bold text-xs text-gray-900 truncate">{item.wovnItem?.garment_name || 'Queued Item'}</h4>
+                <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-semibold flex items-center justify-between">
+                  <span>Pending Scan</span>
+                  <span className="bg-black text-white px-1.5 rounded-full text-[8px] opacity-0 group-hover:opacity-100 transition-opacity">START</span>
+                </p>
+              </GlassCard>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {wovnCustomerId && queueItems.length === 0 && (
+         <div className="flex items-start justify-end -mt-4 mb-4">
+           <Button onClick={() => setIsWovnModalOpen(true)} variant="secondary" className="text-xs shrink-0 rounded-full px-4 h-8 bg-blue-50 text-blue-700 hover:bg-blue-100 border-none">
+              Import from WOVN
+           </Button>
+         </div>
+      )}
+
+      <WovnImportModal 
+        isOpen={isWovnModalOpen} 
+        onClose={() => setIsWovnModalOpen(false)} 
+        wovnCustomerId={wovnCustomerId || ''}
+        onImportComplete={() => {
+          if (profile?.companyId) loadQueue(profile.companyId);
+        }}
+      />
 
       {loading ? (
         <div className="py-20 flex justify-center text-gray-400">Loading...</div>

@@ -22,7 +22,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { frontPart, backPart, anchors, anchorValues, baseSize, garmentType } = req.body;
+    const { frontPart, backPart, anchors, anchorValues, baseSize, garmentType, wovnMetadata } = req.body;
 
     if (!frontPart) {
        return res.status(400).json({ error: 'Missing frontPart image data.' });
@@ -36,6 +36,14 @@ To permanently eliminate camera lens distortion (where the top of the product is
 
 ${anchors.map((a: any) => `- **${a.label}**: ${anchorValues[a.id]}`).join('\n')}
 
+${wovnMetadata ? `CRITICAL INSTRUCTION: This garment is being imported from the company's Catalog. You MUST integrate the following specifications into the Tech Pack (especially the properties and BOM):
+- **Product Name**: ${wovnMetadata.garment_name || 'N/A'}
+- **Fabric/Material**: ${wovnMetadata.fabric_details || 'N/A'}
+- **Fabric Weight**: ${wovnMetadata.fabric_weight_gsm || 'N/A'}
+- **Care Instructions**: ${wovnMetadata.care_instructions || 'N/A'}
+- **Decoration**: ${wovnMetadata.decoration_method || 'N/A'}
+- **Fit**: ${wovnMetadata.fit || 'N/A'}
+` : ''}
 Based on this image and these exact architectural anchors, generate a complete Tech Pack in strict JSON format. Do not use markdown blocks, just raw JSON.
 The JSON should have the exact following structure matching our official Tech Pack template guidelines:
 {

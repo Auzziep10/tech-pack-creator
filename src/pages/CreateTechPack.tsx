@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
 import { ImageUpload } from '../components/upload/ImageUpload';
 import { Button } from '../components/ui/Button';
@@ -8,6 +8,7 @@ import { Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { analyzeGarmentForMeasurement, generateTechPack } from '../services/geminiService';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadGarmentImage, createScanSession } from '../services/dbService';
+import { deleteQueueItem } from '../services/wovnService';
 import { QRCodeSVG } from 'qrcode.react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -16,9 +17,11 @@ type FlowStep = 'upload' | 'analyzing' | 'requestMeasurement' | 'generating' | '
 
 export function CreateTechPack() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [step, setStep] = useState<FlowStep>('upload');
   const [images, setImages] = useState<{file: File | null, frontUrl: string, backUrl: string} | null>(null);
+  const queueItem = location.state?.queueItem;
   
   const [garmentType, setGarmentType] = useState('Product');
   const [anchors, setAnchors] = useState<any[]>([]);
@@ -85,7 +88,15 @@ export function CreateTechPack() {
     if (!images || anchors.some(a => !anchorValues[a.id]?.trim())) return;
     setStep('generating');
     try {
-      const data = await generateTechPack(images.frontUrl, images.backUrl, anchors, anchorValues, baseSize, garmentType);
+      const data = await generateTechPack(
+        images.frontUrl, 
+        images.backUrl, 
+        anchors, 
+        anchorValues, 
+        baseSize, 
+        queueItem?.wovnItem?.garment_name || garmentType,
+        queueItem?.wovnItem
+      );
       
       let finalImageUrl = images.frontUrl;
       if (images.file && user) {
@@ -103,6 +114,15 @@ export function CreateTechPack() {
       }
       if (!data.gallery) data.gallery = initialGallery;
 
+      // Delete item from queue if from Wovn integration
+      if (queueItem?.id) {
+        try {
+          await deleteQueueItem(queueItem.id);
+        } catch (e) {
+          console.error("Failed to clear queue item", e);
+        }
+      }
+
       setStep('done');
       navigate('/pack/draft', { state: { image: finalImageUrl, techPack: data } });
     } catch (e: any) {
@@ -115,8 +135,12 @@ export function CreateTechPack() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h1 className="text-4xl font-serif font-bold tracking-tight text-gray-900">Create Tech Pack</h1>
-        <p className="text-gray-500 mt-1 text-lg">Upload a garment mockup to begin AI analysis.</p>
+        <h1 className="text-4xl font-serif font-bold tracking-tight text-gray-900">
+          {queueItem ? `Process ${queueItem.wovnItem?.garment_name}` : 'Create Tech Pack'}
+        </h1>
+        <p className="text-gray-500 mt-1 text-lg">
+          {queueItem ? 'Scan the physical garment to finalize the import and generate specs.' : 'Upload a garment mockup to begin AI analysis.'}
+        </p>
       </div>
 
       <div className="flex items-center gap-4 mb-8">
