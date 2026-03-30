@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 import { db } from '../services/firebase';
-import { writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getCompanyGarmentQueue, deleteQueueItem } from '../services/wovnService';
 import { WovnImportModal } from '../components/ui/WovnImportModal';
 
@@ -99,7 +99,7 @@ export function Dashboard() {
         .finally(() => setLoading(false));
 
       // Fetch company doc for wovn integration
-      getDoc(doc(db, 'companies', profile.companyId)).then(snap => {
+      const unsubscribeCompany = onSnapshot(doc(db, 'companies', profile.companyId), snap => {
         if (snap.exists()) {
           const data = snap.data();
           let ids: string[] = data.wovnCustomerIds || [];
@@ -109,9 +109,13 @@ export function Dashboard() {
           setWovnCustomerIds(ids);
           if (ids.length > 0) {
             loadQueue(profile.companyId);
+          } else {
+            setQueueItems([]);
           }
         }
       });
+
+      return () => unsubscribeCompany();
     }
   }, [user, profile]);
 

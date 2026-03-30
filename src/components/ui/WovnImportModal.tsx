@@ -19,15 +19,21 @@ export function WovnImportModal({ isOpen, onClose, wovnCustomerIds, onImportComp
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (isOpen && wovnCustomerIds && wovnCustomerIds.length > 0) {
-      setLoading(true);
-      fetchWovnDecksAndItems(wovnCustomerIds)
-        .then(data => {
-          setDecks(data);
-          if (data.length > 0) setSelectedDeckId(data[0].id);
-        })
-        .catch(err => console.error("Error fetching Wovn data:", err))
-        .finally(() => setLoading(false));
+    if (isOpen) {
+      if (wovnCustomerIds && wovnCustomerIds.length > 0) {
+        setLoading(true);
+        fetchWovnDecksAndItems(wovnCustomerIds)
+          .then(data => {
+            setDecks(data);
+            if (data.length > 0) setSelectedDeckId(data[0].id);
+          })
+          .catch(err => console.error("Error fetching Wovn data:", err))
+          .finally(() => setLoading(false));
+      } else {
+        setDecks([]);
+        setSelectedDeckId(null);
+        setLoading(false);
+      }
     }
   }, [isOpen, wovnCustomerIds]);
 
