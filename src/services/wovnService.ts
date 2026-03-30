@@ -15,15 +15,38 @@ const wovnFirebaseConfig = {
 export const wovnApp = initializeApp(wovnFirebaseConfig, 'wovnApp');
 export const wovnDb = getFirestore(wovnApp);
 
-export const fetchWovnDecksAndItems = async (customerId: string) => {
-  const numericId = parseInt(customerId, 10);
-  if (isNaN(numericId)) return [];
+export const fetchAllWovnCustomers = async () => {
+  const q = query(collection(wovnDb, "customers"));
+  const snap = await getDocs(q);
+  return snap.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+};
 
-  const q = query(collection(wovnDb, "decks"), where("customer_id", "==", numericId));
-  const querySnapshot = await getDocs(q);
-  const decksSnap = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+export const fetchWovnDecksAndItems = async (customerIds: string[]) => {
+  if (!customerIds || customerIds.length === 0) return [];
+  
+  const numericIds = customerIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+  if (numericIds.length === 0) return [];
 
-  const results = await Promise.all(decksSnap.map(async (deckData) => {
+  // Firestore 'in' queries are limited to 10 items.
+  // Assuming a company will connect to < 10 Wovn customers at once. 
+  // If more, we'd need to chunk the array.
+  const chunks = [];
+  for (let i = 0; i < numericIds.length; i += 10) {
+    chunks.push(numericIds.slice(i, i + 10));
+  }
+
+  let allDecksSnap: any[] = [];
+  
+  for (const chunk of chunks) {
+    const q = query(collection(wovnDb, "decks"), where("customer_id", "in", chunk));
+    const querySnapshot = await getDocs(q);
+    allDecksSnap = [...allDecksSnap, ...querySnapshot.docs.map(d => ({ id: d.id, ...d.data() as any }))];
+  }
+
+  const results = await Promise.all(allDecksSnap.map(async (deckData) => {
       const itemsQ = query(collection(wovnDb, "deck_items"), where("deck_id", "==", Number(deckData.id)));
       const itemsSnap = await getDocs(itemsQ);
 

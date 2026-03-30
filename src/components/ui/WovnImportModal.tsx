@@ -6,11 +6,11 @@ import { useAuth } from '../../contexts/AuthContext';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  wovnCustomerId: string;
+  wovnCustomerIds: string[];
   onImportComplete: () => void;
 }
 
-export function WovnImportModal({ isOpen, onClose, wovnCustomerId, onImportComplete }: Props) {
+export function WovnImportModal({ isOpen, onClose, wovnCustomerIds, onImportComplete }: Props) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [decks, setDecks] = useState<any[]>([]);
@@ -19,9 +19,9 @@ export function WovnImportModal({ isOpen, onClose, wovnCustomerId, onImportCompl
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    if (isOpen && wovnCustomerId) {
+    if (isOpen && wovnCustomerIds && wovnCustomerIds.length > 0) {
       setLoading(true);
-      fetchWovnDecksAndItems(wovnCustomerId)
+      fetchWovnDecksAndItems(wovnCustomerIds)
         .then(data => {
           setDecks(data);
           if (data.length > 0) setSelectedDeckId(data[0].id);
@@ -29,7 +29,7 @@ export function WovnImportModal({ isOpen, onClose, wovnCustomerId, onImportCompl
         .catch(err => console.error("Error fetching Wovn data:", err))
         .finally(() => setLoading(false));
     }
-  }, [isOpen, wovnCustomerId]);
+  }, [isOpen, wovnCustomerIds]);
 
   if (!isOpen) return null;
 
@@ -71,7 +71,7 @@ export function WovnImportModal({ isOpen, onClose, wovnCustomerId, onImportCompl
              {loading ? (
                <div className="p-4 text-center text-gray-400 text-sm">Loading Decks...</div>
              ) : decks.length === 0 ? (
-               <div className="p-4 text-center text-gray-400 text-sm">No decks found for Customer ID {wovnCustomerId}.</div>
+               <div className="p-4 text-center text-gray-400 text-sm">No decks found.</div>
              ) : (
                <div className="space-y-2">
                  {decks.map(deck => (

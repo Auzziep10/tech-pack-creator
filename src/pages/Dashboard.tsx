@@ -25,7 +25,7 @@ export function Dashboard() {
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   
   // Wovn Queue State
-  const [wovnCustomerId, setWovnCustomerId] = useState<string | null>(null);
+  const [wovnCustomerIds, setWovnCustomerIds] = useState<string[]>([]);
   const [queueItems, setQueueItems] = useState<any[]>([]);
   const [isWovnModalOpen, setIsWovnModalOpen] = useState(false);
 
@@ -100,9 +100,16 @@ export function Dashboard() {
 
       // Fetch company doc for wovn integration
       getDoc(doc(db, 'companies', profile.companyId)).then(snap => {
-        if (snap.exists() && snap.data().wovnCustomerId) {
-          setWovnCustomerId(snap.data().wovnCustomerId);
-          loadQueue(profile.companyId);
+        if (snap.exists()) {
+          const data = snap.data();
+          let ids: string[] = data.wovnCustomerIds || [];
+          if (data.wovnCustomerId && !ids.includes(data.wovnCustomerId)) {
+             ids.push(data.wovnCustomerId);
+          }
+          setWovnCustomerIds(ids);
+          if (ids.length > 0) {
+            loadQueue(profile.companyId);
+          }
         }
       });
     }
@@ -163,7 +170,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {wovnCustomerId && queueItems.length > 0 && (
+      {wovnCustomerIds.length > 0 && queueItems.length > 0 && (
         <div className="mb-10 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-serif font-bold text-gray-900 border-b-2 border-black inline-block pb-1">Pending Wovn Scans ({queueItems.length})</h2>
@@ -196,7 +203,7 @@ export function Dashboard() {
         </div>
       )}
 
-      {wovnCustomerId && queueItems.length === 0 && (
+      {wovnCustomerIds.length > 0 && queueItems.length === 0 && (
          <div className="flex items-start justify-end -mt-4 mb-4">
            <Button onClick={() => setIsWovnModalOpen(true)} variant="secondary" className="text-xs shrink-0 rounded-full px-4 h-8 bg-blue-50 text-blue-700 hover:bg-blue-100 border-none">
               Import from WOVN
@@ -207,7 +214,7 @@ export function Dashboard() {
       <WovnImportModal 
         isOpen={isWovnModalOpen} 
         onClose={() => setIsWovnModalOpen(false)} 
-        wovnCustomerId={wovnCustomerId || ''}
+        wovnCustomerIds={wovnCustomerIds}
         onImportComplete={() => {
           if (profile?.companyId) loadQueue(profile.companyId);
         }}

@@ -3,6 +3,7 @@ import { X, Copy, CheckCircle2, Building, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../services/firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { fetchAllWovnCustomers } from '../../services/wovnService';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -21,7 +22,8 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
   
   // New State for Company Profile Editing
   const [companyName, setCompanyName] = useState('');
-  const [wovnCustomerId, setWovnCustomerId] = useState('');
+  const [wovnCustomerIds, setWovnCustomerIds] = useState<string[]>([]);
+  const [availableWovnCustomers, setAvailableWovnCustomers] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
 
@@ -36,7 +38,12 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
           const data = snap.data();
           setJoinCode(data.joinCode || '');
           setCompanyName(data.name || '');
-          setWovnCustomerId(data.wovnCustomerId || '');
+          
+          let ids: string[] = data.wovnCustomerIds || [];
+          if (data.wovnCustomerId && !ids.includes(data.wovnCustomerId)) {
+            ids.push(data.wovnCustomerId);
+          }
+          setWovnCustomerIds(ids);
         } else {
           // Backward compatibility: If the user has a profile but no company document exists, create it
           const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -52,7 +59,15 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
         }
       };
       
+      const fetchWovnOptions = async () => {
+         try {
+           const customers = await fetchAllWovnCustomers();
+           setAvailableWovnCustomers(customers);
+         } catch(e) { console.error(e) }
+      };
+
       loadCompanySettings();
+      fetchWovnOptions();
     }
   }, [isOpen, profile, user]);
 
@@ -111,7 +126,7 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
       const companyRef = doc(db, 'companies', profile.companyId);
       await updateDoc(companyRef, {
         name: companyName,
-        wovnCustomerId: wovnCustomerId
+        wovnCustomerIds: wovnCustomerIds
       });
       alert('Company settings saved successfully.');
     } catch (e: any) {
@@ -150,14 +165,37 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
               placeholder="e.g. Acme Apparel"
             />
             
-            <Input 
-              label="WOVN Catalog Connection (Customer ID)" 
-              value={wovnCustomerId}
-              onChange={e => setWovnCustomerId(e.target.value)}
-              placeholder="e.g. 170942"
-            />
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">WOVN Catalog Connection (Customers)</label>
+              <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto bg-gray-50/50">
+                {availableWovnCustomers.length === 0 ? (
+                  <div className="p-3 text-xs text-gray-400">Loading customers...</div>
+                ) : (
+                  availableWovnCustomers.map(c => {
+                    const isSelected = wovnCustomerIds.includes(c.id);
+                    return (
+                      <label key={c.id} className="flex items-center gap-3 p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={(e) => {
+                             if (e.target.checked) setWovnCustomerIds(prev => [...prev, c.id]);
+                             else setWovnCustomerIds(prev => prev.filter(id => id !== c.id));
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                        />
+                        <div className="flex flex-col">
+                           <span className="text-sm font-semibold text-gray-900 leading-tight">{c.company || c.name || `Customer #${c.id}`}</span>
+                           <span className="text-[10px] text-gray-500 font-mono">ID: {c.id}</span>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
             
-            <Button onClick={handleSaveCompanyProfile} disabled={isSaving} className="w-full bg-black text-white hover:bg-gray-800">
+            <Button onClick={handleSaveCompanyProfile} disabled={isSaving} className="w-full bg-black text-white hover:bg-gray-800 mt-2">
               {isSaving ? 'Saving...' : 'Save Profile Settings'}
             </Button>
           </div>
