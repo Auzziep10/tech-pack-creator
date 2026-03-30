@@ -84,12 +84,15 @@ export function WovnImportModal({ isOpen, onClose, wovnCustomerIds, onImportComp
                    <button 
                      key={deck.id}
                      onClick={() => setSelectedDeckId(deck.id)}
-                     className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
+                     className={`w-full text-left px-4 py-3 rounded-xl transition-all flex flex-col ${
                        selectedDeckId === deck.id ? 'bg-black text-white shadow-md' : 'hover:bg-gray-100 text-gray-700'
                      }`}
                    >
-                     <div className="font-bold text-sm truncate">{deck.name}</div>
-                     <div className={`text-xs mt-0.5 opacity-80 ${selectedDeckId !== deck.id ? 'text-gray-500' : ''}`}>
+                     <div className="font-bold text-sm truncate w-full">{deck.name}</div>
+                     <div className={`text-[10px] w-full mt-0.5 truncate uppercase tracking-widest font-bold ${selectedDeckId === deck.id ? 'text-gray-300' : 'text-gray-400'}`}>
+                        {deck.customer_name || '...'}
+                     </div>
+                     <div className={`text-xs mt-1 w-full opacity-80 ${selectedDeckId !== deck.id ? 'text-gray-500' : ''}`}>
                        {deck.items?.length || 0} Items
                      </div>
                    </button>

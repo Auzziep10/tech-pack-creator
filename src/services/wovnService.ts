@@ -42,6 +42,20 @@ export const fetchWovnDecksAndItems = async (customerIds: string[]) => {
   }
 
   const results = await Promise.all(allDecksSnap.map(async (deckData) => {
+      let customerName = `Customer #${deckData.customer_id}`;
+      if (deckData.customer_id) {
+        try {
+          const customerRef = doc(wovnDb, "customers", String(deckData.customer_id));
+          const customerSnap = await getDoc(customerRef);
+          if (customerSnap.exists()) {
+            const data = customerSnap.data();
+            customerName = data.company || data.name || `Customer #${deckData.customer_id}`;
+          }
+        } catch (e) {
+          console.error("Failed to fetch customer name for deck", deckData.id, e);
+        }
+      }
+
       const itemsQ = query(collection(wovnDb, "deck_items"), where("deck_id", "==", deckData.id));
       const itemsSnap = await getDocs(itemsQ);
 
@@ -85,7 +99,7 @@ export const fetchWovnDecksAndItems = async (customerIds: string[]) => {
       }));
 
       items.sort((a, b) => a.order_index - b.order_index);
-      return { ...deckData, items };
+      return { ...deckData, customer_name: customerName, items };
   }));
 
   return results;
