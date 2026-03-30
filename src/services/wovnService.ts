@@ -27,15 +27,10 @@ export const fetchAllWovnCustomers = async () => {
 export const fetchWovnDecksAndItems = async (customerIds: string[]) => {
   if (!customerIds || customerIds.length === 0) return [];
   
-  const numericIds = customerIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
-  if (numericIds.length === 0) return [];
-
-  // Firestore 'in' queries are limited to 10 items.
-  // Assuming a company will connect to < 10 Wovn customers at once. 
-  // If more, we'd need to chunk the array.
+  // Use strings directly, as Wovn stores customer_id as string
   const chunks = [];
-  for (let i = 0; i < numericIds.length; i += 10) {
-    chunks.push(numericIds.slice(i, i + 10));
+  for (let i = 0; i < customerIds.length; i += 10) {
+    chunks.push(customerIds.slice(i, i + 10));
   }
 
   let allDecksSnap: any[] = [];
@@ -47,7 +42,7 @@ export const fetchWovnDecksAndItems = async (customerIds: string[]) => {
   }
 
   const results = await Promise.all(allDecksSnap.map(async (deckData) => {
-      const itemsQ = query(collection(wovnDb, "deck_items"), where("deck_id", "==", Number(deckData.id)));
+      const itemsQ = query(collection(wovnDb, "deck_items"), where("deck_id", "==", deckData.id));
       const itemsSnap = await getDocs(itemsQ);
 
       const items = await Promise.all(itemsSnap.docs.map(async (itemDoc) => {
