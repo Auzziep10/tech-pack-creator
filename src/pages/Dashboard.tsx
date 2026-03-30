@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc } from 'firebase/firestore';
-import { getCompanyGarmentQueue } from '../services/wovnService';
+import { getCompanyGarmentQueue, deleteQueueItem } from '../services/wovnService';
 import { WovnImportModal } from '../components/ui/WovnImportModal';
 
 const formatName = (email?: string | null) => {
@@ -184,6 +184,18 @@ export function Dashboard() {
                 key={item.id} 
                 className="p-3 cursor-pointer hover:shadow-md hover:border-gray-800 transition-all flex flex-col group bg-amber-50/30 border-amber-200/50"
                 onClick={() => navigate('/create', { state: { queueItem: item } })}
+                onContextMenu={async (e) => {
+                  e.preventDefault();
+                  if (window.confirm("Remove this item from the queue?")) {
+                    try {
+                      await deleteQueueItem(item.id);
+                      setQueueItems(prev => prev.filter(q => q.id !== item.id));
+                    } catch (err) {
+                      console.error("Error removing queue item:", err);
+                      alert("Failed to remove queue item.");
+                    }
+                  }
+                }}
               >
                 <div className="aspect-square bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center mb-3">
                   {item.wovnItem?.mock_image ? (
