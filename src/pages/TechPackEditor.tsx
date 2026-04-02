@@ -7,6 +7,7 @@ import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
+import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
@@ -256,6 +257,9 @@ export function TechPackEditor() {
       if (techPackDataToSave.lineSheetImage?.startsWith('data:')) {
         techPackDataToSave.lineSheetImage = await uploadBase64Image(techPackDataToSave.lineSheetImage, user.uid);
       }
+      if (techPackDataToSave.detailImage?.startsWith('data:')) {
+        techPackDataToSave.detailImage = await uploadBase64Image(techPackDataToSave.detailImage, user.uid);
+      }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
       techPackDataToSave.images.vectors = finalVectorMap;
@@ -363,6 +367,25 @@ export function TechPackEditor() {
   const updateMeasurement = (index: number, field: string, value: string) => {
     const newData = { ...data };
     newData.measurements[index][field] = value;
+    setData(newData);
+  };
+
+  const updateDetailDesc = (index: number, description: string) => {
+    const newData = { ...data };
+    newData.details[index].description = description;
+    setData(newData);
+  };
+
+  const updateDetailObj = (index: number, detailObj: DetailItem) => {
+    const newData = { ...data };
+    newData.details[index] = detailObj;
+    setData(newData);
+  };
+
+  const removeDetail = (index: number) => {
+    const newData = { ...data };
+    newData.details.splice(index, 1);
+    newData.details.forEach((d: any, i: number) => { d.id = (i + 1).toString(); });
     setData(newData);
   };
 
@@ -787,6 +810,83 @@ export function TechPackEditor() {
                        value={typeof data?.making === 'string' ? data.making : ''} 
                        onChange={v => setData({...data, making: v})} 
                      />
+                  </div>
+               </div>
+            </div>
+          </div>
+
+          {/* Detail Closeups Section */}
+          <div className="print-force-new-page pt-4 mt-8 print:mt-0 print:pt-0">
+            <h3 className="text-lg font-serif font-bold text-gray-900 border-b border-gray-200 pb-1 mb-4 leading-tight">Detail Closeups</h3>
+            <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
+               <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
+                  {data?.detailImage ? (
+                    <div className="relative group w-full h-[300px] md:h-[400px]">
+                       <DetailAnnotator 
+                         imageUrl={data.detailImage} 
+                         details={data.details || []}
+                         onUpdateDetail={updateDetailObj}
+                       />
+                       <button onClick={() => setData({...data, detailImage: ''})} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden z-10"><X size={16} /></button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden p-4 text-center">
+                      <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                         <span className="text-2xl leading-none">+</span>
+                         <span>Upload Detail Closeup Photo</span>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                         if (e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setData({...data, detailImage: ev.target?.result as string});
+                            reader.readAsDataURL(e.target.files[0]);
+                         }
+                      }} />
+                    </label>
+                  )}
+               </div>
+               <div className="col-span-12 md:col-span-5 print:col-span-4 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                     <div className="text-xs print:text-[10px] uppercase font-bold text-gray-900 underline">Button & Hardware Details</div>
+                     <Button 
+                       size="sm" 
+                       variant="secondary"
+                       className="text-[10px] py-1 h-auto print:hidden"
+                       onClick={() => {
+                         const newData = { ...data };
+                         if (!newData.details) newData.details = [];
+                         newData.details.push({ id: (newData.details.length + 1).toString(), description: '', position: null });
+                         setData(newData);
+                       }}
+                     >
+                       + Add Detail
+                     </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(data.details || []).map((detail: any, index: number) => (
+                      <div key={index} className="flex gap-3 group">
+                         <div className="w-6 h-6 shrink-0 bg-gray-100 text-gray-900 rounded-full flex items-center justify-center text-xs font-bold border border-gray-200">
+                           {detail.id}
+                         </div>
+                         <div className="flex-1 relative">
+                            <AutoTextarea 
+                              className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs print:text-[10px] hover:border-gray-300 focus:border-blue-500 outline-none transition-colors" 
+                              value={detail.description || ''} 
+                              onChange={e => updateDetailDesc(index, e.target.value)} 
+                            />
+                            <button 
+                              onClick={() => removeDetail(index)} 
+                              className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"
+                            >
+                              <X size={14} />
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                    {!(data.details?.length > 0) && (
+                      <div className="text-xs text-gray-400 italic print:hidden">No details added yet. Click "+ Add Detail" to begin.</div>
+                    )}
                   </div>
                </div>
             </div>
