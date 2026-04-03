@@ -857,16 +857,16 @@ export function TechPackEditor() {
 
                         {user && (id || id === 'draft') && (
                           <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
-                            <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 mb-3 group-hover:scale-105 transition-transform duration-300">
+                            <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-4 group-hover:scale-105 transition-transform duration-300">
                               <QRCodeSVG 
                                  value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
-                                 size={80} 
+                                 size={140} 
                                  level={"H"}
                                  fgColor={"#000000"}
                                  includeMargin={false}
                               />
                             </div>
-                            <span className="text-gray-400 text-xs font-semibold">Scan to take photo<br/>with phone</span>
+                            <span className="text-gray-500 text-sm font-bold">Scan to open camera</span>
                           </div>
                         )}
                       </div>
