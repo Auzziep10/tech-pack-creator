@@ -244,7 +244,7 @@ export function Dashboard() {
             <PlusCircle size={24} className="text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No tech packs yet</h3>
-          <p className="max-w-sm mb-6">Create your first garment tech pack using AI analysis.</p>
+          <p className="max-w-sm mb-6">Create your first garment tech pack.</p>
           <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">Get Started</Button>
         </div>
       ) : (

@@ -4,20 +4,21 @@ import { Button } from '../components/ui/Button';
 import { ArrowLeft, Download } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 
-const AutoTextarea = ({ value, onChange, className }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string }) => {
+const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
       <textarea
         value={value}
         onChange={onChange}
-        className={`resize-none overflow-hidden col-start-1 row-start-1 w-full h-full ${className}`}
+        placeholder={placeholder}
+        className={`resize-none overflow-hidden col-start-1 row-start-1 w-full h-full bg-transparent ${className}`}
         rows={1}
       />
       <div 
         className={`invisible whitespace-pre-wrap col-start-1 row-start-1 w-full break-words pointer-events-none ${className}`} 
         aria-hidden="true"
       >
-        {value + ' '}
+        {(value || placeholder) + ' '}
       </div>
     </div>
   );
@@ -29,8 +30,8 @@ export function ComboLineSheet() {
   const exportRef = useRef<HTMLDivElement>(null);
   
   const [packs, setPacks] = useState<any[]>([]);
-  const [title, setTitle] = useState('COMBO LINE SHEET');
-  const [season, setSeason] = useState('SEASON 2026');
+  const [title, setTitle] = useState('ARIA ELEVATED BASICS');
+  const [season, setSeason] = useState('MGM RESORTS');
 
   useEffect(() => {
     if (location.state?.packs) {
@@ -43,15 +44,12 @@ export function ComboLineSheet() {
   const updatePackField = (index: number, field: string, value: string) => {
     const newPacks = [...packs];
     newPacks[index] = { ...newPacks[index] };
-    newPacks[index][field] = value;
-    setPacks(newPacks);
-  };
-
-  const updatePropertyField = (index: number, field: string, value: string) => {
-    const newPacks = [...packs];
-    newPacks[index] = { ...newPacks[index] };
-    if (!newPacks[index].properties) newPacks[index].properties = {};
-    newPacks[index].properties[field] = value;
+    if (field === 'name') {
+       newPacks[index].name = value;
+    } else {
+       if (!newPacks[index].techPack) newPacks[index].techPack = {};
+       newPacks[index].techPack[field] = value;
+    }
     setPacks(newPacks);
   };
 
@@ -60,7 +58,7 @@ export function ComboLineSheet() {
     documentTitle: `${title.replace(/\s+/g, '_')}_Combo`,
     pageStyle: `
       @page {
-        size: landscape;
+        size: portrait;
         margin: 0.5in;
       }
       @media print {
@@ -73,22 +71,6 @@ export function ComboLineSheet() {
            max-width: none !important;
            padding: 0 !important;
         }
-        
-        table {
-           width: 100% !important;
-           table-layout: fixed;
-           border-collapse: collapse;
-        }
-        td, th {
-           border: 1px solid #f3f4f6 !important;
-           word-break: break-word;
-        }
-        
-        textarea {
-           resize: none;
-           overflow: hidden;
-           border: none;
-        }
 
         .print-force-new-page {
            page-break-before: always !important;
@@ -98,6 +80,12 @@ export function ComboLineSheet() {
         /* Hide UI elements that shouldn't print */
         .print-hidden {
            display: none !important;
+        }
+        
+        textarea {
+           resize: none;
+           overflow: hidden;
+           border: none;
         }
       }
     `
@@ -112,7 +100,7 @@ export function ComboLineSheet() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1400px] mx-auto pb-20">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-[900px] mx-auto pb-20">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors">
@@ -131,186 +119,102 @@ export function ComboLineSheet() {
       </div>
 
       <div ref={exportRef} className="w-full bg-transparent text-gray-900 print-container">
-        
         {chunkedPacks.map((chunk, pageIndex) => (
-          <div key={pageIndex} className={`bg-white border border-gray-200 rounded-3xl p-10 mb-10 shadow-sm print:shadow-none print:border-none print:p-0 print:mb-0 ${pageIndex > 0 ? 'print-force-new-page' : ''}`}>
+          <div key={pageIndex} className={`bg-white border border-gray-200 rounded-[40px] p-12 mb-10 shadow-sm print:shadow-none print:border-none print:p-0 print:mb-0 min-h-[10.5in] flex flex-col justify-between ${pageIndex > 0 ? 'print-force-new-page' : ''}`}>
             
-            <header className="border-b border-gray-400 pb-2 mb-6 flex justify-between items-end">
-               <div>
-                 <input 
-                   value={title} 
-                   onChange={(e) => setTitle(e.target.value)} 
-                   className="text-3xl print:text-2xl font-serif font-extrabold tracking-tight uppercase leading-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all w-full max-w-lg" 
-                   placeholder="COMBO LINE SHEET TITLE"
-                 />
+            <div className="flex-1">
+               <header className="flex justify-between items-start mb-14 print:mb-10">
+                 <div className="flex flex-col text-left">
+                   <input className="text-[28px] print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={title} onChange={e => setTitle(e.target.value)} placeholder="COLLECTION NAME" />
+                   <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={season} onChange={e => setSeason(e.target.value)} placeholder="SUBTITLE" />
+                 </div>
+                 <div className="flex flex-col items-center justify-center -mt-2">
+                   <div className="text-[52px] print:text-[42px] font-serif tracking-widest font-black text-black leading-none py-2">WOV/N</div>
+                   <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                 </div>
+                 <div className="text-right flex justify-end">
+                   <div className="w-16 h-16 print:w-12 print:h-12 bg-black flex items-center justify-center rounded-sm">
+                      <span className="text-white font-serif italic text-sm print:text-xs">Client</span>
+                   </div>
+                 </div>
+               </header>
+
+               <div className="grid grid-cols-2 gap-x-12 gap-y-16 print:gap-y-10">
+                  {chunk.map((pack, chunkIndex) => {
+                    const img = pack.techPack?.lineSheetImage || pack.techPack?.images?.vector || pack.techPack?.images?.original || pack.imageUrl;
+                    const globalIndex = pageIndex * maxItemsPerPage + chunkIndex;
+                    return (
+                      <div key={chunkIndex} className="flex flex-col">
+                        <div className="w-full aspect-[4/5] bg-transparent relative mb-4 flex items-center justify-center overflow-hidden">
+                          {img ? (
+                            <img src={img} className="absolute inset-0 w-full h-[120%] -top-[10%] object-contain mix-blend-multiply print:scale-100" />
+                          ) : (
+                            <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-xs border border-dashed border-gray-200">No Image</div>
+                          )}
+                        </div>
+                        
+                        <AutoTextarea 
+                          className="text-2xl print:text-xl font-serif text-gray-900 border-b border-transparent hover:border-gray-300 focus:border-black transition-colors mb-4 outline-none w-full" 
+                          value={pack.name || ''} 
+                          onChange={e => updatePackField(globalIndex, 'name', e.target.value)} 
+                          placeholder="Product Name" 
+                        />
+                        
+                        <div className="border-t border-gray-200 print:border-gray-300 pt-3 grid grid-cols-2 gap-4">
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">WHOLESALE</div>
+                               <AutoTextarea className="w-full text-sm print:text-xs font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.wholesale || pack.wholesale || ''} onChange={e => updatePackField(globalIndex, 'wholesale', e.target.value)} placeholder="$0.00" />
+                            </div>
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">SIZES</div>
+                               <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.sizeRun || pack.sizeRun || ''} onChange={e => updatePackField(globalIndex, 'sizeRun', e.target.value)} placeholder="-" />
+                            </div>
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">FABRIC</div>
+                               <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.shell || pack.techPack?.fabrication?.[0]?.material || pack.shell || ''} onChange={e => updatePackField(globalIndex, 'shell', e.target.value)} placeholder="-" />
+                            </div>
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">MOQ</div>
+                               <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.moq || pack.moq || ''} onChange={e => updatePackField(globalIndex, 'moq', e.target.value)} placeholder="-" />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">PRICE (MSRP)</div>
+                               <AutoTextarea className="w-full text-sm print:text-xs font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.msrp || pack.msrp || ''} onChange={e => updatePackField(globalIndex, 'msrp', e.target.value)} placeholder="$0.00" />
+                            </div>
+                            
+                            <div className="h-6 print:h-[22px] hidden print:block bg-transparent opacity-0 pointer-events-none p-0 overflow-hidden text-transparent select-none">-</div>
+                            <div className="h-6 print:h-[22px] hidden print:block bg-transparent opacity-0 pointer-events-none p-0 overflow-hidden text-transparent select-none">-</div>
+                            
+                            <div className="space-y-0.5">
+                               <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">DELIVERY</div>
+                               <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-black border-b border-transparent hover:border-gray-300 outline-none" value={pack.techPack?.deliveryWindow || pack.deliveryWindow || ''} onChange={e => updatePackField(globalIndex, 'deliveryWindow', e.target.value)} placeholder="-" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-start gap-2 border-none">
+                          <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider mt-1 shrink-0">COLORS:</div>
+                          <AutoTextarea 
+                            className="w-full text-xs font-bold text-black border-none outline-none mt-1" 
+                            value={pack.techPack?.availableColors || pack.availableColors || ''} 
+                            onChange={e => updatePackField(globalIndex, 'availableColors', e.target.value)} 
+                            placeholder="Type colors..." 
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                </div>
-               <div className="text-right flex flex-col items-end">
-                 <div className="text-gray-800 font-bold text-xs print:text-[10px] uppercase">SEASON</div>
-                 <input 
-                   value={season} 
-                   onChange={(e) => setSeason(e.target.value)} 
-                   className="text-sm print:text-xs font-bold text-right bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all uppercase" 
-                   placeholder="SPRING / SUMMER 2026"
-                 />
-               </div>
-            </header>
-
-            <div className="overflow-hidden bg-white border border-gray-100 rounded-[20px] ring-1 ring-gray-200">
-               <table className="w-full text-sm print:text-xs" style={{ borderCollapse: 'collapse' }}>
-                  <tbody>
-                     {/* Images Row */}
-                     <tr>
-                        <td className="w-32 print:w-24 border border-gray-100 p-2 bg-gray-50/50 font-bold align-middle text-center text-gray-400 uppercase text-xs tracking-wider">
-                           Design
-                        </td>
-                         {chunk.map((pack, chunkIndex) => {
-                          const img = pack.techPack?.lineSheetImage || pack.techPack?.images?.vector || pack.techPack?.images?.original || pack.imageUrl;
-                          return (
-                            <td key={chunkIndex} className="border border-gray-100 p-6 align-middle relative h-[320px] print:h-[4.5in]">
-                               {img ? (
-                                 <img 
-                                   src={img} 
-                                   alt={pack.name} 
-                                   className="w-full h-full object-contain mix-blend-multiply scale-110"
-                                 />
-                               ) : (
-                                 <div className="w-full h-full bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 text-xs">No Image</div>
-                               )}
-                            </td>
-                          );
-                        })}
-                        {/* Pad empty cells if chunk < 4 */}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-img-${i}`} className="border border-gray-100 p-4 align-middle h-[320px] print:h-[4.5in] bg-gray-50/30"></td>
-                        ))}
-                     </tr>
-
-                     {/* Name Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Product Name</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 font-bold text-center uppercase bg-gray-50/30">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-center font-bold" value={pack.name || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'name', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-name-${i}`} className="border border-gray-100 p-3 bg-gray-50/30"></td>
-                        ))}
-                     </tr>
-
-                     {/* Style Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Style</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 font-mono text-gray-900">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-mono" value={pack.techPack?.properties?.style || pack.properties?.style || ''} onChange={e => updatePropertyField(pageIndex * maxItemsPerPage + chunkIndex, 'style', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-style-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Sizes Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Sizes</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.sizeRun || pack.sizeRun || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'sizeRun', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-sizes-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Material Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Material</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.shell || pack.techPack?.fabrication?.[0]?.material || pack.techPack?.bom?.[0]?.component || pack.shell || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'shell', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-material-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* MSRP / RRP Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">RRP / MSRP</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-bold">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.techPack?.msrp || pack.msrp || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'msrp', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-msrp-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Wholesale Price Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Wholesale Price</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-bold">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-bold text-gray-900" value={pack.techPack?.wholesale || pack.wholesale || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'wholesale', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-wholesale-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Min Order Qty Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Min Order Qty</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.moq || pack.moq || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'moq', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-moq-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Delivery Row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase">Delivery Window</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3 text-gray-900 font-medium">
-                             <AutoTextarea className="w-full bg-transparent outline-none" value={pack.techPack?.deliveryWindow || pack.deliveryWindow || ''} onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'deliveryWindow', e.target.value)} />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-delivery-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                     {/* Colors & SKU block label row */}
-                     <tr>
-                        <td className="border border-gray-100 p-2 bg-gray-50/50 font-bold text-[10px] text-gray-400 tracking-wider uppercase align-top">Available Colors</td>
-                        {chunk.map((pack, chunkIndex) => (
-                          <td key={chunkIndex} className="border border-gray-100 p-3">
-                             <div className="text-[9px] print:text-[8px] uppercase font-bold text-gray-400 mb-1 border-b border-gray-100 pb-0.5">Colors & SKU</div>
-                             <AutoTextarea 
-                               className="w-full bg-transparent outline-none text-[11px] print:text-[10px] leading-relaxed font-medium" 
-                               value={pack.techPack?.availableColors || pack.availableColors || ''} 
-                               onChange={e => updatePackField(pageIndex * maxItemsPerPage + chunkIndex, 'availableColors', e.target.value)} 
-                             />
-                          </td>
-                        ))}
-                        {Array.from({ length: maxItemsPerPage - chunk.length }).map((_, i) => (
-                          <td key={`empty-colors-${i}`} className="border border-gray-100 p-3"></td>
-                        ))}
-                     </tr>
-
-                  </tbody>
-               </table>
             </div>
-
+            
+            <footer className="w-full flex justify-between items-center text-[10px] print:text-[8px] uppercase font-bold tracking-wider text-gray-300 pt-6 mt-12 border-t border-gray-100">
+               <div>CONFIDENTIAL - WOVN GARMENT CATALOG</div>
+               <div>{new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+            </footer>
           </div>
         ))}
       </div>

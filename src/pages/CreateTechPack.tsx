@@ -139,7 +139,7 @@ export function CreateTechPack() {
           {queueItem ? `Process ${queueItem.wovnItem?.garment_name}` : 'Create Tech Pack'}
         </h1>
         <p className="text-gray-500 mt-1 text-lg">
-          {queueItem ? 'Scan the physical garment to finalize the import and generate specs.' : 'Upload a garment mockup to begin AI analysis.'}
+          {queueItem ? 'Scan the physical garment to finalize the import and generate specs.' : 'Upload a garment mockup to begin analysis.'}
         </p>
       </div>
 
@@ -201,7 +201,7 @@ export function CreateTechPack() {
                   <div className="w-16 h-16 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
                   <Sparkles className="absolute inset-0 m-auto text-black animate-pulse" size={20} />
                 </div>
-                <h3 className="text-xl font-serif mt-6 text-gray-900 text-center">AI Vision Analysis</h3>
+                <h3 className="text-xl font-serif mt-6 text-gray-900 text-center">Vision Analysis</h3>
                 <p className="text-gray-500 mt-2 text-center max-w-sm">
                   Scanning garment details, construction features, and silhouette...
                 </p>
@@ -235,7 +235,7 @@ export function CreateTechPack() {
                 <div className="w-2/3 flex flex-col justify-center gap-6">
                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 relative overflow-hidden">
                      <div className="absolute -right-4 -top-4 text-gray-200"><Sparkles size={100} /></div>
-                     <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">AI Detected: {garmentType}</h3>
+                     <h3 className="text-2xl font-serif text-gray-900 mb-2 relative z-10">Detected: {garmentType}</h3>
                      <p className="text-gray-600 text-sm leading-relaxed relative z-10">
                        To eliminate camera lens distortion and assure millimeter accuracy, please provide the horizontal and vertical anchor measurements for your base size.
                      </p>

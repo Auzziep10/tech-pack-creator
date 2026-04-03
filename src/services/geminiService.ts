@@ -113,6 +113,6 @@ export async function generateTechPack(frontImageUrl: string, backImageUrl: stri
     return data;
   } catch (error: any) {
     console.error("Gemini API Error details:", error);
-    throw new Error(error.message || "AI Generation Failed due to an unknown issue.");
+    throw new Error(error.message || "Generation Failed due to an unknown issue.");
   }
 }

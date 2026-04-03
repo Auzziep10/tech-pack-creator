@@ -31,7 +31,7 @@ export default async function handler(req: any, res: any) {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `You are an expert technical product designer.
-Analyze this product mockup. The AI previously classified it as a "${garmentType}".
+Analyze this product mockup. It was previously classified as a "${garmentType}".
 To permanently eliminate camera lens distortion (where the top of the product is closer to the lens than the bottom in flat-lays), the user has provided the following precise geometric anchors for a size ${baseSize}:
 
 ${anchors.map((a: any) => `- **${a.label}**: ${anchorValues[a.id]}`).join('\n')}
