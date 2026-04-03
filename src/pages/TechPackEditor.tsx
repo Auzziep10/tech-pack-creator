@@ -709,7 +709,26 @@ export function TechPackEditor() {
                 </div>
               )}
 
-
+              {isCreator && (
+                <div className="print-force-new-page">
+                  <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
+                    <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
+                  </div>
+                  <div className="text-xs print:text-[10px] text-gray-700 w-full block">
+                    <RichTextCallouts 
+                      className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
+                      value={
+                        typeof data.callouts === 'string' 
+                          ? data.callouts 
+                          : (Array.isArray(data.callouts) && data.callouts.length > 0)
+                            ? data.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
+                            : ''
+                      }
+                      onChange={(val: string) => updateConstruction(val)}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right Column: Measurements & Fabrication */}
