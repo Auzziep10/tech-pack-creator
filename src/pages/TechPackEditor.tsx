@@ -9,7 +9,9 @@ import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbServ
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
-
+import { QRCodeSVG } from 'qrcode.react';
+import { db } from '../services/firebase';
+import { collection, onSnapshot, query, deleteDoc, doc } from 'firebase/firestore';
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
@@ -152,6 +154,36 @@ export function TechPackEditor() {
       setIsVectorizing(false);
     }
   };
+
+  useEffect(() => {
+    if (!user || (!id && id !== 'draft')) return;
+    const q = query(collection(db, 'companionUploads'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const docData = change.doc.data();
+          const docId = change.doc.id;
+          
+          if (docData.imageUrl && docId.startsWith(`${user.uid}_${id}_detail_`)) {
+             const mIdxStr = docId.split('_detail_')[1];
+             const mIdx = parseInt(mIdxStr, 10);
+             if (!isNaN(mIdx)) {
+                setData((prev: any) => {
+                   const newData = { ...prev };
+                   if (!newData.detailModules) newData.detailModules = [];
+                   if (newData.detailModules[mIdx]) {
+                      newData.detailModules[mIdx].detailImage = docData.imageUrl;
+                   }
+                   return newData;
+                });
+                deleteDoc(doc(db, 'companionUploads', docId)).catch(() => {});
+             }
+          }
+        }
+      });
+    });
+    return unsub;
+  }, [user, id]);
 
   useEffect(() => {
     if (location.state?.techPack) {
@@ -798,19 +830,36 @@ export function TechPackEditor() {
                          <button onClick={() => updateDetailModuleStr(mIdx, 'detailImage', '')} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden z-10"><X size={16} /></button>
                       </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full aspect-[4/3] bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors print:hidden p-4 text-center">
-                        <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
-                           <span className="text-2xl leading-none">+</span>
-                           <span>Upload Detail Closeup Photo</span>
-                        </div>
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                           if (e.target.files && e.target.files[0]) {
-                              const reader = new FileReader();
-                              reader.onload = (ev) => updateDetailModuleStr(mIdx, 'detailImage', ev.target?.result as string);
-                              reader.readAsDataURL(e.target.files[0]);
-                           }
-                        }} />
-                      </label>
+                      <div className="flex w-full aspect-[4/3] gap-4 print:hidden">
+                        <label className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors p-4 text-center">
+                          <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                             <span className="text-2xl leading-none">+</span>
+                             <span>Upload Detail Closeup Photo</span>
+                          </div>
+                          <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                             if (e.target.files && e.target.files[0]) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => updateDetailModuleStr(mIdx, 'detailImage', ev.target?.result as string);
+                                reader.readAsDataURL(e.target.files[0]);
+                             }
+                          }} />
+                        </label>
+
+                        {user && (id || id === 'draft') && (
+                          <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
+                            <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-100 mb-3 group-hover:scale-105 transition-transform duration-300">
+                              <QRCodeSVG 
+                                 value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
+                                 size={80} 
+                                 level={"H"}
+                                 fgColor={"#000000"}
+                                 includeMargin={false}
+                              />
+                            </div>
+                            <span className="text-gray-400 text-xs font-semibold">Scan to take photo<br/>with phone</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                  </div>
                  <div className="col-span-12 md:col-span-5 print:col-span-4 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">

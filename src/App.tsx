@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { CreateTechPack } from './pages/CreateTechPack';
 import { TechPackEditor } from './pages/TechPackEditor';
 import { MobileScanner } from './pages/MobileScanner';
+import { QuickCameraScanner } from './pages/QuickCameraScanner';
 import { ComboLineSheet } from './pages/ComboLineSheet';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -22,6 +23,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/scan/:sessionId" element={<MobileScanner />} />
+          <Route path="/detail-camera/:sessionId" element={<QuickCameraScanner />} />
           
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/create" element={<ProtectedRoute><CreateTechPack /></ProtectedRoute>} />
