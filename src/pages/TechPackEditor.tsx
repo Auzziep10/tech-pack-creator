@@ -170,10 +170,20 @@ export function TechPackEditor() {
              if (!isNaN(mIdx)) {
                 setData((prev: any) => {
                    const newData = { ...prev };
-                   if (!newData.detailModules) newData.detailModules = [];
-                   if (newData.detailModules[mIdx]) {
-                      newData.detailModules[mIdx].detailImage = docData.imageUrl;
+                   let mods = newData.detailModules;
+                   if (!mods) {
+                      if (newData.detailImage || newData.details) {
+                         mods = [{ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: newData.detailImage || '', details: newData.details || [] }];
+                      } else {
+                         mods = [{ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] }];
+                      }
                    }
+                   
+                   mods = [...mods];
+                   if (mods[mIdx]) {
+                      mods[mIdx] = { ...mods[mIdx], detailImage: docData.imageUrl };
+                   }
+                   newData.detailModules = mods;
                    return newData;
                 });
                 deleteDoc(doc(db, 'companionUploads', docId)).catch(() => {});
