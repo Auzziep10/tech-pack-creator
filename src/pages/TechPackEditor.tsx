@@ -857,7 +857,7 @@ export function TechPackEditor() {
                                }}
                                onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
                                qrTriggerNode={user && (id || id === 'draft') ? (
-                                  <div className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex items-center justify-center hover:scale-[2] hover:shadow-xl transition-all cursor-crosshair z-20 origin-bottom-left">
+                                  <div className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex items-center justify-center shrink-0 hover:scale-[2.5] hover:-translate-y-4 hover:-translate-x-4 hover:shadow-xl transition-all cursor-crosshair z-20 origin-bottom-right">
                                      <QRCodeSVG 
                                         value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
                                         size={40} 

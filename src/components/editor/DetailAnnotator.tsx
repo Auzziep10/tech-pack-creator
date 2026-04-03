@@ -146,7 +146,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
             </button>
           )}
           {qrTriggerNode && (
-            <div className="ml-2 flex items-center">
+            <div className="ml-2 flex items-center shrink-0">
               {qrTriggerNode}
             </div>
           )}
