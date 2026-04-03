@@ -62,14 +62,20 @@ CRITICAL INSTRUCTIONS:
     
     // Auto-extract just the SVG part if it includes conversational padding
     const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+    let finalSvg = "";
     if (svgMatch) {
-       text = svgMatch[0];
+       finalSvg = svgMatch[0];
     } else {
-       text = text.replace(/```svg\n?/gi, '').replace(/```\n?/g, '').trim();
+       finalSvg = text.replace(/```(?:xml|html|svg)?\n?/gi, '').replace(/```\n?/g, '').trim();
+    }
+
+    // A valid SVG data URI MUST have an xmlns attribute to be rendered by browser <img> tags
+    if (!finalSvg.includes('xmlns="') && finalSvg.includes('<svg')) {
+        finalSvg = finalSvg.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
     }
 
     // Standardize to a safe base64 encoded SVG data URL
-    const svgBase64 = Buffer.from(text).toString('base64');
+    const svgBase64 = Buffer.from(finalSvg, 'utf-8').toString('base64');
     return res.status(200).json({ data: `data:image/svg+xml;base64,${svgBase64}` });
 
   } catch (err: any) {
