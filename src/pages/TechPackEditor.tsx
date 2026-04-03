@@ -117,8 +117,8 @@ export function TechPackEditor() {
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
 
-  const MEASUREMENT_UNIT_KEY = 'global_measurement_unit';
-  const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>(() => (localStorage.getItem(MEASUREMENT_UNIT_KEY) as 'in' | 'cm') || 'in');
+  const MEASUREMENT_UNIT_KEY = 'global_unit_v2';
+  const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>(() => (localStorage.getItem(MEASUREMENT_UNIT_KEY) as 'in' | 'cm') || 'cm');
 
   const toggleUnit = () => {
     const nextUnit = globalUnit === 'in' ? 'cm' : 'in';
@@ -1212,6 +1212,22 @@ export function TechPackEditor() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Modal isOpen={!!qrModalUrl} onClose={() => setQrModalUrl(null)} title="Live Camera Sync">
+         <div className="flex flex-col items-center justify-center p-8 bg-white rounded-2xl relative overflow-hidden">
+           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
+           <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner mb-6 flex justify-center w-full">
+             {qrModalUrl && (
+               <QRCodeSVG value={qrModalUrl} size={280} level={"H"} className="w-full max-w-[280px] h-auto object-contain mix-blend-multiply" />
+             )}
+           </div>
+           <h3 className="text-xl font-serif font-bold text-gray-900 mb-2 text-center">Point Your Mobile Camera</h3>
+           <p className="text-gray-500 font-medium text-center text-sm leading-relaxed max-w-sm">
+             Scan this code with your smartphone to instantly open the companion camera. Any photos you take will sync directly into this tech pack's detail section in real-time.
+           </p>
+         </div>
+      </Modal>
+
     </div>
   );
 }
