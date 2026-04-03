@@ -709,24 +709,7 @@ export function TechPackEditor() {
                 </div>
               )}
 
-              <div className="print-force-new-page">
-                <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
-                  <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
-                </div>
-                <div className="text-xs print:text-[10px] text-gray-700 w-full block">
-                  <RichTextCallouts 
-                    className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
-                    value={
-                      typeof data.callouts === 'string' 
-                        ? data.callouts 
-                        : (Array.isArray(data.callouts) && data.callouts.length > 0)
-                          ? data.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
-                          : ''
-                    }
-                    onChange={(val: string) => updateConstruction(val)}
-                  />
-                </div>
-              </div>
+
             </div>
 
             {/* Right Column: Measurements & Fabrication */}
@@ -989,7 +972,7 @@ export function TechPackEditor() {
                
                <div className="flex-1">
                   {/* Header */}
-                  <header className="flex justify-between items-start mb-8 print:mb-8">
+                  <header className="grid grid-cols-3 items-start mb-8 print:mb-8">
                      <div className="flex flex-col text-left">
                        <input className="text-2xl print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.season || ''} onChange={e => updateProperty('season', e.target.value)} placeholder="COLLECTION NAME" />
                        <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.category || ''} onChange={e => updateProperty('category', e.target.value)} placeholder="SUBTITLE - PAGE NO" />
@@ -1017,7 +1000,7 @@ export function TechPackEditor() {
                          <button onClick={(e) => { e.preventDefault(); updateProperty('wovnLogo', ''); }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
                        )}
                      </div>
-                     <div className="text-right flex justify-end group relative">
+                     <div className="flex justify-end group relative">
                        {data?.properties?.clientLogo ? (
                          <img src={data.properties.clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />
                        ) : (
