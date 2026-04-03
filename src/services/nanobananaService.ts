@@ -35,29 +35,27 @@ async function resizeImage(imageUrl: string, maxSize = 1440): Promise<{ base64Da
 }
 
 export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject(new Error('Canvas null'));
-      
-      // Provide a clean white background
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Apply professional technical CAD filter programmatically onto the raster image
-      ctx.filter = 'grayscale(100%) contrast(125%) brightness(110%) sepia(10%) hue-rotate(180deg)';
-      ctx.drawImage(img, 0, 0, img.width, img.height);
-      
-      // Ensure we export exactly as a pure image rather than a fragile text SVG
-      const dataUrl = canvas.toDataURL('image/png');
-      resolve(dataUrl);
-    };
-    img.onerror = () => reject(new Error("Failed to load image for blueprint generation"));
-    img.src = imageUrl;
-  });
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/vectorize', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ base64Data, mimeType })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data;
+
+  } catch (err) {
+    console.error("Vectorization Error:", err);
+    throw err;
+  }
 }
