@@ -276,9 +276,9 @@ export function TechPackEditor() {
       if (id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert("Failed to save tech pack");
+      alert("Failed to save tech pack: \n\n" + (e.message || String(e)));
     } finally {
       setIsSaving(false);
     }
