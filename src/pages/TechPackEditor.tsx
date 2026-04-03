@@ -181,7 +181,13 @@ export function TechPackEditor() {
                    
                    mods = [...mods];
                    if (mods[mIdx]) {
-                      mods[mIdx] = { ...mods[mIdx], detailImage: docData.imageUrl };
+                      const curMod = { ...mods[mIdx] };
+                      const currentImages = curMod.detailImages?.length ? curMod.detailImages : (curMod.detailImage ? [curMod.detailImage] : []);
+                      const newImages = [...currentImages, docData.imageUrl];
+                      
+                      curMod.detailImages = newImages;
+                      curMod.detailImage = newImages[0]; // backward compat
+                      mods[mIdx] = curMod;
                    }
                    newData.detailModules = mods;
                    return newData;
@@ -830,47 +836,97 @@ export function TechPackEditor() {
               </div>
               <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
                  <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
-                    {mod.detailImage ? (
-                      <div className="relative group w-full h-[300px] md:h-[400px]">
-                         <DetailAnnotator 
-                           imageUrl={mod.detailImage} 
-                           details={mod.details || []}
-                           onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
-                         />
-                         <button onClick={() => updateDetailModuleStr(mIdx, 'detailImage', '')} className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden z-10"><X size={16} /></button>
-                      </div>
-                    ) : (
-                      <div className="flex w-full aspect-[4/3] gap-4 print:hidden">
-                        <label className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors p-4 text-center">
-                          <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
-                             <span className="text-2xl leading-none">+</span>
-                             <span>Upload Detail Closeup Photo</span>
+                     {(() => {
+                        const images = mod.detailImages?.length ? mod.detailImages : (mod.detailImage ? [mod.detailImage] : []);
+                        
+                        return images.length > 0 ? (
+                          <div className="relative group w-full h-[300px] md:h-[400px]">
+                             <DetailAnnotator 
+                               images={images} 
+                               details={mod.details || []}
+                               onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
+                               onRemoveImage={(imgIdx) => {
+                                  const newImages = [...images];
+                                  newImages.splice(imgIdx, 1);
+                                  const newData = { ...data };
+                                  newData.detailModules[mIdx].detailImages = newImages;
+                                  newData.detailModules[mIdx].detailImage = newImages[0] || '';
+                                  setData(newData);
+                               }}
+                               onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
+                               qrTriggerNode={user && (id || id === 'draft') ? (
+                                  <div className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex items-center justify-center hover:scale-[2] hover:shadow-xl transition-all cursor-crosshair z-20 origin-bottom-left">
+                                     <QRCodeSVG 
+                                        value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
+                                        size={40} 
+                                        level={"L"}
+                                        includeMargin={false}
+                                     />
+                                  </div>
+                               ) : null}
+                             />
+                             <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                   Array.from(e.target.files).forEach(file => {
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                         setData((prev: any) => {
+                                            const newData = { ...prev };
+                                            const newImages = [...(newData.detailModules[mIdx].detailImages || []), ev.target?.result as string];
+                                            newData.detailModules[mIdx].detailImages = newImages;
+                                            newData.detailModules[mIdx].detailImage = newImages[0];
+                                            return newData;
+                                         });
+                                      };
+                                      reader.readAsDataURL(file);
+                                   });
+                                }
+                             }} />
                           </div>
-                          <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                             if (e.target.files && e.target.files[0]) {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => updateDetailModuleStr(mIdx, 'detailImage', ev.target?.result as string);
-                                reader.readAsDataURL(e.target.files[0]);
-                             }
-                          }} />
-                        </label>
-
-                        {user && (id || id === 'draft') && (
-                          <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
-                            <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-4 group-hover:scale-105 transition-transform duration-300">
-                              <QRCodeSVG 
-                                 value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
-                                 size={140} 
-                                 level={"H"}
-                                 fgColor={"#000000"}
-                                 includeMargin={false}
-                              />
-                            </div>
-                            <span className="text-gray-500 text-sm font-bold">Scan to open camera</span>
+                        ) : (
+                          <div className="flex w-full aspect-[4/3] gap-4 print:hidden">
+                            <label className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors p-4 text-center">
+                              <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                                 <span className="text-2xl leading-none">+</span>
+                                 <span>Upload Detail Closeup Photo</span>
+                              </div>
+                              <input type="file" className="hidden" accept="image/*" multiple onChange={(e) => {
+                                 if (e.target.files && e.target.files.length > 0) {
+                                    Array.from(e.target.files).forEach(file => {
+                                       const reader = new FileReader();
+                                       reader.onload = (ev) => {
+                                          setData((prev: any) => {
+                                             const newData = { ...prev };
+                                             const currentImages = newData.detailModules[mIdx].detailImages || (newData.detailModules[mIdx].detailImage ? [newData.detailModules[mIdx].detailImage] : []);
+                                             const newImages = [...currentImages, ev.target?.result as string];
+                                             newData.detailModules[mIdx].detailImages = newImages;
+                                             newData.detailModules[mIdx].detailImage = newImages[0];
+                                             return newData;
+                                          });
+                                       };
+                                       reader.readAsDataURL(file);
+                                    });
+                                 }
+                              }} />
+                            </label>
+    
+                            {user && (id || id === 'draft') && (
+                              <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
+                                <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-4 group-hover:scale-105 transition-transform duration-300">
+                                  <QRCodeSVG 
+                                     value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
+                                     size={140} 
+                                     level={"H"}
+                                     fgColor={"#000000"}
+                                     includeMargin={false}
+                                  />
+                                </div>
+                                <span className="text-gray-500 text-sm font-bold">Scan to open camera</span>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )}
+                        );
+                     })()}
                  </div>
                  <div className="col-span-12 md:col-span-5 print:col-span-4 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">
                     <div className="flex items-center justify-between mb-2">
