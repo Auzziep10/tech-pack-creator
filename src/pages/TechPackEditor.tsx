@@ -842,7 +842,7 @@ export function TechPackEditor() {
                         const images = mod.detailImages?.length ? mod.detailImages : (mod.detailImage ? [mod.detailImage] : []);
                         
                         return images.length > 0 ? (
-                          <div className="relative group w-full h-[300px] md:h-[400px]">
+                          <div className="relative group w-full flex flex-col">
                              <DetailAnnotator 
                                images={images} 
                                details={mod.details || []}

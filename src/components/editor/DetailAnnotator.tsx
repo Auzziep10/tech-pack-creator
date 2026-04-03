@@ -68,23 +68,23 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
       </div>
 
       <div 
-        className={`bg-white rounded-2xl border relative overflow-hidden flex-1 ${
+        className={`bg-gray-50 rounded-2xl border relative flex-1 ${
           activeId ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
-        } aspect-[4/3] relative group/main`}
+        } relative group/main flex items-center justify-center p-2 min-h-[300px]`}
       >
         {activeImageUrl ? (
-          <div className="absolute inset-0 flex items-center justify-center p-2 md:p-4 h-full pointer-events-none">
+          <>
             <div 
               ref={containerRef}
               onPointerDown={handlePointerDown}
               style={{ touchAction: 'none' }}
-              className={`relative flex max-w-full max-h-full h-full pointer-events-auto ${activeId ? 'cursor-crosshair' : ''}`}
+              className={`relative flex ${activeId ? 'cursor-crosshair' : ''}`}
             >
               <img 
                 src={activeImageUrl} 
                 alt="Detail Closeup" 
                 draggable={false}
-                className="max-w-full max-h-full object-contain pointer-events-none w-full grow"
+                className="max-w-full max-h-[700px] print:max-h-[400px] w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
               />
           
               {/* Stickers Layer */}
@@ -117,7 +117,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                 <X size={16} />
               </button>
             )}
-          </div>
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
         )}
