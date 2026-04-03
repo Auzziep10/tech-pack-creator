@@ -598,10 +598,28 @@ export function TechPackEditor() {
                      {galleryImages.map((gImg, idx) => (
                        <div 
                           key={idx} 
-                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', idx.toString());
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+                            if (isNaN(fromIdx) || fromIdx === idx) return;
+                            const newGallery = [...galleryImages];
+                            const [moved] = newGallery.splice(fromIdx, 1);
+                            newGallery.splice(idx, 0, moved);
+                            setGalleryImages(newGallery);
+                            
+                            // Reorder finalGalleryImages in dataset as well so saving reflects rearranging
+                            setData((d: any) => ({ ...d, gallery: newGallery }));
+                          }}
+                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
                           onClick={() => setImageUrl(gImg)}
                        >
-                          <img src={gImg} className="w-full h-full object-cover" alt="Gallery thumbnail" />
+                          <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
                        </div>
                      ))}
                      <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
