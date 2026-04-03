@@ -28,7 +28,7 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const prompt = `Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack.
 
 CRITICAL INSTRUCTIONS:
