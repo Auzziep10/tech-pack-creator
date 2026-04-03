@@ -59,7 +59,14 @@ CRITICAL INSTRUCTIONS:
     }
     
     let text = result.response.text();
-    text = text.replace(/```svg\n?/gi, '').replace(/```\n?/g, '').trim();
+    
+    // Auto-extract just the SVG part if it includes conversational padding
+    const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+    if (svgMatch) {
+       text = svgMatch[0];
+    } else {
+       text = text.replace(/```svg\n?/gi, '').replace(/```\n?/g, '').trim();
+    }
 
     // Standardize to a safe base64 encoded SVG data URL
     const svgBase64 = Buffer.from(text).toString('base64');

@@ -102,9 +102,7 @@ export function TechPackEditor() {
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>({ properties: {}, measurements: [], callouts: [], bom: [] });
   const [imageUrl, setImageUrl] = useState('');
-  const [vectorMap, setVectorMap] = useState<Record<string, string>>({});
-  const vectorImageUrl = vectorMap[imageUrl] || '';
-  const [showVector, setShowVector] = useState(false);
+
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   
@@ -141,9 +139,13 @@ export function TechPackEditor() {
     try {
       const { vectorizeGarmentImage } = await import('../services/nanobananaService');
       const newImageUrl = await vectorizeGarmentImage(imageUrl);
-      setVectorMap(prev => ({ ...prev, [imageUrl]: newImageUrl }));
-      setShowVector(true);
-      pushLog(`Generated Vector Blueprint for photo`);
+      setGalleryImages(prev => {
+        const newGallery = [newImageUrl, ...prev];
+        setData((d: any) => ({ ...d, gallery: newGallery }));
+        return newGallery;
+      });
+      setImageUrl(newImageUrl);
+      pushLog(`Generated Vector Blueprint successfully`);
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
     } finally {
@@ -162,10 +164,7 @@ export function TechPackEditor() {
       const initialImage = location.state.techPack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
       
-      const legacyVector = location.state.techPack?.images?.vector;
-      const initialVectors = location.state.techPack?.images?.vectors || (legacyVector ? { [initialImage]: legacyVector } : {});
-      setVectorMap(initialVectors);
-      
+
       const initialGallery = location.state.techPack?.gallery || [];
       if (initialImage && !initialGallery.includes(initialImage)) {
          initialGallery.unshift(initialImage);
@@ -186,10 +185,7 @@ export function TechPackEditor() {
           const initialImage = packInfo.techPack?.images?.original || packInfo.imageUrl;
           setImageUrl(initialImage);
           
-          const legacyVector = packInfo.techPack?.images?.vector;
-          const initialVectors = packInfo.techPack?.images?.vectors || (legacyVector ? { [initialImage]: legacyVector } : {});
-          setVectorMap(initialVectors);
-          
+
           const initialGallery = packInfo.techPack?.gallery || [];
           if (initialImage && !initialGallery.includes(initialImage)) {
              initialGallery.unshift(initialImage);
@@ -231,25 +227,14 @@ export function TechPackEditor() {
       const techPackDataToSave = { ...data };
 
       let finalGalleryImages = [];
-      let finalVectorMap: Record<string, string> = {};
-
       for (const gImg of galleryImages) {
          let finalUrl = gImg;
          if (gImg.startsWith('data:')) {
             finalUrl = await uploadBase64Image(gImg, user.uid);
          }
          finalGalleryImages.push(finalUrl);
-
-         if (vectorMap[gImg]) {
-             let vecUrl = vectorMap[gImg];
-             if (vecUrl.startsWith('data:')) {
-                vecUrl = await uploadBase64Image(vecUrl, user.uid);
-             }
-             finalVectorMap[finalUrl] = vecUrl;
-         }
       }
       setGalleryImages(finalGalleryImages);
-      setVectorMap(finalVectorMap);
       techPackDataToSave.gallery = finalGalleryImages;
 
       if (techPackDataToSave.patternImage?.startsWith('data:')) {
@@ -269,8 +254,6 @@ export function TechPackEditor() {
       }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
-      techPackDataToSave.images.vectors = finalVectorMap;
-      techPackDataToSave.images.vector = finalVectorMap[finalGalleryImages[0]] || ''; // Retain for legacy compat
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       // Strip root properties that were temporarily injected for the editor UI logic to avoid Firebase undefined nesting errors
@@ -597,55 +580,26 @@ export function TechPackEditor() {
             <div className="col-span-5 print:w-full print:mb-8 space-y-4">
               {imageUrl ? (
                 <div>
-                  <div className={`bg-white rounded-2xl ${vectorImageUrl ? 'print:grid print:grid-cols-3 print:gap-4 print:items-end' : ''} print-image-wrapper`}>
-                    
-                    {/* Explicitly Printed Images (Hidden in UI) */}
-                    {vectorImageUrl && (
-                      <div className="hidden print:flex flex-col w-full h-full relative">
-                         <img src={imageUrl} alt="Initial View" className="w-full flex-1 object-contain mx-auto" style={{ maxHeight: '100%' }} />
-                         <div className="text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Initial Image</div>
-                      </div>
-                    )}
-                    
-                    {vectorImageUrl && (
-                      <div className="hidden print:flex flex-col w-full h-full relative">
-                         <img src={vectorImageUrl} alt="Vector Blueprint" className="w-full flex-1 object-contain mx-auto" style={{ maxHeight: '100%' }} />
-                         <div className="text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Vector Blueprint</div>
-                      </div>
-                    )}
-
+                  <div className={`bg-white rounded-2xl print-image-wrapper`}>
                     {/* Interactive UI and Annotated Print */}
                     <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
-                        imageUrl={showVector && vectorImageUrl ? vectorImageUrl : imageUrl} 
+                        imageUrl={imageUrl} 
                         measurements={data.measurements}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                       />
-                      <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Vector With Callouts</div>
+                      <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
                   </div>
-                  {vectorImageUrl && (
-                    <div className="flex justify-center items-center gap-2 mt-2 print:hidden">
-                       <Button variant="secondary" size="sm" onClick={() => setShowVector(!showVector)} className="text-[10px] py-1 h-auto text-gray-600 bg-gray-100 hover:bg-gray-200">
-                        {showVector ? "View Original Image" : "View Vector Blueprint"}
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={handleVectorize} isLoading={isVectorizing} className="text-[10px] w-7 h-7 p-0 shrink-0 flex items-center justify-center text-gray-500 hover:text-purple-600 hover:bg-purple-50 transition-colors" title="Regenerate Vector Blueprint">
-                        <Wand2 size={12} />
-                      </Button>
-                    </div>
-                  )}
 
                   {/* Photo Gallery Strip */}
                   <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
                      {galleryImages.map((gImg, idx) => (
                        <div 
                           key={idx} 
-                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg && !showVector ? 'border-black scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
-                          onClick={() => {
-                            setImageUrl(gImg);
-                            setShowVector(false); // Reset to original image view when picking a new one
-                          }}
+                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          onClick={() => setImageUrl(gImg)}
                        >
                           <img src={gImg} className="w-full h-full object-cover" alt="Gallery thumbnail" />
                        </div>
@@ -811,21 +765,7 @@ export function TechPackEditor() {
                          <span className="text-2xl leading-none">+</span>
                          <span>Upload Pattern / Detail Sketches</span>
                       </div>
-                      {vectorImageUrl && (
-                         <Button 
-                           onClick={(e) => { 
-                              e.preventDefault(); 
-                              e.stopPropagation(); 
-                              setData({...data, patternImage: vectorImageUrl}); 
-                              pushLog('Applied Vector Blueprint to Specs');
-                           }} 
-                           size="sm" 
-                           variant="secondary" 
-                           className="mt-4 text-[10px] py-1.5 h-auto relative z-10 font-bold tracking-wide"
-                         >
-                            Use Vector Blueprint
-                         </Button>
-                      )}
+
                       <input type="file" className="hidden" accept="image/*" onChange={(e) => {
                          if (e.target.files && e.target.files[0]) {
                             const reader = new FileReader();
@@ -1046,14 +986,7 @@ export function TechPackEditor() {
                              }
                           }} />
                         </label>
-                        {vectorImageUrl && (
-                           <button onClick={() => {
-                             setData({...data, lineSheetImage: vectorImageUrl});
-                             pushLog('Applied Vector Blueprint to Line Sheet');
-                           }} className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200 text-xs font-bold hover:bg-gray-50 text-purple-600">
-                             Use Vector
-                           </button>
-                        )}
+
                         {data?.lineSheetImage && (
                           <button onClick={() => setData({...data, lineSheetImage: ''})} className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200 text-xs font-bold hover:bg-red-50 text-red-600">
                             Clear
