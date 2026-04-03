@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode } from 'lucide-react';
+import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
@@ -112,8 +113,69 @@ export function TechPackEditor() {
   const [isSaving, setIsSaving] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
+
+  const MEASUREMENT_UNIT_KEY = 'global_measurement_unit';
+  const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>(() => (localStorage.getItem(MEASUREMENT_UNIT_KEY) as 'in' | 'cm') || 'in');
+
+  const toggleUnit = () => {
+    const nextUnit = globalUnit === 'in' ? 'cm' : 'in';
+    setGlobalUnit(nextUnit);
+    localStorage.setItem(MEASUREMENT_UNIT_KEY, nextUnit);
+
+    // Auto-convert existing measurements
+    setData((prev: any) => {
+      const newMs = (prev.measurements || []).map((m: any) => ({
+        ...m,
+        value: autoConvert(m.value, nextUnit),
+        tolMinus: autoConvert(m.tolMinus, nextUnit),
+        tolPlus: autoConvert(m.tolPlus, nextUnit),
+        tolerance: autoConvert(m.tolerance, nextUnit)
+      }));
+      return { ...prev, measurements: newMs };
+    });
+  };
+
+  const autoConvert = (str: string | undefined, targetUnit: 'in' | 'cm') => {
+    if (!str || !str.trim()) return str;
+    const val = str.trim();
+    
+    // Convert TO cm from IN
+    if (targetUnit === 'cm') {
+      const dec = parseFractionToDecimal(val);
+      if (dec === null) return str;
+      return (dec * 2.54).toFixed(2).replace(/\.00$/, '');
+    } else {
+      // Convert TO IN from CM
+      const float = parseFloat(val);
+      if (isNaN(float)) return str;
+      const dec = float / 2.54;
+      return decimalToNearestFractionStr(dec, 8);
+    }
+  };
+
+  const parseFractionToDecimal = (val: string): number | null => {
+    let match = val.match(/^(\d+)[\s-]+(\d+)\/(\d+)$/);
+    if (match) return parseInt(match[1]) + (parseInt(match[2]) / parseInt(match[3]));
+    match = val.match(/^(\d+)\/(\d+)$/);
+    if (match) return parseInt(match[1]) / parseInt(match[2]);
+    const float = parseFloat(val);
+    return isNaN(float) ? null : float;
+  };
+
+  const decimalToNearestFractionStr = (decimal: number, denominator: number = 8): string => {
+    const whole = Math.floor(decimal);
+    const fraction = decimal - whole;
+    const num = Math.round(fraction * denominator);
+    if (num === 0) return whole === 0 ? "0" : whole.toString();
+    if (num === denominator) return (whole + 1).toString();
+    let n = num, d = denominator;
+    while (n % 2 === 0 && d % 2 === 0) { n /= 2; d /= 2; }
+    if (whole === 0) return `${n}/${d}`;
+    return `${whole} ${n}/${d}`;
+  };
 
   const isCreator = !data?.userId || user?.uid === data?.userId;
   const canEdit = isCreator || (data?.isTeamEditable !== false);
@@ -736,7 +798,10 @@ export function TechPackEditor() {
               {/* Measurements Table */}
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
-                  <span>Measurements</span>
+                  <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
+                  <button onClick={toggleUnit} className="print:hidden text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
+                    Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
+                  </button>
                 </h3>
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-xs print:text-[10px] text-left">
@@ -857,14 +922,10 @@ export function TechPackEditor() {
                                }}
                                onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
                                qrTriggerNode={user && (id || id === 'draft') ? (
-                                  <div className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex items-center justify-center shrink-0 hover:scale-[2.5] hover:-translate-y-4 hover:-translate-x-4 hover:shadow-xl transition-all cursor-crosshair z-20 origin-bottom-right">
-                                     <QRCodeSVG 
-                                        value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
-                                        size={40} 
-                                        level={"L"}
-                                        includeMargin={false}
-                                     />
-                                  </div>
+                                  <button onClick={() => setQrModalUrl(`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`)} className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-1 items-center justify-center shrink-0 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer">
+                                     <QrCode className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
+                                     <span className="text-[8px] font-bold text-gray-500 group-hover:text-black">CONNECT</span>
+                                  </button>
                                ) : null}
                              />
                              <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={(e) => {
