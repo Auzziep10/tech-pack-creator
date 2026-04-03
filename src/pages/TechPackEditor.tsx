@@ -978,14 +978,50 @@ export function TechPackEditor() {
                        <input className="text-2xl print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.season || ''} onChange={e => updateProperty('season', e.target.value)} placeholder="COLLECTION NAME" />
                        <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.category || ''} onChange={e => updateProperty('category', e.target.value)} placeholder="SUBTITLE - PAGE NO" />
                      </div>
-                     <div className="flex flex-col items-center justify-center -mt-2">
-                       <div className="text-5xl font-serif tracking-widest font-black text-black">WOV/N</div>
-                       <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                     <div className="flex flex-col items-center justify-center -mt-2 group relative">
+                       {data?.properties?.wovnLogo ? (
+                         <img src={data.properties.wovnLogo} alt="WOVN Logo" className="h-20 print:h-16 object-contain" />
+                       ) : (
+                         <>
+                           <div className="text-5xl font-serif tracking-widest font-black text-black">WOV/N</div>
+                           <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                         </>
+                       )}
+                       <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity print:hidden rounded-lg">
+                         <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200">Upload WOVN Logo</span>
+                         <input type="file" className="hidden" accept="image/*" onChange={e => {
+                             if(e.target.files && e.target.files[0]) {
+                                const reader = new FileReader();
+                                reader.onload = ev => updateProperty('wovnLogo', ev.target?.result as string);
+                                reader.readAsDataURL(e.target.files[0]);
+                             }
+                         }} />
+                       </label>
+                       {data?.properties?.wovnLogo && (
+                         <button onClick={(e) => { e.preventDefault(); updateProperty('wovnLogo', ''); }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                       )}
                      </div>
-                     <div className="text-right flex justify-end">
-                       <div className="w-14 h-14 bg-black flex items-center justify-center rounded-sm">
-                          <span className="text-white font-serif italic text-sm">Client</span>
-                       </div>
+                     <div className="text-right flex justify-end group relative">
+                       {data?.properties?.clientLogo ? (
+                         <img src={data.properties.clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />
+                       ) : (
+                         <div className="w-14 h-14 bg-black flex items-center justify-center rounded-sm">
+                            <span className="text-white font-serif italic text-sm">Client</span>
+                         </div>
+                       )}
+                       <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity print:hidden rounded-sm">
+                         <span className="text-[10px] font-bold text-center bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200 uppercase tracking-wider">Upload</span>
+                         <input type="file" className="hidden" accept="image/*" onChange={e => {
+                             if(e.target.files && e.target.files[0]) {
+                                const reader = new FileReader();
+                                reader.onload = ev => updateProperty('clientLogo', ev.target?.result as string);
+                                reader.readAsDataURL(e.target.files[0]);
+                             }
+                         }} />
+                       </label>
+                       {data?.properties?.clientLogo && (
+                         <button onClick={(e) => { e.preventDefault(); updateProperty('clientLogo', ''); }} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                       )}
                      </div>
                   </header>
 

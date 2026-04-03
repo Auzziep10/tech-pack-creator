@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, X } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
@@ -32,6 +32,8 @@ export function ComboLineSheet() {
   const [packs, setPacks] = useState<any[]>([]);
   const [title, setTitle] = useState('ARIA ELEVATED BASICS');
   const [season, setSeason] = useState('MGM RESORTS');
+  const [wovnLogo, setWovnLogo] = useState('');
+  const [clientLogo, setClientLogo] = useState('');
 
   useEffect(() => {
     if (location.state?.packs) {
@@ -128,14 +130,50 @@ export function ComboLineSheet() {
                    <input className="text-[28px] print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={title} onChange={e => setTitle(e.target.value)} placeholder="COLLECTION NAME" />
                    <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={season} onChange={e => setSeason(e.target.value)} placeholder="SUBTITLE" />
                  </div>
-                 <div className="flex flex-col items-center justify-center -mt-2">
-                   <div className="text-[52px] print:text-[42px] font-serif tracking-widest font-black text-black leading-none py-2">WOV/N</div>
-                   <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                 <div className="flex flex-col items-center justify-center -mt-2 group relative">
+                   {wovnLogo ? (
+                     <img src={wovnLogo} alt="WOVN Logo" className="h-20 print:h-16 object-contain" />
+                   ) : (
+                     <>
+                       <div className="text-[52px] print:text-[42px] font-serif tracking-widest font-black text-black leading-none py-2">WOV/N</div>
+                       <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                     </>
+                   )}
+                   <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity print:hidden rounded-lg">
+                     <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200">Upload WOVN Logo</span>
+                     <input type="file" className="hidden" accept="image/*" onChange={e => {
+                         if(e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = ev => setWovnLogo(ev.target?.result as string);
+                            reader.readAsDataURL(e.target.files[0]);
+                         }
+                     }} />
+                   </label>
+                   {wovnLogo && (
+                     <button onClick={(e) => { e.preventDefault(); setWovnLogo(''); }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                   )}
                  </div>
-                 <div className="text-right flex justify-end">
-                   <div className="w-16 h-16 print:w-12 print:h-12 bg-black flex items-center justify-center rounded-sm">
-                      <span className="text-white font-serif italic text-sm print:text-xs">Client</span>
-                   </div>
+                 <div className="text-right flex justify-end group relative">
+                   {clientLogo ? (
+                     <img src={clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />
+                   ) : (
+                     <div className="w-16 h-16 print:w-12 print:h-12 bg-black flex items-center justify-center rounded-sm">
+                        <span className="text-white font-serif italic text-sm print:text-xs">Client</span>
+                     </div>
+                   )}
+                   <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity print:hidden rounded-sm">
+                     <span className="text-[10px] font-bold text-center bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200 uppercase tracking-wider">Upload</span>
+                     <input type="file" className="hidden" accept="image/*" onChange={e => {
+                         if(e.target.files && e.target.files[0]) {
+                            const reader = new FileReader();
+                            reader.onload = ev => setClientLogo(ev.target?.result as string);
+                            reader.readAsDataURL(e.target.files[0]);
+                         }
+                     }} />
+                   </label>
+                   {clientLogo && (
+                     <button onClick={(e) => { e.preventDefault(); setClientLogo(''); }} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                   )}
                  </div>
                </header>
 
