@@ -33,7 +33,7 @@ const AutoTextarea = ({ value, onChange, className, placeholder }: { value: stri
   );
 };
 
-const RichTextCallouts = ({ value, onChange, className }: { value: string, onChange: (v: string) => void, className: string }) => {
+const RichTextCallouts = ({ value, onChange, className, placeholder }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string }) => {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -62,13 +62,14 @@ const RichTextCallouts = ({ value, onChange, className }: { value: string, onCha
         onChange={handleChange}
         onBlur={() => setIsEditing(false)}
         className={`${className} bg-white border border-gray-300 focus:border-blue-500 shadow-sm`}
-        rows={6}
+        placeholder={placeholder}
+        rows={3}
       />
     );
   }
 
   const renderRichText = (text: string) => {
-    if (!text) return <span className="text-gray-400 italic">Click to add construction details...</span>;
+    if (!text) return <span className="text-gray-400 italic">{placeholder || "Click to add details..."}</span>;
     return text.split('\n').map((line, i) => {
       const isHeader = /^\d+\.\s/.test(line.trim());
       const isBullet = line.trim().startsWith('-');
@@ -1016,11 +1017,12 @@ export function TechPackEditor() {
                              {detail.id}
                            </div>
                            <div className="flex-1 relative">
-                              <AutoTextarea 
-                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs print:text-[10px] hover:border-gray-300 focus:border-blue-500 outline-none transition-colors" 
+                              <RichTextCallouts
+                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs print:text-[10px] hover:border-gray-300 focus:border-blue-500 outline-none transition-colors min-h-[40px] block" 
+                                placeholder="Add multi-line bullet details here..."
                                 value={detail.description || ''} 
-                                onChange={e => updateDetailDesc(mIdx, index, e.target.value)} 
-                              />
+                                onChange={val => updateDetailDesc(mIdx, index, val)} 
+                              /> 
                               <button 
                                 onClick={() => removeDetail(mIdx, index)} 
                                 className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"
