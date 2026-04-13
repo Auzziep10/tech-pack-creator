@@ -27,6 +27,7 @@ export function CreateTechPack() {
   const [anchors, setAnchors] = useState<any[]>([]);
   const [anchorValues, setAnchorValues] = useState<Record<string, string>>({});
   const [baseSize, setBaseSize] = useState('Medium');
+  const [unit, setUnit] = useState<'cm' | 'in'>('cm');
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -88,11 +89,17 @@ export function CreateTechPack() {
     if (!images || anchors.some(a => !anchorValues[a.id]?.trim())) return;
     setStep('generating');
     try {
+      // Append explicitly selected unit so the AI parser generates correct values
+      const valuesWithUnits = Object.entries(anchorValues).reduce((acc, [k, v]) => {
+        acc[k] = `${v} ${unit}`;
+        return acc;
+      }, {} as Record<string, string>);
+
       const data = await generateTechPack(
         images.frontUrl, 
         images.backUrl, 
         anchors, 
-        anchorValues, 
+        valuesWithUnits, 
         baseSize, 
         queueItem?.wovnItem?.garment_name || garmentType,
         queueItem?.wovnItem
@@ -242,35 +249,47 @@ export function CreateTechPack() {
                    </div>
                    
                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-                     <div className="space-y-2">
-                       <label className="text-sm font-medium text-gray-700 block">Base Size</label>
-                       <div className="relative">
-                         <select
-                           value={baseSize}
-                           onChange={(e) => setBaseSize(e.target.value)}
-                           className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black transition-colors appearance-none cursor-pointer h-10"
-                         >
-                           {['XS', 'Small', 'Medium', 'Large', 'XL', '2XL', '3XL', 'One Size', 'Other'].map(size => (
-                             <option key={size} value={size}>{size}</option>
-                           ))}
-                         </select>
-                         <svg className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                     <div className="flex flex-col gap-4">
+                       <div className="space-y-2">
+                         <label className="text-sm font-medium text-gray-700 block">Base Size</label>
+                         <div className="relative">
+                           <select
+                             value={baseSize}
+                             onChange={(e) => setBaseSize(e.target.value)}
+                             className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-black transition-colors appearance-none cursor-pointer h-10"
+                           >
+                             {['XS', 'Small', 'Medium', 'Large', 'XL', '2XL', '3XL', 'One Size', 'Other'].map(size => (
+                               <option key={size} value={size}>{size}</option>
+                             ))}
+                           </select>
+                           <svg className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                         </div>
+                       </div>
+                       <div className="space-y-2">
+                         <label className="text-sm font-medium text-gray-700 block">Measurements</label>
+                         <div className="flex bg-gray-100 p-1 rounded-xl h-10">
+                            <button onClick={() => setUnit('in')} className={`flex-1 rounded-lg text-xs font-bold transition-all ${unit === 'in' ? 'bg-white shadow-sm text-gray-900 border border-gray-200' : 'text-gray-500 hover:text-gray-700 border border-transparent'}`}>IN.</button>
+                            <button onClick={() => setUnit('cm')} className={`flex-1 rounded-lg text-xs font-bold transition-all ${unit === 'cm' ? 'bg-white shadow-sm text-gray-900 border border-gray-200' : 'text-gray-500 hover:text-gray-700 border border-transparent'}`}>CM.</button>
+                         </div>
                        </div>
                      </div>
-                     {anchors.map((anchor, i) => (
-                       <div key={anchor.id} className="space-y-2">
-                         <Input 
-                           label={anchor.label}
-                           placeholder="e.g. 55"
-                           value={anchorValues[anchor.id] || ''}
-                           onChange={e => setAnchorValues(prev => ({...prev, [anchor.id]: e.target.value}))}
-                           autoFocus={i === 0}
-                         />
-                         <p className="text-[11px] text-gray-500 leading-snug">
-                           {anchor.description}
-                         </p>
-                       </div>
-                     ))}
+                     {anchors.map((anchor, i) => {
+                       const cleanLabel = anchor.label.replace(/\s*\(\s*(cm|in|inch|inches|centimeters)\s*\)\s*/ig, '').trim();
+                       return (
+                         <div key={anchor.id} className="space-y-2">
+                           <Input 
+                             label={`${cleanLabel} (${unit})`}
+                             placeholder={unit === 'in' ? "e.g. 21.5" : "e.g. 55"}
+                             value={anchorValues[anchor.id] || ''}
+                             onChange={e => setAnchorValues(prev => ({...prev, [anchor.id]: e.target.value}))}
+                             autoFocus={i === 0}
+                           />
+                           <p className="text-[11px] text-gray-500 leading-snug">
+                             {anchor.description}
+                           </p>
+                         </div>
+                       );
+                     })}
                    </div>
                    
                    <div className="pt-4 flex justify-end">
