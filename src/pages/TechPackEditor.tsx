@@ -414,10 +414,17 @@ export function TechPackEditor() {
            padding: 0 !important;
         }
         
+        .print-image-wrapper {
+           page-break-inside: avoid;
+           break-inside: avoid;
+           overflow: hidden !important;
+        }
+
         .print-image-wrapper > div {
            aspect-ratio: auto !important;
-           height: 4in !important;
+           height: 4.5in !important;
            margin: 0 auto;
+           overflow: hidden;
         }
         
         .print-properties-grid {

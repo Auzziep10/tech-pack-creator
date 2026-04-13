@@ -157,7 +157,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
         className={`select-none bg-white rounded-2xl border relative overflow-hidden group ${
           isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
         } ${
-          isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5]'
+          isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:h-full'
         }`}
       >
         <div className="absolute inset-6 flex items-center justify-center pointer-events-none">
