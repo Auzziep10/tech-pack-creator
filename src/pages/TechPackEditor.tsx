@@ -12,7 +12,7 @@ import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotato
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, query, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
@@ -724,7 +724,7 @@ export function TechPackEditor() {
                             e.dataTransfer.effectAllowed = 'move';
                           }}
                           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                          onDrop={(e) => {
+                          onDrop={async (e) => {
                             e.preventDefault();
                             const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
                             if (isNaN(fromIdx) || fromIdx === idx) return;
@@ -735,7 +735,22 @@ export function TechPackEditor() {
                             
                             // Reorder finalGalleryImages in dataset as well so saving reflects rearranging
                             setData((d: any) => ({ ...d, gallery: newGallery }));
+                            
+                            if (idx === 0) setImageUrl(moved);
+                            
+                            // Immediately auto-save the new main thumbnail choice if the file is already in the database
+                            if (idx === 0 && id && id !== 'draft' && !moved.startsWith('data:')) {
+                               try {
+                                 await updateDoc(doc(db, 'techPacks', id), {
+                                    imageUrl: moved,
+                                    "techPack.gallery": newGallery
+                                 });
+                               } catch (err) {
+                                 console.error("Auto-sync image error:", err);
+                               }
+                            }
                           }}
+
                           className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
                           onClick={() => setImageUrl(gImg)}
                        >
@@ -743,9 +758,9 @@ export function TechPackEditor() {
                           {idx === 0 && (
                               <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm">MAIN</div>
                            )}
-                           {idx !== 0 && (
+                            {idx !== 0 && (
                               <button 
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation();
                                   const newGallery = [...galleryImages];
                                   const [moved] = newGallery.splice(idx, 1);
@@ -753,6 +768,18 @@ export function TechPackEditor() {
                                   setGalleryImages(newGallery);
                                   setData((d: any) => ({ ...d, gallery: newGallery }));
                                   setImageUrl(moved);
+                                  
+                                  // Immediately auto-save the new main thumbnail choice if the file is already in the database
+                                  if (id && id !== 'draft' && !moved.startsWith('data:')) {
+                                     try {
+                                       await updateDoc(doc(db, 'techPacks', id), {
+                                          imageUrl: moved,
+                                          "techPack.gallery": newGallery
+                                       });
+                                     } catch (err) {
+                                       console.error("Auto-sync image error:", err);
+                                     }
+                                  }
                                 }}
                                 className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-400 text-[10px] w-5 h-5 flex flex-col items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm"
                                 title="Set as Main Cover Photo"
