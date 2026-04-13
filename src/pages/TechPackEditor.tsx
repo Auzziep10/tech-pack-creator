@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -950,13 +950,33 @@ export function TechPackEditor() {
                   className="w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                   placeholder="Detail Closeups"
                 />
-                {mIdx > 0 && (
-                   <button onClick={() => {
-                      const newData = { ...data };
-                      newData.detailModules.splice(mIdx, 1);
-                      setData(newData);
-                   }} className="text-red-500 hover:text-red-700 text-xs font-bold uppercase print:hidden shrink-0 ml-4 opacity-0 group-hover/mod:opacity-100 transition-opacity"><X size={16} /></button>
-                )}
+                <div className="flex items-center ml-4 gap-2 opacity-0 group-hover/mod:opacity-100 transition-opacity print:hidden shrink-0">
+                   {mIdx > 0 && (
+                      <button onClick={() => {
+                         const newData = { ...data };
+                         const temp = newData.detailModules[mIdx - 1];
+                         newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
+                         newData.detailModules[mIdx] = temp;
+                         setData(newData);
+                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowUp size={14} /></button>
+                   )}
+                   {mIdx < dModules.length - 1 && (
+                      <button onClick={() => {
+                         const newData = { ...data };
+                         const temp = newData.detailModules[mIdx + 1];
+                         newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
+                         newData.detailModules[mIdx] = temp;
+                         setData(newData);
+                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowDown size={14} /></button>
+                   )}
+                   {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
+                      <button onClick={() => {
+                         const newData = { ...data };
+                         newData.detailModules.splice(mIdx, 1);
+                         setData(newData);
+                      }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1"><X size={14} /></button>
+                   )}
+                </div>
               </div>
               <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
                  <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
