@@ -79,7 +79,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
     <div className={
       isFullscreen 
         ? "fixed inset-0 z-50 bg-gray-900/20 flex flex-col p-4 md:p-8 gap-4 md:gap-6 backdrop-blur-sm animate-in fade-in"
-        : "flex flex-col gap-4"
+        : "flex flex-col gap-4 flex-1 min-h-0 w-full"
     }>
       {/* Artboard Toolbar */}
       {isFullscreen && (
@@ -157,7 +157,7 @@ export function GarmentAnnotator({ imageUrl, measurements, onVectorize, isVector
         className={`select-none bg-white rounded-2xl border relative overflow-hidden group ${
           isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
         } ${
-          isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:h-full'
+          isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
         }`}
       >
         <div className="absolute inset-6 flex items-center justify-center pointer-events-none">
