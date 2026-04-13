@@ -695,10 +695,12 @@ export function TechPackEditor() {
 
           {viewMode === 'techpack' ? (
             <>
-              <div className="grid grid-cols-12 gap-4 print:flex print:flex-col">
-            {/* Left Column: Image & Callouts */}
-            <div className="col-span-5 print:w-full print:mb-8 space-y-4">
-              {imageUrl ? (
+              <div className="flex flex-col gap-6 print:gap-0">
+                {/* Top Row: Main Photo & Additional Views */}
+                <div className="grid grid-cols-12 gap-8 print:flex print:flex-row print:w-full print:mb-8 pb-8 border-b border-gray-200 print:border-transparent print:pb-0">
+                  {/* Left Column: Main Photo */}
+                  <div className="col-span-12 lg:col-span-7 print:w-[55%] xl:col-span-8 flex flex-col space-y-4">
+                    {imageUrl ? (
                 <div>
                   <div className={`bg-white rounded-2xl print-image-wrapper`}>
                     {/* Interactive UI and Annotated Print */}
@@ -827,9 +829,33 @@ export function TechPackEditor() {
                   </label>
                 </div>
               )}
+            </div>
 
+            {/* Right Column: 2x2 Gallery Grid */}
+            <div className="col-span-12 lg:col-span-5 print:w-[45%] xl:col-span-4 flex flex-col">
+               <h3 className="hidden print:block text-[10px] uppercase font-bold text-gray-500 mt-2 mb-3 border-t border-gray-200 pt-2 w-full text-center tracking-wider shrink-0">Secondary Views</h3>
+               {galleryImages.length > 1 ? (
+                  <div className="grid grid-cols-2 gap-4 print:gap-3 flex-1 auto-rows-fr">
+                     {galleryImages.slice(1, 5).map((img, i) => (
+                        <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden border border-gray-200 shadow-sm print:shadow-none flex items-center justify-center p-2 mb-4 md:mb-0 print:border-gray-100">
+                           <img src={img} className="max-w-full max-h-[300px] md:max-h-[220px] print:max-h-[3.8in] print:w-full print:object-contain object-contain pointer-events-none" />
+                        </div>
+                     ))}
+                  </div>
+               ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl print:hidden p-6 text-center min-h-[300px]">
+                     <div className="text-base font-bold mb-2">Secondary Variations</div>
+                     <div className="text-sm max-w-xs">Upload more images to generate an automatic 2x2 grid array to the right of your main photo on the export.</div>
+                  </div>
+               )}
+            </div>
+          </div>
+
+          {/* Bottom Row / Full Width Column */}
+          <div className="flex flex-col gap-8 print:gap-0 w-full space-y-4 print:space-y-0">
+              
               {isCreator && (
-                <div className="print-force-new-page">
+                <div className="print-force-new-page mb-8 print:mb-0">
                   <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
                     <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                   </div>
@@ -848,10 +874,7 @@ export function TechPackEditor() {
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Right Column: Measurements & Fabrication */}
-            <div className="col-span-7 print:w-full space-y-4">
               {/* Measurements Table */}
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
