@@ -84,7 +84,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                 src={activeImageUrl} 
                 alt="Detail Closeup" 
                 draggable={false}
-                className="max-w-full max-h-[700px] print:max-h-[400px] w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
+                className="max-w-full max-h-[700px] print:max-h-[8in] w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
               />
           
               {/* Stickers Layer */}
