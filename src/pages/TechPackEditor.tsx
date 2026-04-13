@@ -633,7 +633,9 @@ export function TechPackEditor() {
           
           <header className="border-b border-gray-200 pb-2 mb-2 flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none">{viewMode === 'linesheet' ? 'LINE SHEET' : 'TECH PACK'}</h1>
+              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none uppercase">
+                 {packName ? `${packName} - ` : ''}{viewMode === 'linesheet' ? 'LINE SHEET' : 'TECH PACK'}
+              </h1>
               <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">{viewMode === 'linesheet' ? 'WHOLESALE SUMMARY' : 'GARMENT SPECIFICATION'}</div>
             </div>
             <div className="text-right">
