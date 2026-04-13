@@ -978,7 +978,7 @@ export function TechPackEditor() {
                    )}
                 </div>
               </div>
-              <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0">
+              <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0 print:break-inside-avoid">
                  <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
                      {(() => {
                         const images = mod.detailImages?.length ? mod.detailImages : (mod.detailImage ? [mod.detailImage] : []);

@@ -68,7 +68,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
       </div>
 
       <div 
-        className={`bg-gray-50 rounded-2xl border relative flex-1 ${
+        className={`bg-gray-50 rounded-2xl border relative flex-1 print:break-inside-avoid ${
           activeId ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
         } relative group/main flex items-center justify-center p-2 min-h-[300px]`}
       >
@@ -78,7 +78,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
               ref={containerRef}
               onPointerDown={handlePointerDown}
               style={{ touchAction: 'none' }}
-              className={`relative flex ${activeId ? 'cursor-crosshair' : ''}`}
+              className={`relative flex print:break-inside-avoid ${activeId ? 'cursor-crosshair' : ''}`}
             >
               <img 
                 src={activeImageUrl} 
