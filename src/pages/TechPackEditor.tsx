@@ -377,7 +377,7 @@ export function TechPackEditor() {
         user.uid, 
         profile?.companyId || user.uid, 
         packName, 
-        imageUrl, 
+        finalGalleryImages[0] || imageUrl, 
         techPackDataToSave, 
         user.email || 'Unknown',
         existingId,
@@ -734,10 +734,30 @@ export function TechPackEditor() {
                             // Reorder finalGalleryImages in dataset as well so saving reflects rearranging
                             setData((d: any) => ({ ...d, gallery: newGallery }));
                           }}
-                          className={`relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
                           onClick={() => setImageUrl(gImg)}
                        >
                           <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
+                          {idx === 0 && (
+                              <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm">MAIN</div>
+                           )}
+                           {idx !== 0 && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newGallery = [...galleryImages];
+                                  const [moved] = newGallery.splice(idx, 1);
+                                  newGallery.unshift(moved);
+                                  setGalleryImages(newGallery);
+                                  setData((d: any) => ({ ...d, gallery: newGallery }));
+                                  setImageUrl(moved);
+                                }}
+                                className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-400 text-[10px] w-5 h-5 flex flex-col items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm"
+                                title="Set as Main Cover Photo"
+                              >
+                                ★
+                              </button>
+                           )}
                        </div>
                      ))}
                      <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
