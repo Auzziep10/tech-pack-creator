@@ -489,7 +489,7 @@ export function TechPackEditor() {
           details: data.details || []
         }];
       } else {
-        mods = [{ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] }];
+        mods = [];
       }
     }
     return mods;
@@ -538,7 +538,7 @@ export function TechPackEditor() {
   const addDetailModule = () => {
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
-    newData.detailModules.push({ title: 'New Detail Section', subtitle: 'Additional Specs', detailImage: '', details: [] });
+    newData.detailModules.push({ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] });
     setData(newData);
   };
 
@@ -1048,8 +1048,8 @@ export function TechPackEditor() {
             </div>
           ))}
           <div className="flex justify-center mt-6 print:hidden">
-              <Button onClick={addDetailModule} variant="secondary" className="border-dashed border-2 bg-gray-50 hover:bg-gray-100 text-gray-600">
-                  + Add Another Detail Section
+              <Button onClick={addDetailModule} variant="secondary" className="border-dashed border-2 bg-gray-50 hover:bg-gray-100 text-gray-600 print:hidden hidden max-[1023px]:inline-flex lg:inline-flex mx-auto">
+                  {dModules.length === 0 ? "+ Add Detail Section" : "+ Add Another Detail Section"}
               </Button>
           </div>
           </>
