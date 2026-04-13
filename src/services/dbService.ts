@@ -37,30 +37,44 @@ export const saveTechPack = async (
     });
   }
 
+  const stripUndefined = (obj: any): any => {
+    if (obj === undefined) return null;
+    if (Array.isArray(obj)) return obj.map(stripUndefined);
+    if (obj !== null && typeof obj === 'object') {
+      const result: any = {};
+      for (const key in obj) {
+        if (obj[key] !== undefined) {
+          result[key] = stripUndefined(obj[key]);
+        }
+      }
+      return result;
+    }
+    return obj;
+  };
+
+  const payload = stripUndefined({
+    companyId: companyId || userId,
+    name: name || 'Untitled',
+    imageUrl: imageUrl || '',
+    techPack: techPack || {},
+    activityLog: updatedLog,
+    isTeamEditable
+  });
+
   if (existingId) {
     const packRef = doc(db, 'techPacks', existingId);
     await updateDoc(packRef, {
-      companyId,
-      name,
-      imageUrl,
-      techPack,
-      updatedAt: serverTimestamp(),
-      activityLog: updatedLog,
-      isTeamEditable
+      ...payload,
+      updatedAt: serverTimestamp()
     });
     return existingId;
   } else {
     const docRef = await addDoc(collection(db, 'techPacks'), {
+      ...payload,
       userId,
-      companyId,
       creatorEmail,
-      name,
-      imageUrl,
-      techPack,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      activityLog: updatedLog,
-      isTeamEditable
+      updatedAt: serverTimestamp()
     });
     return docRef.id;
   }
