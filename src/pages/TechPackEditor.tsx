@@ -359,6 +359,21 @@ export function TechPackEditor() {
           if (techPackDataToSave.detailModules[i].detailImage?.startsWith('data:')) {
             techPackDataToSave.detailModules[i].detailImage = await uploadBase64Image(techPackDataToSave.detailModules[i].detailImage, user.uid);
           }
+          if (techPackDataToSave.detailModules[i].detailImages?.length) {
+            const uploadedArray = [];
+            for (const dImg of techPackDataToSave.detailModules[i].detailImages) {
+               if (!dImg) continue; 
+               if (dImg.startsWith('data:')) {
+                  uploadedArray.push(await uploadBase64Image(dImg, user.uid));
+               } else {
+                  uploadedArray.push(dImg);
+               }
+            }
+            techPackDataToSave.detailModules[i].detailImages = uploadedArray;
+            if (uploadedArray.length > 0) {
+               techPackDataToSave.detailModules[i].detailImage = uploadedArray[0];
+            }
+          }
         }
       } else if (techPackDataToSave.detailImage?.startsWith('data:')) {
         techPackDataToSave.detailImage = await uploadBase64Image(techPackDataToSave.detailImage, user.uid);
@@ -372,13 +387,16 @@ export function TechPackEditor() {
       delete techPackDataToSave.isTeamEditable;
       delete techPackDataToSave.activityLog;
 
+      // Deeply sanitize data via JSON serialization to completely eliminate 'undefined' properties which critically crash Firestore nested entity validation
+      const sanitizedTechPackData = JSON.parse(JSON.stringify(techPackDataToSave));
+
       const existingId = id === 'draft' ? undefined : id;
       const savedId = await saveTechPack(
         user.uid, 
         profile?.companyId || user.uid, 
         packName, 
         finalGalleryImages[0] || imageUrl, 
-        techPackDataToSave, 
+        sanitizedTechPackData, 
         user.email || 'Unknown',
         existingId,
         finalActivityLog,
