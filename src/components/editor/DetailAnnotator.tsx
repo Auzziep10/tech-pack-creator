@@ -70,7 +70,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
       <div 
         className={`bg-gray-50 rounded-2xl border flex-1 print:flex-none print:h-auto print:border-none print:bg-transparent ${
           activeId ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
-        } relative group/main flex flex-col p-2 print:p-0 min-h-[300px] print:space-y-8`}
+        } relative group/main flex flex-col p-2 print:p-0 min-h-[300px] ${images.length > 1 ? 'print:grid print:grid-cols-2 print:gap-2 print:space-y-0 print:items-start' : 'print:space-y-4'}`}
       >
         {images.length > 0 ? (
           images.map((imgUrl, imgIdx) => {
@@ -78,7 +78,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
             return (
               <div 
                 key={imgIdx}
-                className={`${isActive ? 'flex flex-1' : 'hidden print:flex'} relative items-center justify-center print:block print:text-center print:break-inside-avoid print:bg-gray-50 print:border print:border-gray-200 print:rounded-2xl print:p-2`}
+                className={`${isActive ? 'flex flex-1' : 'hidden print:flex'} relative items-center justify-center print:block print:text-center print:break-inside-avoid print:bg-gray-50 print:border print:border-gray-200 print:rounded-2xl print:p-1.5`}
               >
                 <div 
                   ref={isActive ? containerRef : undefined}
@@ -90,7 +90,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     src={imgUrl} 
                     alt={`Detail Closeup ${imgIdx + 1}`} 
                     draggable={false}
-                    className="max-w-full max-h-[700px] print:max-h-[5.5in] print:w-auto w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
+                    className={`max-w-full h-auto object-contain pointer-events-none rounded-lg shadow-sm ${images.length > 1 ? 'max-h-[700px] print:max-h-[3.2in]' : 'max-h-[700px] print:max-h-[5in]'}`}
                   />
               
                   {/* Stickers Layer for this specific image */}
