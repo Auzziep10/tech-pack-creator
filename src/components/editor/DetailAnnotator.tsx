@@ -68,56 +68,68 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
       </div>
 
       <div 
-        className={`bg-gray-50 rounded-2xl border relative flex-1 print:flex-none print:h-[7in] print:block print:text-center print:break-inside-avoid ${
+        className={`bg-gray-50 rounded-2xl border flex-1 print:flex-none print:h-auto print:border-none print:bg-transparent ${
           activeId ? 'border-blue-500 ring-4 ring-blue-500/20 cursor-crosshair' : 'border-gray-200'
-        } relative group/main flex items-center justify-center p-2 min-h-[300px]`}
+        } relative group/main flex flex-col p-2 print:p-0 min-h-[300px] print:space-y-8`}
       >
-        {activeImageUrl ? (
-          <>
-            <div 
-              ref={containerRef}
-              onPointerDown={handlePointerDown}
-              style={{ touchAction: 'none' }}
-              className={`relative flex print:inline-block print:h-full print:break-inside-avoid ${activeId ? 'cursor-crosshair' : ''}`}
-            >
-              <img 
-                src={activeImageUrl} 
-                alt="Detail Closeup" 
-                draggable={false}
-                className="max-w-full max-h-[700px] print:max-h-full print:h-full print:w-auto w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
-              />
-          
-              {/* Stickers Layer */}
-              {details.map((d, index) => {
-                const targetIdx = d.imageIndex ?? 0;
-                if (!d.position || targetIdx !== activeImageIndex) return null;
-                return (
-                  <div 
-                    key={d.id}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md cursor-pointer group pointer-events-auto z-10"
-                    style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
-                  >
-                    <span className="group-hover:hidden">{d.id}</span>
-                    <button 
-                      onClick={(e) => removeSticker(e, index)} 
-                      className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {onRemoveImage && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onRemoveImage(activeImageIndex); if (activeImageIndex > 0) setActiveImageIndex(prev => prev - 1); }} 
-                className="absolute top-3 right-3 p-1.5 bg-white rounded-full shadow-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/main:opacity-100 transition-opacity print:hidden pointer-events-auto border border-gray-100"
-                title="Remove image"
+        {images.length > 0 ? (
+          images.map((imgUrl, imgIdx) => {
+            const isActive = imgIdx === activeImageIndex;
+            return (
+              <div 
+                key={imgIdx}
+                className={`${isActive ? 'flex flex-1' : 'hidden print:flex'} relative items-center justify-center print:block print:text-center print:break-inside-avoid print:bg-gray-50 print:border print:border-gray-200 print:rounded-2xl print:p-2`}
               >
-                <X size={16} />
-              </button>
-            )}
-          </>
+                <div 
+                  ref={isActive ? containerRef : undefined}
+                  onPointerDown={isActive ? handlePointerDown : undefined}
+                  style={{ touchAction: 'none' }}
+                  className={`relative flex print:inline-block print:w-auto print:max-h-[6.5in] ${activeId && isActive ? 'cursor-crosshair' : ''}`}
+                >
+                  <img 
+                    src={imgUrl} 
+                    alt={`Detail Closeup ${imgIdx + 1}`} 
+                    draggable={false}
+                    className="max-w-full max-h-[700px] print:max-h-[5.5in] print:w-auto w-auto h-auto object-contain pointer-events-none rounded-lg shadow-sm"
+                  />
+              
+                  {/* Stickers Layer for this specific image */}
+                  {details.map((d, dIdx) => {
+                    const targetIdx = d.imageIndex ?? 0;
+                    if (!d.position || targetIdx !== imgIdx) return null;
+                    return (
+                      <div 
+                        key={d.id}
+                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md cursor-pointer group pointer-events-auto z-10"
+                        style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
+                      >
+                        <span className="group-hover:hidden">{d.id}</span>
+                        {isActive && (
+                          <button 
+                            onClick={(e) => removeSticker(e, dIdx)} 
+                            className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Remove Image Button (Digital only, active only) */}
+                {isActive && onRemoveImage && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); onRemoveImage(imgIdx); if (imgIdx > 0) setActiveImageIndex(prev => prev - 1); }} 
+                    className="absolute top-3 right-3 p-1.5 bg-white rounded-full shadow-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/main:opacity-100 transition-opacity print:hidden pointer-events-auto border border-gray-100"
+                    title="Remove image"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            );
+          })
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">No image</div>
         )}
