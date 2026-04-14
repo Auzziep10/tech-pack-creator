@@ -440,7 +440,7 @@ export function TechPackEditor() {
 
         .print-image-wrapper > div {
            aspect-ratio: auto !important;
-           height: 4.5in !important;
+           height: 3.8in !important;
            margin: 0 auto;
            overflow: hidden;
         }
@@ -716,7 +716,7 @@ export function TechPackEditor() {
               <div className="grid grid-cols-12 gap-4 print:flex print:flex-col print:gap-0">
                 {/* Left Column (Digital) / Top Grid (Print) */}
                 <div className="col-span-12 lg:col-span-5 print:w-full space-y-4">
-                  <div className="print:flex print:flex-row print:w-full print:gap-8 print:mb-8 print:pb-8 print:border-b print:border-gray-200">
+                  <div className="print:flex print:flex-row print:w-full print:gap-6 print:mb-4 print:pb-4 print:border-b print:border-gray-200">
                     <div className="w-full print:w-[55%] flex flex-col space-y-4">
                       {imageUrl ? (
                 <div>
@@ -855,8 +855,8 @@ export function TechPackEditor() {
                        {galleryImages.length > 1 && (
                           <div className="grid grid-cols-2 gap-3 flex-1 auto-rows-[1fr]">
                              {galleryImages.slice(1, 5).map((img, i) => (
-                                <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border-gray-100">
-                                   <img src={img} className="max-w-full max-h-[3.8in] w-full object-contain pointer-events-none" />
+                                <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border border-gray-100">
+                                   <img src={img} className="max-w-full max-h-[1.7in] w-full object-contain pointer-events-none" />
                                 </div>
                              ))}
                           </div>
