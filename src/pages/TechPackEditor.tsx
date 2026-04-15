@@ -12,6 +12,7 @@ import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotato
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
+import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
@@ -814,9 +815,7 @@ export function TechPackEditor() {
                         <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
                            if (e.target.files) {
                               const files = Array.from(e.target.files);
-                              const promises = files.map(file => new Promise<string>((res) => {
-                                 const r = new FileReader(); r.onload = (ev) => res(ev.target?.result as string); r.readAsDataURL(file);
-                              }));
+                              const promises = files.map(file => compressImageFile(file, 1600));
                               const newImages = await Promise.all(promises);
                               const newGallery = [...galleryImages, ...newImages];
                               setGalleryImages(newGallery);
@@ -836,9 +835,7 @@ export function TechPackEditor() {
                      <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
                          if (e.target.files && e.target.files.length > 0) {
                             const files = Array.from(e.target.files);
-                            const promises = files.map(file => new Promise<string>((res) => {
-                               const r = new FileReader(); r.onload = (ev) => res(ev.target?.result as string); r.readAsDataURL(file);
-                            }));
+                            const promises = files.map(file => compressImageFile(file, 1600));
                             const newImages = await Promise.all(promises);
                             setGalleryImages(newImages);
                             setImageUrl(newImages[0]);
@@ -1041,20 +1038,18 @@ export function TechPackEditor() {
                                   </button>
                                ) : null}
                              />
-                             <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={(e) => {
+                             <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={async (e) => {
                                 if (e.target.files && e.target.files.length > 0) {
-                                   Array.from(e.target.files).forEach(file => {
-                                      const reader = new FileReader();
-                                      reader.onload = (ev) => {
-                                         setData((prev: any) => {
-                                            const newData = { ...prev };
-                                            const newImages = [...(newData.detailModules[mIdx].detailImages || []), ev.target?.result as string];
-                                            newData.detailModules[mIdx].detailImages = newImages;
-                                            newData.detailModules[mIdx].detailImage = newImages[0];
-                                            return newData;
-                                         });
-                                      };
-                                      reader.readAsDataURL(file);
+                                   const files = Array.from(e.target.files);
+                                   const promises = files.map(file => compressImageFile(file, 1600));
+                                   const compressedDataUrLs = await Promise.all(promises);
+                                   
+                                   setData((prev: any) => {
+                                      const newData = { ...prev };
+                                      const newImages = [...(newData.detailModules[mIdx].detailImages || []), ...compressedDataUrLs];
+                                      newData.detailModules[mIdx].detailImages = newImages;
+                                      newData.detailModules[mIdx].detailImage = newImages[0];
+                                      return newData;
                                    });
                                 }
                              }} />
