@@ -297,7 +297,12 @@ export const Garment3DViewer = ({
             {tapeAnchors.length > 0 && tapeAnchors.map((p, i) => (
                <mesh key={i} position={p}>
                  <sphereGeometry args={[0.04, 16, 16]} />
-                 <meshBasicMaterial color="#ef4444" />
+                 <meshBasicMaterial 
+                    color="#ef4444" 
+                    polygonOffset={true} 
+                    polygonOffsetFactor={-10} 
+                    polygonOffsetUnits={-10} 
+                 />
                </mesh>
             ))}
             
@@ -310,6 +315,9 @@ export const Garment3DViewer = ({
                  dashScale={20} 
                  dashSize={0.5} 
                  gapSize={0.5}
+                 polygonOffset={true}
+                 polygonOffsetFactor={-10}
+                 polygonOffsetUnits={-10}
                />
             )}
 
