@@ -185,7 +185,7 @@ export const Garment3DViewer = ({
           <div className="absolute top-5 left-5 z-20 bg-white/95 backdrop-blur-md p-4 rounded-2xl border-2 border-red-200 shadow-xl w-72">
             <div className="flex items-center justify-between mb-2 border-b border-red-100 pb-2">
                <h3 className="font-extrabold text-red-500 flex items-center gap-2"><Ruler size={16}/> Virtual Tape Measure</h3>
-               <button onClick={() => { setIsMeasuring(false); setTapePoints([]); }} className="text-gray-400 hover:text-black">
+               <button onClick={() => { setIsMeasuring(false); setTapeSegments([]); }} className="text-gray-400 hover:text-black">
                  <X size={18} />
                </button>
             </div>
