@@ -59,7 +59,19 @@ function Loader() {
   );
 }
 
+// Dynamic Lighting Presets
+type LightPreset = 'studio' | 'dramatic' | 'outdoor' | 'soft';
+const LIGHT_CONFIG = {
+  studio: { label: 'Studio', env: 'city', bg: '#fafafa', ambient: 1.2, rim: [5, 10, 5], rimInt: 2.5, rimCol: '#ffffff', fill: [-10, 5, -5], fillInt: 1.5, fillCol: '#e0f2fe', shadow: '#0f172a' },
+  dramatic: { label: 'Dramatic', env: 'night', bg: '#1e293b', ambient: 0.2, rim: [8, 5, -8], rimInt: 4.5, rimCol: '#ffedd5', fill: [-8, -2, 5], fillInt: 1.5, fillCol: '#38bdf8', shadow: '#000000' },
+  outdoor: { label: 'Outdoor', env: 'sunset', bg: '#fef3c7', ambient: 1.5, rim: [-10, 10, 10], rimInt: 3.5, rimCol: '#fef08a', fill: [5, 2, -5], fillInt: 1.0, fillCol: '#fed7aa', shadow: '#78350f' },
+  soft: { label: 'Soft', env: 'warehouse', bg: '#f3f4f6', ambient: 2.5, rim: [0, 5, 0], rimInt: 1.0, rimCol: '#ffffff', fill: [0, -5, 0], fillInt: 0.5, fillCol: '#ffffff', shadow: '#94a3b8' }
+};
+
 export const Garment3DViewer = ({ url }: { url: string }) => {
+  const [preset, setPreset] = useState<LightPreset>('studio');
+  const config = LIGHT_CONFIG[preset];
+
   if (!url) return null;
 
   return (
@@ -80,28 +92,42 @@ export const Garment3DViewer = ({ url }: { url: string }) => {
              <p className="font-bold text-gray-900 text-sm leading-tight mt-0.5">LiDAR Capture</p>
           </div>
         </div>
+
+        {/* Lighting Controls - Top Right */}
+        <div className="absolute top-5 right-5 z-10 flex flex-col gap-2">
+          {Object.entries(LIGHT_CONFIG).map(([key, val]) => (
+            <button
+              key={key}
+              onClick={() => setPreset(key as LightPreset)}
+              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold tracking-widest uppercase transition-all shadow-sm backdrop-blur-md border ${
+                 preset === key 
+                 ? 'bg-black text-white border-black scale-105' 
+                 : 'bg-white/80 text-gray-500 border-gray-200 hover:bg-white hover:text-gray-900'
+              }`}
+            >
+              {val.label}
+            </button>
+          ))}
+        </div>
         
         <Canvas shadows camera={{ position: [0, 2, 8], fov: 40 }}>
-          {/* Subtle Ambient Studio Background */}
-          <color attach="background" args={['#fafafa']} />
+          <color attach="background" args={[config.bg]} />
           
           <Suspense fallback={<Loader />}>
-            <Environment preset="city" />
+            {/* @ts-ignore */}
+            <Environment preset={config.env} />
             
-            {/* Cinematic Three Point Lighting Setup */}
-            <ambientLight intensity={1.2} />
-            <spotLight position={[5, 10, 5]} intensity={2.5} angle={0.5} penumbra={1} castShadow shadow-mapSize={[2048, 2048]} />
-            <directionalLight position={[-10, 5, -5]} intensity={1.5} color="#e0f2fe" />
+            <ambientLight intensity={config.ambient} />
+            <spotLight position={config.rim as any} intensity={config.rimInt} color={config.rimCol} angle={0.5} penumbra={1} castShadow shadow-mapSize={[2048, 2048]} />
+            <directionalLight position={config.fill as any} intensity={config.fillInt} color={config.fillCol} />
             
-            {/* The Model properly centered on origin */}
             <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
               <Center>
                 <Model url={url} />
               </Center>
             </Float>
             
-            {/* Soft Contact Shadow below the floating object */}
-            <ContactShadows resolution={1024} scale={20} blur={2.5} opacity={0.4} far={10} color="#0f172a" />
+            <ContactShadows resolution={1024} scale={20} blur={2.5} opacity={0.4} far={10} color={config.shadow} />
           </Suspense>
 
           <OrbitControls 
