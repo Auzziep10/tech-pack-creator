@@ -1005,7 +1005,11 @@ export function TechPackEditor() {
             <div className="mt-8 mb-4 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm print:hidden cursor-move w-full">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2 mb-4">3D AR Mesh Viewer</h3>
               <div className="w-full">
-                 <Garment3DViewer url={data.model3dUrl} />
+                 <Garment3DViewer 
+                    url={data.model3dUrl} 
+                    measurements={data.measurements || []} 
+                    onUpdateMeasurement={(idx, val) => updateMeasurement(idx, 'value', val.toString())} 
+                 />
               </div>
             </div>
           )}
