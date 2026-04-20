@@ -6,6 +6,7 @@ import { auth, storage, db } from './firebase';
 import { signInWithEmailAndPassword, User } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import * as DocumentPicker from 'expo-document-picker';
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -147,10 +148,30 @@ export default function App() {
           
           <TouchableOpacity 
             style={[styles.button, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e4e4e7', width: '100%', marginBottom: 40 }]} 
+          <TouchableOpacity 
+            style={[styles.modeCard, { backgroundColor: '#f4f4f5', borderColor: '#e4e4e7' }]} 
             onPress={() => setScanMode('flat')}
           >
             <Text style={{color: '#09090b', fontSize: 18, fontWeight: 'bold', marginBottom: 4}}>Flat Lay / Tabletop</Text>
             <Text style={{color: '#52525b', fontSize: 13, textAlign: 'center'}}>Best for accurate pattern/seam mapping. (Tip: Slide thin cardboard inside to give slight depth).</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.modeCard, { backgroundColor: '#ffffff', borderColor: '#d4d4d8', borderStyle: 'dashed' }]} 
+            onPress={async () => {
+              try {
+                const res = await DocumentPicker.getDocumentAsync({ type: ['*/*'], copyToCacheDirectory: true });
+                if (!res.canceled && res.assets && res.assets.length > 0) {
+                  setScanMode('mannequin'); // Default to 3D mode tag
+                  setScannedModelUrl(res.assets[0].uri);
+                }
+              } catch (err) {
+                 alert("File picking failed.");
+              }
+            }}
+          >
+            <Text style={{color: '#09090b', fontSize: 16, fontWeight: 'bold', marginBottom: 4}}>Upload from Files</Text>
+            <Text style={{color: '#52525b', fontSize: 12, textAlign: 'center'}}>Select a pre-existing .usdz or .obj file from iCloud Drive or On My iPhone.</Text>
           </TouchableOpacity>
         </View>
       ) : !scannedModelUrl ? (
