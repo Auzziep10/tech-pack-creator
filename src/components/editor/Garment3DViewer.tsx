@@ -1,70 +1,42 @@
-import React, { Suspense, useEffect, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stage } from '@react-three/drei';
-import * as THREE from 'three';
-import { USDZLoader } from 'three-stdlib';
-
-const Model = ({ url }: { url: string }) => {
-  const [scene, setScene] = useState<THREE.Group | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    const loader = new USDZLoader();
-    loader.load(
-      url,
-      (group: THREE.Group) => {
-        if (active) {
-          // Normalize and scale the model slightly
-          group.scale.set(10, 10, 10);
-          setScene(group);
-        }
-      },
-      undefined,
-      (err: any) => {
-        console.error("USDZLoader Error:", err);
-        if (active) setError("Failed to load 3D mesh.");
-      }
-    );
-
-    return () => { active = false; };
-  }, [url]);
-
-  if (error) {
-    return (
-      <mesh>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial color="red" wireframe />
-      </mesh>
-    );
-  }
-
-  if (!scene) return null;
-
-  return <primitive object={scene} />;
-};
+import React from 'react';
+import { Box, Download, Smartphone } from 'lucide-react';
 
 export const Garment3DViewer = ({ url }: { url: string }) => {
   if (!url) return null;
 
   return (
-    <div className="w-full h-full min-h-[400px] bg-gradient-to-b from-gray-50 to-gray-200 rounded-2xl overflow-hidden relative border border-gray-200 shadow-inner">
-      <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/40 shadow-sm text-xs font-bold text-gray-700 flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-        LIVE 3D VIEWPORT
+    <div className="w-full h-full min-h-[300px] bg-gradient-to-b from-gray-50 to-gray-200 rounded-2xl overflow-hidden relative border border-gray-200 flex flex-col items-center justify-center p-8">
+      <div className="w-20 h-20 bg-white shadow-md rounded-2xl flex items-center justify-center mb-4 border border-gray-100">
+        <Box size={40} className="text-blue-500" />
       </div>
       
-      <Canvas shadows camera={{ position: [0, 2, 5], fov: 45 }}>
-        <Suspense fallback={null}>
-          <Stage environment="city" intensity={0.5} adjustCamera>
-            <Model url={url} />
-          </Stage>
-        </Suspense>
-        <OrbitControls makeDefault autoRotate autoRotateSpeed={0.5} minPolarAngle={0} maxPolarAngle={Math.PI / 1.5} />
-      </Canvas>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">3D Garment Mesh</h3>
+      <p className="text-sm text-gray-500 text-center max-w-[280px] mb-6">
+        This high-fidelity topographic mesh was captured via LiDAR.
+      </p>
       
-      <div className="absolute bottom-4 right-4 z-10 text-gray-400 text-[10px] font-medium tracking-wider uppercase">
-        * Drag to orbit • Scroll to zoom
+      <div className="flex flex-col gap-3 w-full max-w-[200px]">
+        <a 
+          href={url} 
+          rel="ar"
+          className="flex items-center justify-center gap-2 bg-black text-white hover:bg-gray-800 py-3 px-4 rounded-xl font-bold transition-colors w-full"
+        >
+          <Smartphone size={18} />
+          View in AR / 3D
+        </a>
+        
+        <a 
+          href={url} 
+          download
+          className="flex items-center justify-center gap-2 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 py-3 px-4 rounded-xl font-bold transition-colors w-full"
+        >
+          <Download size={18} />
+          Download .USDZ
+        </a>
+      </div>
+      
+      <div className="absolute bottom-4 text-center text-[10px] font-bold tracking-wider text-gray-400 uppercase w-full">
+        APPLE QUICK LOOK FORMAT
       </div>
     </div>
   );
