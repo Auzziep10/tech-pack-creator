@@ -147,8 +147,6 @@ export default function App() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.button, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e4e4e7', width: '100%', marginBottom: 40 }]} 
-          <TouchableOpacity 
             style={[styles.modeCard, { backgroundColor: '#f4f4f5', borderColor: '#e4e4e7' }]} 
             onPress={() => setScanMode('flat')}
           >
