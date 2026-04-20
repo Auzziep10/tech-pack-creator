@@ -72,10 +72,8 @@ const Model = ({
               return;
           }
           
-          // --- Perspective Raycast Surface Projection Algorithm ---
-          // Creates a flawless 3D geodesic surface trace between two arbitrary clicks 
-          // by projecting the mathematical line onto the mesh from the user's camera viewpoint!
-          const steps = 30; // High resolution path resolution
+          // Transforms mathematical 2-point intersections into a 100-step topology trace
+          const steps = 100; // Ultra high resolution for micro wrinkles
           const newPath: THREE.Vector3[] = [];
           const raycaster = new THREE.Raycaster();
           
@@ -88,15 +86,18 @@ const Model = ({
                   break;
               }
               
-              // Raycast from camera directly through the intermediate point into the mesh
               const dir = pMid.clone().sub(camera.position).normalize();
               raycaster.set(camera.position, dir);
               
               const hits = raycaster.intersectObject(scene, true);
               if (hits.length > 0) {
-                  newPath.push(hits[0].point.clone());
+                  // Push the hit point 0.02 units back toward the camera to physically prevent Z-fighting
+                  // This hovers the line perfectly above the fabric without distorting the distance map
+                  const hitPoint = hits[0].point.clone();
+                  const hoverOffset = camera.position.clone().sub(hitPoint).normalize().multiplyScalar(0.02);
+                  newPath.push(hitPoint.add(hoverOffset));
               } else {
-                  newPath.push(pMid); // Fallback to inner euclidean line if hole exists
+                  newPath.push(pMid);
               }
           }
           
@@ -297,12 +298,7 @@ export const Garment3DViewer = ({
             {tapeAnchors.length > 0 && tapeAnchors.map((p, i) => (
                <mesh key={i} position={p}>
                  <sphereGeometry args={[0.04, 16, 16]} />
-                 <meshBasicMaterial 
-                    color="#ef4444" 
-                    polygonOffset={true} 
-                    polygonOffsetFactor={-10} 
-                    polygonOffsetUnits={-10} 
-                 />
+                 <meshBasicMaterial color="#ef4444" />
                </mesh>
             ))}
             
@@ -315,9 +311,6 @@ export const Garment3DViewer = ({
                  dashScale={20} 
                  dashSize={0.5} 
                  gapSize={0.5}
-                 polygonOffset={true}
-                 polygonOffsetFactor={-10}
-                 polygonOffsetUnits={-10}
                />
             )}
 
