@@ -762,14 +762,6 @@ export function TechPackEditor() {
                     </div>
                   </div>
 
-                  {/* 3D Viewport Layer */}
-                  {data?.model3dUrl && (
-                    <div className="mt-4 bg-white p-2 rounded-2xl border border-gray-200 print:hidden cursor-move">
-                       <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-2 mb-2">3D AR Mesh Viewer</h3>
-                       <Garment3DViewer url={data.model3dUrl} />
-                    </div>
-                  )}
-
                   {/* Photo Gallery Strip */}
                   <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
                      {galleryImages.map((gImg, idx) => (
@@ -1008,6 +1000,15 @@ export function TechPackEditor() {
             </div>
           </div>
 
+          {/* 3D Viewport Full Screen Layer (Between Grid and Details) */}
+          {data?.model3dUrl && (
+            <div className="mt-8 mb-4 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm print:hidden cursor-move w-full">
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2 mb-4">3D AR Mesh Viewer</h3>
+              <div className="w-full">
+                 <Garment3DViewer url={data.model3dUrl} />
+              </div>
+            </div>
+          )}
 
           {/* Detail Closeups Section */}
           {dModules.map((mod: any, mIdx: number) => (
