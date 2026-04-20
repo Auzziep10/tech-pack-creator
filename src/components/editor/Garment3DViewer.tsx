@@ -108,7 +108,8 @@ export const Garment3DViewer = ({ url }: { url: string }) => {
             makeDefault 
             autoRotate 
             autoRotateSpeed={1.5} 
-            enablePan={false} 
+            enablePan={true} 
+            target={[0, 1, 0]}
             minPolarAngle={Math.PI / 4} 
             maxPolarAngle={Math.PI / 1.7} 
             minDistance={4}
