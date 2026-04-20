@@ -231,7 +231,7 @@ export function TechPackEditor() {
     const qScans = query(collection(db, `users/${user.uid}/pendingScans`));
     const unsubScans = onSnapshot(qScans, (snapshot) => {
       const scans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPendingScans(scans.filter(s => s.status === 'pending'));
+      setPendingScans(scans.filter((s: any) => s.status === 'pending'));
     });
 
     if (!id && id !== 'draft') return () => { unsubScans(); };
@@ -604,6 +604,9 @@ export function TechPackEditor() {
         <p className="text-gray-500 mb-4">No Tech Pack data found.</p>
         <Button onClick={() => navigate('/create')}>Create New Tech Pack</Button>
       </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
       <div className="flex items-center justify-between">

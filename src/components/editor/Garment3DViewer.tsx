@@ -13,7 +13,7 @@ const Model = ({ url }: { url: string }) => {
     const loader = new USDZLoader();
     loader.load(
       url,
-      (group) => {
+      (group: THREE.Group) => {
         if (active) {
           // Normalize and scale the model slightly
           group.scale.set(10, 10, 10);
@@ -21,7 +21,7 @@ const Model = ({ url }: { url: string }) => {
         }
       },
       undefined,
-      (err) => {
+      (err: any) => {
         console.error("USDZLoader Error:", err);
         if (active) setError("Failed to load 3D mesh.");
       }
@@ -56,7 +56,7 @@ export const Garment3DViewer = ({ url }: { url: string }) => {
       
       <Canvas shadows camera={{ position: [0, 2, 5], fov: 45 }}>
         <Suspense fallback={null}>
-          <Stage environment="city" intensity={0.5} contactShadow opacity={0.5} adjustCamera>
+          <Stage environment="city" intensity={0.5} adjustCamera>
             <Model url={url} />
           </Stage>
         </Suspense>
