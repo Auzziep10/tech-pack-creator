@@ -95,7 +95,7 @@ export const Garment3DViewer = ({ url }: { url: string }) => {
             
             {/* The Model properly centered on origin */}
             <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
-              <Center top>
+              <Center>
                 <Model url={url} />
               </Center>
             </Float>
