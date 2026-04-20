@@ -137,7 +137,7 @@ export const Garment3DViewer = ({
                </button>
             </div>
             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-tight mb-4">
-              Click directly on the mesh surface to build a geodesic path. Re-calculates true scale.
+              To measure round surfaces, <span className="text-red-500 font-extrabold pb-0.5 border-b-2 border-red-200">drop multiple pins</span> along the curve to trace it (like a physical measuring tape). Clicking only two points calculates a straight line through the cavity!
             </p>
             
             <div className="bg-red-50 text-red-600 rounded-xl p-3 mb-4 flex items-center justify-between shadow-inner border border-red-100">
@@ -245,7 +245,7 @@ export const Garment3DViewer = ({
             {tapePoints.length > 0 && tapePoints.map((p, i) => (
                <mesh key={i} position={p}>
                  <sphereGeometry args={[0.04, 16, 16]} />
-                 <meshBasicMaterial color="#ef4444" depthTest={false} />
+                 <meshBasicMaterial color="#ef4444" />
                </mesh>
             ))}
             
@@ -258,7 +258,6 @@ export const Garment3DViewer = ({
                  dashScale={20} 
                  dashSize={0.5} 
                  gapSize={0.5}
-                 depthTest={false}
                />
             )}
 
