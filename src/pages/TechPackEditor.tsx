@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -14,6 +14,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { Garment3DViewer } from '../components/editor/Garment3DViewer';
+
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
@@ -219,8 +221,21 @@ export function TechPackEditor() {
     }
   };
 
+  const [pendingScans, setPendingScans] = useState<any[]>([]);
+  const [showScansInbox, setShowScansInbox] = useState(false);
+
   useEffect(() => {
-    if (!user || (!id && id !== 'draft')) return;
+    if (!user) return;
+    
+    // Listen for incoming 3D LiDAR Scans from the iOS Companion App
+    const qScans = query(collection(db, `users/${user.uid}/pendingScans`));
+    const unsubScans = onSnapshot(qScans, (snapshot) => {
+      const scans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPendingScans(scans.filter(s => s.status === 'pending'));
+    });
+
+    if (!id && id !== 'draft') return () => { unsubScans(); };
+
     const q = query(collection(db, 'companionUploads'));
     const unsub = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
@@ -262,7 +277,7 @@ export function TechPackEditor() {
         }
       });
     });
-    return unsub;
+    return () => { unsub(); unsubScans(); };
   }, [user, id]);
 
   useEffect(() => {
@@ -589,9 +604,6 @@ export function TechPackEditor() {
         <p className="text-gray-500 mb-4">No Tech Pack data found.</p>
         <Button onClick={() => navigate('/create')}>Create New Tech Pack</Button>
       </div>
-    );
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
       <div className="flex items-center justify-between">
@@ -607,6 +619,19 @@ export function TechPackEditor() {
           />
         </div>
         <div className="flex items-center gap-2">
+          {pendingScans.length > 0 && (
+            <Button 
+               onClick={() => setShowScansInbox(true)} 
+               className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0"
+               title="New 3D Scans Available"
+            >
+               <Smartphone size={16} className="mr-2" />
+               <span className="font-bold text-sm hidden sm:inline">Mobile Scans</span>
+               <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
+                 {pendingScans.length}
+               </div>
+            </Button>
+          )}
           <div className="flex bg-gray-100 p-1 rounded-xl mr-2 print:hidden hidden sm:flex shrink-0">
              <button onClick={() => setViewMode('techpack')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
              <button onClick={() => setViewMode('linesheet')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
@@ -733,6 +758,14 @@ export function TechPackEditor() {
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
                   </div>
+
+                  {/* 3D Viewport Layer */}
+                  {data?.model3dUrl && (
+                    <div className="mt-4 bg-white p-2 rounded-2xl border border-gray-200 print:hidden cursor-move">
+                       <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-2 mb-2">3D AR Mesh Viewer</h3>
+                       <Garment3DViewer url={data.model3dUrl} />
+                    </div>
+                  )}
 
                   {/* Photo Gallery Strip */}
                   <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
@@ -1296,6 +1329,43 @@ export function TechPackEditor() {
 
         </div>
       </div>
+
+      {/* Mobile Scans Inbox Modal */}
+      <Modal isOpen={showScansInbox} onClose={() => setShowScansInbox(false)} title="Mobile Scans Inbox">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 pb-4">
+          <p className="text-sm text-gray-500">
+            These 3D scans were recently captured by your team using the companion app. Select one to instantly link it to this Tech Pack.
+          </p>
+          
+          <div className="grid gap-3">
+            {pendingScans.map((scan) => (
+              <div key={scan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center text-blue-600">
+                    <Archive size={20} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900 leading-tight">Incoming {scan.mode === 'flat' ? 'Flat Lay Scan' : '3D Scan'}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{new Date(scan.createdAt?.toMillis() || Date.now()).toLocaleString()}</div>
+                  </div>
+                </div>
+                <Button onClick={async () => {
+                  try {
+                    setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
+                    await updateDoc(doc(db, `users/${user?.uid}/pendingScans`, scan.id), { status: 'claimed' });
+                    setShowScansInbox(false);
+                    pushLog(`Linked Mobile 3D Scan (${scan.mode})`);
+                  } catch (e) {
+                    alert("Failed to claim scan.");
+                  }
+                }} size="sm" className="bg-blue-600">
+                  Attach
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Modal>
 
       <AnimatePresence>
         {showHistory && (
