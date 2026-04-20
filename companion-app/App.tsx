@@ -147,7 +147,7 @@ export default function App() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={[styles.modeCard, { backgroundColor: '#f4f4f5', borderColor: '#e4e4e7' }]} 
+            style={[styles.button, { backgroundColor: '#f4f4f5', borderColor: '#e4e4e7', borderWidth: 1, width: '100%', marginBottom: 16 }]} 
             onPress={() => setScanMode('flat')}
           >
             <Text style={{color: '#09090b', fontSize: 18, fontWeight: 'bold', marginBottom: 4}}>Flat Lay / Tabletop</Text>
@@ -155,7 +155,7 @@ export default function App() {
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.modeCard, { backgroundColor: '#ffffff', borderColor: '#d4d4d8', borderStyle: 'dashed' }]} 
+            style={[styles.button, { backgroundColor: '#ffffff', borderColor: '#d4d4d8', borderStyle: 'dashed', borderWidth: 1, width: '100%', marginBottom: 16 }]} 
             onPress={async () => {
               try {
                 const res = await DocumentPicker.getDocumentAsync({ type: ['*/*'], copyToCacheDirectory: true });
