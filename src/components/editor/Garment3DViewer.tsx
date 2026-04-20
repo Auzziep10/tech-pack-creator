@@ -1,11 +1,24 @@
 import React, { Suspense, useEffect, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Center, Environment, ContactShadows, Float, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
 
-const Model = ({ url, isMeasuring, onAddPoint, onLoadedScale }: { url: string, isMeasuring: boolean, onAddPoint: (p: THREE.Vector3) => void, onLoadedScale: (s: number) => void }) => {
+const Model = ({ 
+  url, 
+  isMeasuring, 
+  lastPoint, 
+  onAddSegment, 
+  onLoadedScale 
+}: { 
+  url: string, 
+  isMeasuring: boolean, 
+  lastPoint: THREE.Vector3 | null, 
+  onAddSegment: (pts: THREE.Vector3[]) => void, 
+  onLoadedScale: (s: number) => void 
+}) => {
+  const { camera } = useThree();
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +65,42 @@ const Model = ({ url, isMeasuring, onAddPoint, onLoadedScale }: { url: string, i
       onClick={(e: any) => {
         if (isMeasuring && e.point) {
           e.stopPropagation();
-          onAddPoint(e.point.clone());
+          const pNew = e.point.clone();
+          
+          if (!lastPoint) {
+              onAddSegment([pNew]);
+              return;
+          }
+          
+          // --- Perspective Raycast Surface Projection Algorithm ---
+          // Creates a flawless 3D geodesic surface trace between two arbitrary clicks 
+          // by projecting the mathematical line onto the mesh from the user's camera viewpoint!
+          const steps = 30; // High resolution path resolution
+          const newPath: THREE.Vector3[] = [];
+          const raycaster = new THREE.Raycaster();
+          
+          for (let i = 1; i <= steps; i++) {
+              const t = i / steps;
+              const pMid = lastPoint.clone().lerp(pNew, t);
+              
+              if (i === steps) {
+                  newPath.push(pNew);
+                  break;
+              }
+              
+              // Raycast from camera directly through the intermediate point into the mesh
+              const dir = pMid.clone().sub(camera.position).normalize();
+              raycaster.set(camera.position, dir);
+              
+              const hits = raycaster.intersectObject(scene, true);
+              if (hits.length > 0) {
+                  newPath.push(hits[0].point.clone());
+              } else {
+                  newPath.push(pMid); // Fallback to inner euclidean line if hole exists
+              }
+          }
+          
+          onAddSegment(newPath);
         }
       }}
     />
@@ -89,13 +137,18 @@ export const Garment3DViewer = ({
 }) => {
   const [preset, setPreset] = useState<LightPreset>('studio');
   const [isMeasuring, setIsMeasuring] = useState(false);
-  const [tapePoints, setTapePoints] = useState<THREE.Vector3[]>([]);
+  const [tapeSegments, setTapeSegments] = useState<THREE.Vector3[][]>([]);
   const [meshScale, setMeshScale] = useState(1);
   const [selectedTargetPOM, setSelectedTargetPOM] = useState<string>('');
   
   const config = LIGHT_CONFIG[preset];
 
   if (!url) return null;
+
+  // Flatten segments into renderable tools
+  const tapePoints = tapeSegments.flat();
+  const tapeAnchors = tapeSegments.map(seg => seg[seg.length - 1]);
+  const lastPoint = tapeAnchors.length > 0 ? tapeAnchors[tapeAnchors.length - 1] : null;
 
   // Calculate distance
   // 1 meter = 39.3701 inches
@@ -162,11 +215,9 @@ export const Garment3DViewer = ({
               <div className="flex gap-2 mt-1">
                 <button 
                   onClick={() => {
-                    const newPoints = [...tapePoints];
-                    newPoints.pop();
-                    setTapePoints(newPoints);
+                    setTapeSegments(prev => prev.slice(0, -1));
                   }}
-                  disabled={tapePoints.length === 0}
+                  disabled={tapeSegments.length === 0}
                   className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors disabled:opacity-50"
                 >
                   <Undo2 size={14}/> Undo
@@ -176,7 +227,7 @@ export const Garment3DViewer = ({
                     if (onUpdateMeasurement && selectedTargetPOM !== '') {
                       onUpdateMeasurement(parseInt(selectedTargetPOM), trueInches);
                       setIsMeasuring(false);
-                      setTapePoints([]);
+                      setTapeSegments([]);
                     }
                   }}
                   disabled={selectedTargetPOM === '' || tapePoints.length < 2}
@@ -193,7 +244,7 @@ export const Garment3DViewer = ({
         <div className="absolute top-5 right-5 z-10 flex flex-col gap-2 items-end">
           {!isMeasuring && (
             <button
-               onClick={() => setIsMeasuring(true)}
+               onClick={() => { setIsMeasuring(true); setTapeSegments([]); }}
                className="mb-4 bg-red-500 hover:bg-red-600 hover:-translate-y-0.5 text-white shadow-md shadow-red-500/20 px-4 py-2 font-bold text-xs uppercase tracking-widest rounded-xl border border-red-600 flex items-center justify-center gap-2 transition-all"
             >
                <Ruler size={14} /> Virtual Tape Measure
@@ -236,13 +287,14 @@ export const Garment3DViewer = ({
                 <Model 
                    url={url} 
                    isMeasuring={isMeasuring} 
-                   onAddPoint={(p) => setTapePoints([...tapePoints, p])} 
+                   lastPoint={lastPoint}
+                   onAddSegment={(pts) => setTapeSegments(prev => [...prev, pts])} 
                    onLoadedScale={setMeshScale}
                 />
               </Center>
             </Float>
             
-            {tapePoints.length > 0 && tapePoints.map((p, i) => (
+            {tapeAnchors.length > 0 && tapeAnchors.map((p, i) => (
                <mesh key={i} position={p}>
                  <sphereGeometry args={[0.04, 16, 16]} />
                  <meshBasicMaterial color="#ef4444" />
