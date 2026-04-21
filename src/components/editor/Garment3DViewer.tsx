@@ -45,7 +45,7 @@ const Model = ({
                  // iPhone-style Material Enhancements for PBR
                  if (child.material) {
                      const materials = Array.isArray(child.material) ? child.material : [child.material];
-                     materials.forEach(mat => {
+                     materials.forEach((mat: any) => {
                          // Apple uses intense Image-Based Lighting (IBL) for deep reflections
                          if (mat.envMapIntensity !== undefined) mat.envMapIntensity = 2.0; 
                          
