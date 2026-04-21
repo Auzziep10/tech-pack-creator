@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Center, Environment, ContactShadows, Float, Line, SoftShadows } from '@react-three/drei';
+import { OrbitControls, Center, Environment, ContactShadows, Float, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
@@ -44,15 +44,18 @@ const Model = ({
                  
                  // iPhone-style Material Enhancements for PBR
                  if (child.material) {
-                     // Apple uses intense Image-Based Lighting (IBL) for deep reflections
-                     child.material.envMapIntensity = 2.0; 
-                     
-                     // Prevent shiny "plastic" artifacts on fabric by enforcing baseline roughness
-                     if (child.material.roughness !== undefined) {
-                         child.material.roughness = Math.max(0.65, child.material.roughness); 
-                     }
-                     
-                     child.material.needsUpdate = true;
+                     const materials = Array.isArray(child.material) ? child.material : [child.material];
+                     materials.forEach(mat => {
+                         // Apple uses intense Image-Based Lighting (IBL) for deep reflections
+                         if (mat.envMapIntensity !== undefined) mat.envMapIntensity = 2.0; 
+                         
+                         // Prevent shiny "plastic" artifacts on fabric by enforcing baseline roughness
+                         if (mat.roughness !== undefined) {
+                             mat.roughness = Math.max(0.65, mat.roughness); 
+                         }
+                         
+                         mat.needsUpdate = true;
+                     });
                  }
              }
           });
@@ -284,9 +287,6 @@ export const Garment3DViewer = ({
           <color attach="background" args={[config.bg]} />
           
           <Suspense fallback={<Loader />}>
-            {/* Inject cinematic soft shadows like iOS Quick Look */}
-            <SoftShadows size={15} samples={16} focus={0.5} />
-            
             {/* @ts-ignore */}
             <Environment preset={config.env} />
             
