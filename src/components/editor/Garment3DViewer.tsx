@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Center, Environment, ContactShadows, Float, Line } from '@react-three/drei';
+import { OrbitControls, Center, Environment, ContactShadows, Float, Line, SoftShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
@@ -41,6 +41,19 @@ const Model = ({
              if (child.isMesh) {
                  child.castShadow = true;
                  child.receiveShadow = true;
+                 
+                 // iPhone-style Material Enhancements for PBR
+                 if (child.material) {
+                     // Apple uses intense Image-Based Lighting (IBL) for deep reflections
+                     child.material.envMapIntensity = 2.0; 
+                     
+                     // Prevent shiny "plastic" artifacts on fabric by enforcing baseline roughness
+                     if (child.material.roughness !== undefined) {
+                         child.material.roughness = Math.max(0.65, child.material.roughness); 
+                     }
+                     
+                     child.material.needsUpdate = true;
+                 }
              }
           });
 
@@ -267,15 +280,18 @@ export const Garment3DViewer = ({
           ))}
         </div>
         
-        <Canvas shadows camera={{ position: [0, 2, 8], fov: 40 }}>
+        <Canvas shadows camera={{ position: [0, 2, 8], fov: 40 }} gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}>
           <color attach="background" args={[config.bg]} />
           
           <Suspense fallback={<Loader />}>
+            {/* Inject cinematic soft shadows like iOS Quick Look */}
+            <SoftShadows size={15} samples={16} focus={0.5} />
+            
             {/* @ts-ignore */}
             <Environment preset={config.env} />
             
             <ambientLight intensity={config.ambient} />
-            <spotLight position={config.rim as any} intensity={config.rimInt} color={config.rimCol} angle={0.5} penumbra={1} castShadow shadow-mapSize={[2048, 2048]} />
+            <spotLight position={config.rim as any} intensity={config.rimInt} color={config.rimCol} angle={0.5} penumbra={1} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0001} />
             <directionalLight position={config.fill as any} intensity={config.fillInt} color={config.fillCol} />
             
             {/* Freeze floating and rotation if measuring so tape paths don't de-sync from world space object */}
@@ -314,7 +330,7 @@ export const Garment3DViewer = ({
                />
             )}
 
-            <ContactShadows resolution={1024} scale={20} blur={2.5} opacity={0.4} far={10} color={config.shadow} />
+            <ContactShadows resolution={1024} scale={20} blur={3.5} opacity={0.6} far={10} color={config.shadow} />
           </Suspense>
 
           <OrbitControls 
