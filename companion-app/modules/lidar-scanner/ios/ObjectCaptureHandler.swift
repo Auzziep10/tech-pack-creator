@@ -88,7 +88,8 @@ public struct GarmentScannerView: View {
         Task {
             do {
                 var pSession = try PhotogrammetrySession(input: imagesDir, configuration: PhotogrammetrySession.Configuration())
-                try pSession.process(requests: [.modelFile(url: modelUrl, detail: .full)])
+                let request = PhotogrammetrySession.Request.modelFile(url: modelUrl, detail: PhotogrammetrySession.Request.Detail.full)
+                try pSession.process(requests: [request])
                 
                 for try await output in pSession.outputs {
                     switch output {
