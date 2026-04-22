@@ -26,6 +26,42 @@ public struct GarmentScannerView: View {
                         session.start(imagesDirectory: dir, configuration: config)
                     }
                 
+                // Top UI for capturing
+                if case .capturing = session.state {
+                    VStack {
+                        HStack(spacing: 20) {
+                            Spacer()
+                            Button(action: {
+                                session.pause()
+                                session.beginNewScanPassAfterFlip()
+                            }) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.title2)
+                                    .foregroundColor(.white)
+                                    .frame(width: 50, height: 50)
+                                    .background(Color.orange)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
+                            }
+                            
+                            Button(action: {
+                                session.finish()
+                            }) {
+                                Image(systemName: "checkmark")
+                                    .font(.title2)
+                                    .foregroundColor(.white)
+                                    .frame(width: 50, height: 50)
+                                    .background(Color.green)
+                                    .clipShape(Circle())
+                                    .shadow(radius: 4)
+                            }
+                        }
+                        .padding(.top, 60)
+                        .padding(.trailing, 20)
+                        Spacer()
+                    }
+                }
+                
                 VStack {
                     Spacer()
                     if case .initializing = session.state {
@@ -45,27 +81,7 @@ public struct GarmentScannerView: View {
                                 .padding(.horizontal, 40).padding(.vertical, 16)
                                 .background(Color.blue).clipShape(Capsule())
                         }
-                    } else if case .capturing = session.state {
-                        VStack(spacing: 20) {
-                            Button(action: {
-                                session.pause()
-                                session.beginNewScanPassAfterFlip()
-                            }) {
-                                Text("Flip Garment & Add Segment")
-                                    .font(.headline).foregroundColor(.white)
-                                    .padding(.horizontal, 40).padding(.vertical, 16)
-                                    .background(Color.orange).clipShape(Capsule())
-                            }
-                            
-                            Button(action: {
-                                session.finish()
-                            }) {
-                                Text("Finish & Build 3D Model")
-                                    .font(.headline).foregroundColor(.white)
-                                    .padding(.horizontal, 40).padding(.vertical, 16)
-                                    .background(Color.green).clipShape(Capsule())
-                            }
-                        }
+
                     } else if case .completed = session.state {
                         Color.clear.task {
                             isProcessing = true
