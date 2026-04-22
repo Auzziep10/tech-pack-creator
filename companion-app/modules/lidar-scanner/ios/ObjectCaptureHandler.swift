@@ -37,11 +37,14 @@ public struct GarmentScannerView: View {
                             }) {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                                     .font(.title2)
-                                    .foregroundColor(.white)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.orange)
                                     .frame(width: 50, height: 50)
-                                    .background(Color.orange)
+                                    .background(.ultraThinMaterial)
+                                    .environment(\.colorScheme, .dark)
                                     .clipShape(Circle())
-                                    .shadow(radius: 4)
+                                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
                             }
                             
                             Button(action: {
@@ -49,11 +52,14 @@ public struct GarmentScannerView: View {
                             }) {
                                 Image(systemName: "checkmark")
                                     .font(.title2)
-                                    .foregroundColor(.white)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.green)
                                     .frame(width: 50, height: 50)
-                                    .background(Color.green)
+                                    .background(.ultraThinMaterial)
+                                    .environment(\.colorScheme, .dark)
                                     .clipShape(Circle())
-                                    .shadow(radius: 4)
+                                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
                             }
                         }
                         .padding(.top, 60)
