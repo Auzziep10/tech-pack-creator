@@ -31,9 +31,14 @@ public struct GarmentScannerView: View {
                     VStack {
                         HStack(spacing: 20) {
                             Spacer()
-                            if session.isPaused {
+                            if session.userCompletedScanPass {
                                 Button(action: {
-                                    session.beginNewScanPassAfterFlip()
+                                    if !session.isPaused {
+                                        session.pause()
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                        session.beginNewScanPassAfterFlip()
+                                    }
                                 }) {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                         .font(.title2)
@@ -53,7 +58,7 @@ public struct GarmentScannerView: View {
                                     Image(systemName: "pause.fill")
                                         .font(.title2)
                                         .fontWeight(.bold)
-                                        .foregroundColor(.yellow)
+                                        .foregroundColor(session.isPaused ? .gray : .yellow)
                                         .frame(width: 50, height: 50)
                                         .background(.ultraThinMaterial)
                                         .environment(\.colorScheme, .dark)
@@ -61,6 +66,7 @@ public struct GarmentScannerView: View {
                                         .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
                                         .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
                                 }
+                                .disabled(session.isPaused)
                             }
                             
                             Button(action: {
