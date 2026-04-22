@@ -40,7 +40,7 @@ public struct GarmentScannerView: View {
                         Button(action: {
                             session.startCapturing()
                         }) {
-                            Text("Start Garment Scan")
+                            Text("Start Scanning")
                                 .font(.headline).foregroundColor(.white)
                                 .padding(.horizontal, 40).padding(.vertical, 16)
                                 .background(Color.blue).clipShape(Capsule())
@@ -48,9 +48,19 @@ public struct GarmentScannerView: View {
                     } else if case .capturing = session.state {
                         VStack(spacing: 20) {
                             Button(action: {
+                                session.pause()
+                                session.beginNewScanPassAfterFlip()
+                            }) {
+                                Text("Flip Garment & Add Segment")
+                                    .font(.headline).foregroundColor(.white)
+                                    .padding(.horizontal, 40).padding(.vertical, 16)
+                                    .background(Color.orange).clipShape(Capsule())
+                            }
+                            
+                            Button(action: {
                                 session.finish()
                             }) {
-                                Text("Finish Scan & Build 3D Model")
+                                Text("Finish & Build 3D Model")
                                     .font(.headline).foregroundColor(.white)
                                     .padding(.horizontal, 40).padding(.vertical, 16)
                                     .background(Color.green).clipShape(Capsule())
