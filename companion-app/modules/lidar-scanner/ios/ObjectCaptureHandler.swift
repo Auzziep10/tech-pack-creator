@@ -31,20 +31,36 @@ public struct GarmentScannerView: View {
                     VStack {
                         HStack(spacing: 20) {
                             Spacer()
-                            Button(action: {
-                                session.pause()
-                                session.beginNewScanPassAfterFlip()
-                            }) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.orange)
-                                    .frame(width: 50, height: 50)
-                                    .background(.ultraThinMaterial)
-                                    .environment(\.colorScheme, .dark)
-                                    .clipShape(Circle())
-                                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
-                                    .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+                            if session.isPaused {
+                                Button(action: {
+                                    session.beginNewScanPassAfterFlip()
+                                }) {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.orange)
+                                        .frame(width: 50, height: 50)
+                                        .background(.ultraThinMaterial)
+                                        .environment(\.colorScheme, .dark)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                                        .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+                                }
+                            } else {
+                                Button(action: {
+                                    session.pause()
+                                }) {
+                                    Image(systemName: "pause.fill")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.yellow)
+                                        .frame(width: 50, height: 50)
+                                        .background(.ultraThinMaterial)
+                                        .environment(\.colorScheme, .dark)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
+                                        .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+                                }
                             }
                             
                             Button(action: {
