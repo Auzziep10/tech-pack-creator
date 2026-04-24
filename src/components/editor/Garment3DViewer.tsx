@@ -32,9 +32,12 @@ const Model = ({
           // Normalize scale aggressively using bounding box
           const box = new THREE.Box3().setFromObject(group);
           const size = box.getSize(new THREE.Vector3()).length();
-          const targetScale = 6 / size; 
+          const targetScale = 4.5 / size; 
           group.scale.setScalar(targetScale);
           onLoadedScale(targetScale);
+          
+          // Force a resize event shortly after load to fix R3F Canvas initial layout shift bugs
+          setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
 
           // Force mesh to cast and receive shadows for premium lighting
           group.traverse((child: any) => {
