@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Center, Environment, ContactShadows, Float, Line } from '@react-three/drei';
+import { OrbitControls, Center, Environment, ContactShadows, Float, Line, Bounds } from '@react-three/drei';
 import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
@@ -29,6 +29,10 @@ const Model = ({
       url,
       (group: any) => {
         if (active) {
+          // Reset scale in case this is a cached group from a previous render
+          group.scale.set(1, 1, 1);
+          group.updateMatrixWorld(true);
+
           // Normalize scale aggressively using bounding box
           const box = new THREE.Box3().setFromObject(group);
           const size = box.getSize(new THREE.Vector3()).length();
@@ -303,15 +307,17 @@ export const Garment3DViewer = ({
                rotationIntensity={isMeasuring ? 0 : 0.2} 
                floatIntensity={isMeasuring ? 0 : 0.5}
             >
-              <Center>
-                <Model 
-                   url={url} 
-                   isMeasuring={isMeasuring} 
-                   lastPoint={lastPoint}
-                   onAddSegment={(pts) => setTapeSegments(prev => [...prev, pts])} 
-                   onLoadedScale={setMeshScale}
-                />
-              </Center>
+              <Bounds fit clip observe margin={1.2}>
+                <Center>
+                  <Model 
+                     url={url} 
+                     isMeasuring={isMeasuring} 
+                     lastPoint={lastPoint}
+                     onAddSegment={(pts) => setTapeSegments(prev => [...prev, pts])} 
+                     onLoadedScale={setMeshScale}
+                  />
+                </Center>
+              </Bounds>
             </Float>
             
             {tapeAnchors.length > 0 && tapeAnchors.map((p, i) => (
