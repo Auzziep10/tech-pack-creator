@@ -16,6 +16,30 @@ import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
 
+const forceDownload = async (url: string, filename: string) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error('Download failed', error);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
+
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
@@ -749,7 +773,7 @@ export function TechPackEditor() {
                     <div className="w-full print:w-[55%] flex flex-col space-y-4">
                       {imageUrl ? (
                 <div>
-                  <div className={`bg-white rounded-2xl print-image-wrapper`}>
+                  <div className={`bg-white rounded-2xl print-image-wrapper relative group/mainimg`}>
                     {/* Interactive UI and Annotated Print */}
                     <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
@@ -760,6 +784,16 @@ export function TechPackEditor() {
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        forceDownload(imageUrl, `${packName || 'techpack'}_main.jpg`);
+                      }}
+                      className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md text-gray-500 hover:text-black hover:bg-gray-50 opacity-0 group-hover/mainimg:opacity-100 transition-opacity print:hidden border border-gray-200 z-10"
+                      title="Download Main Image"
+                    >
+                      <Download size={16} />
+                    </button>
                   </div>
 
                   {/* Photo Gallery Strip */}
@@ -836,6 +870,16 @@ export function TechPackEditor() {
                                 ★
                               </button>
                            )}
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               forceDownload(gImg, `${packName || 'techpack'}_image_${idx + 1}.jpg`);
+                             }}
+                             className="absolute bottom-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                             title="Download Image"
+                           >
+                             <Download size={12} />
+                           </button>
                        </div>
                      ))}
                      <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
