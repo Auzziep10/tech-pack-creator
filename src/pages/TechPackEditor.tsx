@@ -40,6 +40,17 @@ const forceDownload = async (url: string, filename: string) => {
   }
 };
 
+const svgToDataUri = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+const STANDARD_SEAMS = [
+  { name: 'Edge Stitch', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,40 L 160,40 A 10,10 0 0 1 170,50 A 10,10 0 0 1 160,60 L 20,60" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="150" y1="30" x2="150" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') },
+  { name: 'Double Fold Hem', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,30 L 160,30 A 10,10 0 0 1 170,40 A 10,10 0 0 1 160,50 L 110,50 A 10,10 0 0 0 100,60 A 10,10 0 0 0 110,70 L 140,70" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" /><line x1="125" y1="20" x2="125" y2="80" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') },
+  { name: 'Flat Felled Seam', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,60 L 120,60 A 10,10 0 0 0 130,50 A 10,10 0 0 0 120,40 L 80,40 A 10,10 0 0 1 70,30 L 70,20 L 20,20" fill="none" stroke="#1f2937" stroke-width="3" /><path d="M 180,40 L 80,40 A 10,10 0 0 0 70,50 A 10,10 0 0 0 80,60 L 120,60 A 10,10 0 0 1 130,70 L 130,80 L 180,80" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="90" y1="30" x2="90" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /><line x1="110" y1="30" x2="110" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') },
+  { name: 'French Seam', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,30 L 140,30 A 10,10 0 0 1 150,40 L 150,50 L 90,50 A 10,10 0 0 0 80,60 L 80,80 L 20,80" fill="none" stroke="#1f2937" stroke-width="3" /><path d="M 20,40 L 130,40 A 10,10 0 0 0 140,50 L 140,60 L 90,60 A 10,10 0 0 1 80,70 L 80,90 L 20,90" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="105" y1="20" x2="105" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') },
+  { name: 'Overlock / Serged', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><line x1="20" y1="45" x2="150" y2="45" stroke="#1f2937" stroke-width="3" /><line x1="20" y1="55" x2="150" y2="55" stroke="#1f2937" stroke-width="3" /><path d="M 130,35 L 160,35 L 160,65 L 130,65 Z" fill="none" stroke="#ef4444" stroke-width="2" /><path d="M 135,35 L 160,45 L 135,55 L 160,65" fill="none" stroke="#ef4444" stroke-width="2" /><line x1="140" y1="30" x2="140" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') },
+  { name: 'Bound Seam', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><line x1="20" y1="50" x2="140" y2="50" stroke="#1f2937" stroke-width="3" /><path d="M 110,30 L 150,30 A 10,10 0 0 1 160,40 L 160,60 A 10,10 0 0 1 150,70 L 110,70 A 10,10 0 0 1 100,60 A 10,10 0 0 1 110,50 L 140,50" fill="none" stroke="#1f2937" stroke-width="3" /><path d="M 140,50 L 110,50 A 10,10 0 0 0 100,40 A 10,10 0 0 0 110,30" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="120" y1="20" x2="120" y2="80" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /></svg>') }
+];
+
 const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
   return (
     <div className="grid w-full relative">
@@ -1101,83 +1112,112 @@ export function TechPackEditor() {
                      {(() => {
                         const images = mod.detailImages?.length ? mod.detailImages : (mod.detailImage ? [mod.detailImage] : []);
                         
-                        return images.length > 0 ? (
-                          <div className="relative group w-full flex flex-col">
-                             <DetailAnnotator 
-                               images={images} 
-                               details={mod.details || []}
-                               onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
-                               onRemoveImage={(imgIdx) => {
-                                  const newImages = [...images];
-                                  newImages.splice(imgIdx, 1);
-                                  const newData = { ...data };
-                                  newData.detailModules[mIdx].detailImages = newImages;
-                                  newData.detailModules[mIdx].detailImage = newImages[0] || '';
-                                  setData(newData);
-                               }}
-                               onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
-                               qrTriggerNode={user && (id || id === 'draft') ? (
-                                  <button onClick={() => setQrModalUrl(`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`)} className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-1 items-center justify-center shrink-0 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer">
-                                     <QrCode className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
-                                     <span className="text-[8px] font-bold text-gray-500 group-hover:text-black">CONNECT</span>
-                                  </button>
-                               ) : null}
-                             />
-                             <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={async (e) => {
-                                if (e.target.files && e.target.files.length > 0) {
-                                   const files = Array.from(e.target.files);
-                                   const promises = files.map(file => compressImageFile(file, 1600));
-                                   const compressedDataUrLs = await Promise.all(promises);
-                                   
-                                   setData((prev: any) => {
-                                      const newData = { ...prev };
-                                      const newImages = [...(newData.detailModules[mIdx].detailImages || []), ...compressedDataUrLs];
-                                      newData.detailModules[mIdx].detailImages = newImages;
-                                      newData.detailModules[mIdx].detailImage = newImages[0];
-                                      return newData;
-                                   });
-                                }
-                             }} />
-                          </div>
-                        ) : (
-                          <div className="flex w-full aspect-[4/3] gap-4 print:hidden">
-                            <label className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors p-4 text-center">
-                              <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
-                                 <span className="text-2xl leading-none">+</span>
-                                 <span>Upload Detail Closeup Photo</span>
-                              </div>
-                              <input type="file" className="hidden" accept="image/*" multiple onChange={(e) => {
-                                 if (e.target.files && e.target.files.length > 0) {
-                                    Array.from(e.target.files).forEach(file => {
-                                       const reader = new FileReader();
-                                       reader.onload = (ev) => {
-                                          setData((prev: any) => {
-                                             const newData = { ...prev };
-                                             const currentImages = newData.detailModules[mIdx].detailImages || (newData.detailModules[mIdx].detailImage ? [newData.detailModules[mIdx].detailImage] : []);
-                                             const newImages = [...currentImages, ev.target?.result as string];
-                                             newData.detailModules[mIdx].detailImages = newImages;
-                                             newData.detailModules[mIdx].detailImage = newImages[0];
-                                             return newData;
-                                          });
-                                       };
-                                       reader.readAsDataURL(file);
+                        return (
+                          <div className="flex flex-col gap-4 w-full">
+                            <select 
+                               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none hover:border-gray-300 focus:border-black transition-colors shadow-sm print:hidden"
+                               onChange={(e) => {
+                                 if (!e.target.value) return;
+                                 const selected = STANDARD_SEAMS.find(s => s.name === e.target.value);
+                                 if (selected) {
+                                    setData((prev: any) => {
+                                       const newData = { ...prev };
+                                       const currentImages = newData.detailModules[mIdx].detailImages || (newData.detailModules[mIdx].detailImage ? [newData.detailModules[mIdx].detailImage] : []);
+                                       const newImages = [...currentImages, selected.svg];
+                                       newData.detailModules[mIdx].detailImages = newImages;
+                                       newData.detailModules[mIdx].detailImage = newImages[0];
+                                       if (!newData.detailModules[mIdx].subtitle || newData.detailModules[mIdx].subtitle === 'Button & Hardware Details') {
+                                         newData.detailModules[mIdx].subtitle = selected.name;
+                                       }
+                                       return newData;
                                     });
                                  }
-                              }} />
-                            </label>
-    
-                            {user && (id || id === 'draft') && (
-                              <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
-                                <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-4 group-hover:scale-105 transition-transform duration-300">
-                                  <QRCodeSVG 
-                                     value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
-                                     size={140} 
-                                     level={"H"}
-                                     fgColor={"#000000"}
-                                     includeMargin={false}
-                                  />
-                                </div>
-                                <span className="text-gray-500 text-sm font-bold">Scan to open camera</span>
+                                 e.target.value = '';
+                               }}
+                            >
+                              <option value="">+ Insert Standard Seam / Hem Graphic...</option>
+                              {STANDARD_SEAMS.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                            </select>
+                            
+                            {images.length > 0 ? (
+                              <div className="relative group w-full flex flex-col">
+                                 <DetailAnnotator 
+                                   images={images} 
+                                   details={mod.details || []}
+                                   onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
+                                   onRemoveImage={(imgIdx) => {
+                                      const newImages = [...images];
+                                      newImages.splice(imgIdx, 1);
+                                      const newData = { ...data };
+                                      newData.detailModules[mIdx].detailImages = newImages;
+                                      newData.detailModules[mIdx].detailImage = newImages[0] || '';
+                                      setData(newData);
+                                   }}
+                                   onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
+                                   qrTriggerNode={user && (id || id === 'draft') ? (
+                                      <button onClick={() => setQrModalUrl(`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`)} className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-1 items-center justify-center shrink-0 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer">
+                                         <QrCode className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
+                                         <span className="text-[8px] font-bold text-gray-500 group-hover:text-black">CONNECT</span>
+                                      </button>
+                                   ) : null}
+                                 />
+                                 <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={async (e) => {
+                                    if (e.target.files && e.target.files.length > 0) {
+                                       const files = Array.from(e.target.files);
+                                       const promises = files.map(file => compressImageFile(file, 1600));
+                                       const compressedDataUrLs = await Promise.all(promises);
+                                       
+                                       setData((prev: any) => {
+                                          const newData = { ...prev };
+                                          const newImages = [...(newData.detailModules[mIdx].detailImages || []), ...compressedDataUrLs];
+                                          newData.detailModules[mIdx].detailImages = newImages;
+                                          newData.detailModules[mIdx].detailImage = newImages[0];
+                                          return newData;
+                                       });
+                                    }
+                                 }} />
+                              </div>
+                            ) : (
+                              <div className="flex w-full aspect-[4/3] gap-4 print:hidden">
+                                <label className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors p-4 text-center">
+                                  <div className="text-gray-400 text-xs font-semibold flex flex-col items-center gap-2">
+                                     <span className="text-2xl leading-none">+</span>
+                                     <span>Upload Detail Closeup Photo</span>
+                                  </div>
+                                  <input type="file" className="hidden" accept="image/*" multiple onChange={(e) => {
+                                     if (e.target.files && e.target.files.length > 0) {
+                                        Array.from(e.target.files).forEach(file => {
+                                           const reader = new FileReader();
+                                           reader.onload = (ev) => {
+                                              setData((prev: any) => {
+                                                 const newData = { ...prev };
+                                                 const currentImages = newData.detailModules[mIdx].detailImages || (newData.detailModules[mIdx].detailImage ? [newData.detailModules[mIdx].detailImage] : []);
+                                                 const newImages = [...currentImages, ev.target?.result as string];
+                                                 newData.detailModules[mIdx].detailImages = newImages;
+                                                 newData.detailModules[mIdx].detailImage = newImages[0];
+                                                 return newData;
+                                              });
+                                           };
+                                           reader.readAsDataURL(file);
+                                        });
+                                     }
+                                  }} />
+                                </label>
+        
+                                {user && (id || id === 'draft') && (
+                                  <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center cursor-default group hover:border-gray-300 transition-colors">
+                                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-gray-100 mb-4 group-hover:scale-105 transition-transform duration-300">
+                                      <QRCodeSVG 
+                                         value={`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`} 
+                                         size={140} 
+                                         level={"H"}
+                                         fgColor={"#000000"}
+                                         includeMargin={false}
+                                      />
+                                    </div>
+                                    <span className="text-gray-500 text-sm font-bold">Scan to open camera</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
