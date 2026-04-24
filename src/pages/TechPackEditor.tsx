@@ -1112,34 +1112,7 @@ export function TechPackEditor() {
                      {(() => {
                         const images = mod.detailImages?.length ? mod.detailImages : (mod.detailImage ? [mod.detailImage] : []);
                         
-                        return (
-                          <div className="flex flex-col gap-4 w-full">
-                            <select 
-                               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-700 outline-none hover:border-gray-300 focus:border-black transition-colors shadow-sm print:hidden"
-                               onChange={(e) => {
-                                 if (!e.target.value) return;
-                                 const selected = STANDARD_SEAMS.find(s => s.name === e.target.value);
-                                 if (selected) {
-                                    setData((prev: any) => {
-                                       const newData = { ...prev };
-                                       const currentImages = newData.detailModules[mIdx].detailImages || (newData.detailModules[mIdx].detailImage ? [newData.detailModules[mIdx].detailImage] : []);
-                                       const newImages = [...currentImages, selected.svg];
-                                       newData.detailModules[mIdx].detailImages = newImages;
-                                       newData.detailModules[mIdx].detailImage = newImages[0];
-                                       if (!newData.detailModules[mIdx].subtitle || newData.detailModules[mIdx].subtitle === 'Button & Hardware Details') {
-                                         newData.detailModules[mIdx].subtitle = selected.name;
-                                       }
-                                       return newData;
-                                    });
-                                 }
-                                 e.target.value = '';
-                               }}
-                            >
-                              <option value="">+ Insert Standard Seam / Hem Graphic...</option>
-                              {STANDARD_SEAMS.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                            </select>
-                            
-                            {images.length > 0 ? (
+                        return images.length > 0 ? (
                               <div className="relative group w-full flex flex-col">
                                  <DetailAnnotator 
                                    images={images} 
@@ -1219,9 +1192,7 @@ export function TechPackEditor() {
                                   </div>
                                 )}
                               </div>
-                            )}
-                          </div>
-                        );
+                            );
                      })()}
                  </div>
                  <div className="col-span-12 md:col-span-5 print:col-span-4 space-y-4 md:border-l border-gray-100 md:pl-6 print:border-l-2 print:border-gray-800 print:pl-4 print:space-y-3">
@@ -1241,20 +1212,39 @@ export function TechPackEditor() {
                          + Add Detail
                        </Button>
                     </div>
-
-                    <div className="space-y-3">
+                     <div className="space-y-3">
                       {(mod.details || []).map((detail: any, index: number) => (
                         <div key={index} className="flex gap-3 group">
-                           <div className="w-6 h-6 shrink-0 bg-gray-100 text-gray-900 rounded-full flex items-center justify-center text-xs font-bold border border-gray-200">
-                             {detail.id}
+                           <div className="flex flex-col items-center gap-2 shrink-0">
+                             <div className="w-6 h-6 bg-gray-100 text-gray-900 rounded-full flex items-center justify-center text-xs font-bold border border-gray-200">
+                               {detail.id}
+                             </div>
                            </div>
-                           <div className="flex-1 relative">
+                           <div className="flex-1 relative space-y-2">
                               <RichTextCallouts
                                 className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs print:text-[10px] hover:border-gray-300 focus:border-blue-500 outline-none transition-colors min-h-[40px] block" 
                                 placeholder="Add multi-line bullet details here..."
                                 value={detail.description || ''} 
                                 onChange={val => updateDetailDesc(mIdx, index, val)} 
                               /> 
+                              <div className="flex items-center gap-2 print:hidden">
+                                <select 
+                                   className="flex-1 bg-white border border-gray-200 rounded-md px-2 py-1 text-[10px] uppercase font-bold text-gray-500 outline-none hover:border-gray-300 focus:border-black transition-colors"
+                                   value={STANDARD_SEAMS.find(s => s.svg === detail.iconUrl)?.name || ''}
+                                   onChange={(e) => {
+                                     const selected = STANDARD_SEAMS.find(s => s.name === e.target.value);
+                                     updateDetailObj(mIdx, index, { ...detail, iconUrl: selected ? selected.svg : undefined });
+                                   }}
+                                >
+                                  <option value="">No Seam Icon</option>
+                                  {STANDARD_SEAMS.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                                </select>
+                                {detail.iconUrl && (
+                                   <div className="w-8 h-6 bg-white border border-gray-200 rounded shrink-0 p-0.5 shadow-sm">
+                                      <img src={detail.iconUrl} className="w-full h-full object-contain pointer-events-none" />
+                                   </div>
+                                )}
+                              </div>
                               <button 
                                 onClick={() => removeDetail(mIdx, index)} 
                                 className="absolute top-1 right-1 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden"

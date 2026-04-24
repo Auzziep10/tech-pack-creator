@@ -11,6 +11,7 @@ export interface DetailItem {
   description: string;
   position: Point | null; // null if not placed yet
   imageIndex?: number;
+  iconUrl?: string;
 }
 
 interface DetailAnnotatorProps {
@@ -100,18 +101,25 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     return (
                       <div 
                         key={d.id}
-                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md cursor-pointer group pointer-events-auto z-10"
+                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer group pointer-events-auto z-10"
                         style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
                       >
-                        <span className="group-hover:hidden">{d.id}</span>
-                        {isActive && (
-                          <button 
-                            onClick={(e) => removeSticker(e, dIdx)} 
-                            className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
-                          >
-                            <X size={12} />
-                          </button>
+                        {d.iconUrl && (
+                          <div className="absolute top-1/2 -translate-y-1/2 left-full ml-1 w-12 h-10 bg-white border-2 border-gray-200 rounded-lg shadow-sm flex items-center justify-center p-1 pointer-events-none">
+                            <img src={d.iconUrl} alt="Seam icon" className="w-full h-full object-contain" />
+                          </div>
                         )}
+                        <div className="flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md">
+                          <span className="group-hover:hidden">{d.id}</span>
+                          {isActive && (
+                            <button 
+                              onClick={(e) => removeSticker(e, dIdx)} 
+                              className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
