@@ -105,7 +105,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                         style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
                       >
                         {d.iconUrl && (
-                          <div className="absolute top-1/2 -translate-y-1/2 left-full ml-1 w-12 h-10 bg-white border-2 border-gray-200 rounded-lg shadow-sm flex items-center justify-center p-1 pointer-events-none">
+                          <div className="absolute top-1/2 -translate-y-1/2 left-full ml-1.5 w-16 h-10 bg-white border border-gray-200 rounded-lg shadow-md flex items-center justify-center p-1 pointer-events-auto transition-all duration-200 hover:scale-[3] hover:-translate-y-1/2 hover:z-50 origin-left group/icon">
                             <img src={d.iconUrl} alt="Seam icon" className="w-full h-full object-contain" />
                           </div>
                         )}
