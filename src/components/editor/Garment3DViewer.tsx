@@ -10,7 +10,8 @@ const Model = ({
   isMeasuring, 
   lastPoint, 
   onAddSegment, 
-  onLoadedScale 
+  onLoadedScale,
+  scaleRatios
 }: { 
   url: string, 
   isMeasuring: boolean, 
