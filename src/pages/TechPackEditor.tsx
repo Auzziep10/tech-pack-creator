@@ -15,7 +15,7 @@ import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
-import { gradeSize } from '../services/geminiService';
+import { gradeSize, translateTechPack } from '../services/geminiService';
 
 const forceDownload = async (url: string, filename: string) => {
   try {
@@ -183,19 +183,65 @@ export function TechPackEditor() {
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
   const [isGrading, setIsGrading] = useState(false);
 
-  useEffect(() => {
-    if (data?.properties?.baseSize && activeSizeTab === 'M' && data.properties.baseSize !== 'M') {
-       setActiveSizeTab(data.properties.baseSize);
+  const LANGUAGES = ['English', 'Spanish', 'Mandarin', 'Vietnamese', 'Portuguese', 'Italian', 'French', 'Turkish', 'Bengali'];
+  const [activeLanguage, setActiveLanguage] = useState('English');
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  const isTranslated = activeLanguage !== 'English';
+  const displayData = isTranslated ? (data.translations?.[activeLanguage] || data) : data;
+
+  const handleLanguageChange = async (newLang: string) => {
+    if (newLang === 'English') {
+      setActiveLanguage(newLang);
+      return;
     }
-  }, [data?.properties?.baseSize]);
+    
+    if (data.translations?.[newLang]) {
+      setActiveLanguage(newLang);
+      return;
+    }
+    
+    setIsTranslating(true);
+    try {
+      const translated = await translateTechPack(data, newLang);
+      setData((prev: any) => ({
+        ...prev,
+        translations: {
+           ...(prev.translations || {}),
+           [newLang]: translated
+        }
+      }));
+      setActiveLanguage(newLang);
+      pushLog("Translated to " + newLang);
+    } catch (err: any) {
+      alert(err.message || "Failed to translate tech pack.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const checkReadonly = () => {
+    if (isTranslated) {
+      alert("Translations are read-only to preserve your original English specifications. Please switch back to English to make edits.");
+      return true;
+    }
+    return false;
+  };
+
+
+  useEffect(() => {
+    if (displayData?.properties?.baseSize && activeSizeTab === 'M' && displayData.properties.baseSize !== 'M') {
+       setActiveSizeTab(displayData.properties.baseSize);
+    }
+  }, [displayData?.properties?.baseSize]);
 
   const handleGradeSize = async () => {
-    const baseSize = data?.properties?.baseSize || 'M';
+    const baseSize = displayData?.properties?.baseSize || 'M';
     if (activeSizeTab === baseSize) return;
     
     setIsGrading(true);
     try {
-      const graded = await gradeSize(data.measurements, baseSize, activeSizeTab, data?.properties?.category || 'Garment');
+      const graded = await gradeSize(displayData.measurements, baseSize, activeSizeTab, displayData?.properties?.category || 'Garment');
       
       setData((prev: any) => {
         const newData = { ...prev };
@@ -276,12 +322,12 @@ export function TechPackEditor() {
     return `${whole} ${n}/${d}`;
   };
 
-  const isCreator = !data?.userId || user?.uid === data?.userId;
-  const canEdit = isCreator || (data?.isTeamEditable !== false);
+  const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
+  const canEdit = isCreator || (displayData?.isTeamEditable !== false);
 
   const toggleTeamEditable = () => {
     if (!isCreator) return;
-    const isLocking = data?.isTeamEditable ?? true;
+    const isLocking = displayData?.isTeamEditable ?? true;
     pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing');
     setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
   };
@@ -432,7 +478,7 @@ export function TechPackEditor() {
         message: 'Saved Tech Pack',
         user: user.email || 'Unknown'
       };
-      const finalActivityLog = [...(data.activityLog || []), saveLog];
+      const finalActivityLog = [...(displayData.activityLog || []), saveLog];
       setData((prev: any) => ({ ...prev, activityLog: finalActivityLog }));
 
       let annotatedImg = '';
@@ -511,7 +557,7 @@ export function TechPackEditor() {
         user.email || 'Unknown',
         existingId,
         finalActivityLog,
-        data.isTeamEditable ?? true
+        displayData.isTeamEditable ?? true
       );
       if (id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
@@ -602,6 +648,7 @@ export function TechPackEditor() {
   });
 
   const updateMeasurement = (index: number, field: string, value: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (field === 'value') {
        const baseSize = newData.properties?.baseSize || 'M';
@@ -620,14 +667,14 @@ export function TechPackEditor() {
   };
 
   const ensureDetailModules = () => {
-    let mods = data.detailModules;
+    let mods = displayData.detailModules;
     if (!mods) {
-      if (data.detailImage || (data.details && data.details.length > 0)) {
+      if (displayData.detailImage || (displayData.details && displayData.details.length > 0)) {
         mods = [{
           title: 'Detail Closeups',
           subtitle: 'Button & Hardware Details',
-          detailImage: data.detailImage || '',
-          details: data.details || []
+          detailImage: displayData.detailImage || '',
+          details: displayData.details || []
         }];
       } else {
         mods = [];
@@ -639,6 +686,7 @@ export function TechPackEditor() {
   const dModules = ensureDetailModules();
 
   const updateDetailModuleStr = (modIndex: number, field: string, value: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex][field] = value;
@@ -646,6 +694,7 @@ export function TechPackEditor() {
   };
 
   const updateDetailDesc = (modIndex: number, index: number, description: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details[index].description = description;
@@ -653,6 +702,7 @@ export function TechPackEditor() {
   };
 
   const updateDetailObj = (modIndex: number, index: number, detailObj: DetailItem) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details[index] = detailObj;
@@ -660,6 +710,7 @@ export function TechPackEditor() {
   };
 
   const addDetailToMod = (modIndex: number) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     const details = newData.detailModules[modIndex].details || [];
@@ -669,6 +720,7 @@ export function TechPackEditor() {
   };
 
   const removeDetail = (modIndex: number, index: number) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details.splice(index, 1);
@@ -677,6 +729,7 @@ export function TechPackEditor() {
   };
 
   const addDetailModule = () => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules.push({ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] });
@@ -684,6 +737,7 @@ export function TechPackEditor() {
   };
 
   const updateBOM = (index: number, field: string, value: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.bom) newData.bom = [];
     newData.bom[index][field] = value;
@@ -691,12 +745,14 @@ export function TechPackEditor() {
   };
 
   const updateConstruction = (val: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     newData.callouts = val;
     setData(newData);
   };
 
   const updateProperty = (field: string, value: string) => {
+    if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.properties) newData.properties = {};
     newData.properties[field] = value;
@@ -705,7 +761,7 @@ export function TechPackEditor() {
 
   if (isLoading) return <div className="py-20 text-center text-gray-500">Loading...</div>;
 
-  if (!data?.measurements?.length) {
+  if (!displayData?.measurements?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <p className="text-gray-500 mb-4">No Tech Pack data found.</p>
@@ -742,18 +798,32 @@ export function TechPackEditor() {
                </div>
             </Button>
           )}
+          
           <div className="flex bg-gray-100 p-1 rounded-xl mr-2 print:hidden hidden sm:flex shrink-0">
              <button onClick={() => setViewMode('techpack')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
              <button onClick={() => setViewMode('linesheet')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
           </div>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm mr-2 print:hidden">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Language:</span>
+            <select 
+              className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-24"
+              value={activeLanguage}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              disabled={isTranslating}
+            >
+              {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            {isTranslating && <div className="w-3 h-3 border-2 border-gray-200 border-t-black rounded-full animate-spin" />}
+          </div>
+
           {isCreator && (
             <Button 
                onClick={toggleTeamEditable} 
                variant="secondary" 
-               className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 ${data?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
-               title={data?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
+               className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
+               title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
             >
-               {data?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
+               {displayData?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
             </Button>
           )}
           {!canEdit && (
@@ -794,7 +864,7 @@ export function TechPackEditor() {
             </div>
             <div className="text-right">
               <div className="text-gray-500 text-xs print:text-[10px]">Date: {new Date().toLocaleDateString()}</div>
-              <div className="text-gray-500 text-xs print:text-[10px] mt-0.5">Ref: {data?.properties?.style || `TP-${Math.floor(Math.random() * 10000)}`}</div>
+              <div className="text-gray-500 text-xs print:text-[10px] mt-0.5">Ref: {displayData?.properties?.style || `TP-${Math.floor(Math.random() * 10000)}`}</div>
             </div>
           </header>
 
@@ -804,7 +874,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={data?.properties?.style || ''}
+                 value={displayData?.properties?.style || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('style', e.target.value)}
                />
@@ -813,7 +883,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={data?.properties?.season || ''}
+                 value={displayData?.properties?.season || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('season', e.target.value)}
                />
@@ -822,7 +892,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={data?.properties?.category || ''}
+                 value={displayData?.properties?.category || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('category', e.target.value)}
                />
@@ -831,7 +901,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={data?.properties?.designer || ''}
+                 value={displayData?.properties?.designer || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('designer', e.target.value)}
                />
@@ -840,7 +910,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={data?.properties?.gender || ''}
+                 value={displayData?.properties?.gender || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('gender', e.target.value)}
                />
@@ -849,7 +919,7 @@ export function TechPackEditor() {
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
                <select 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
-                 value={data?.properties?.baseSize || 'M'}
+                 value={displayData?.properties?.baseSize || 'M'}
                  onChange={(e) => updateProperty('baseSize', e.target.value)}
                >
                  {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -871,7 +941,7 @@ export function TechPackEditor() {
                     <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
                         imageUrl={imageUrl} 
-                        measurements={data.measurements}
+                        measurements={displayData.measurements}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                       />
@@ -1053,10 +1123,10 @@ export function TechPackEditor() {
                         <RichTextCallouts 
                           className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
                           value={
-                            typeof data.callouts === 'string' 
-                              ? data.callouts 
-                              : (Array.isArray(data.callouts) && data.callouts.length > 0)
-                                ? data.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
+                            typeof displayData.callouts === 'string' 
+                              ? displayData.callouts 
+                              : (Array.isArray(displayData.callouts) && displayData.callouts.length > 0)
+                                ? displayData.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
                                 : ''
                           }
                           onChange={(val: string) => updateConstruction(val)}
@@ -1085,11 +1155,11 @@ export function TechPackEditor() {
                         onClick={() => setActiveSizeTab(size)}
                         className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                       >
-                        {size} {data?.properties?.baseSize === size || (!data?.properties?.baseSize && size === 'M') ? '(Base)' : ''}
+                        {size} {displayData?.properties?.baseSize === size || (!displayData?.properties?.baseSize && size === 'M') ? '(Base)' : ''}
                       </button>
                     ))}
                   </div>
-                  {activeSizeTab !== (data?.properties?.baseSize || 'M') && (
+                  {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (
                     <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 ml-4 shrink-0">
                       <Calculator size={14} className="mr-1 inline-block"/> Compute Size {activeSizeTab}
                     </Button>
@@ -1108,7 +1178,7 @@ export function TechPackEditor() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.measurements.map((m: any, i: number) => (
+                      {displayData.measurements.map((m: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
                           <td className="px-2 py-2 align-top font-mono text-xs print:text-[10px] text-gray-500">
                              <AutoTextarea className="w-full bg-transparent outline-none uppercase leading-tight" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
@@ -1118,7 +1188,7 @@ export function TechPackEditor() {
                              <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" value={activeSizeTab === (data?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" value={activeSizeTab === (displayData?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
                           </td>
                           <td className="px-1 py-2 align-top">
                              <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
@@ -1148,7 +1218,7 @@ export function TechPackEditor() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(data.bom || data.fabrication || []).map((f: any, i: number) => (
+                      {(displayData.bom || displayData.fabrication || []).map((f: any, i: number) => (
                         <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
                           <td className="px-2 py-2 align-top">
                              <AutoTextarea className="w-full bg-transparent outline-none font-semibold text-gray-900 uppercase text-xs print:text-[10px] tracking-wider leading-tight" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
@@ -1176,15 +1246,15 @@ export function TechPackEditor() {
           </div>
 
           {/* 3D Viewport Full Screen Layer (Between Grid and Details) */}
-          {data?.model3dUrl && (
+          {displayData?.model3dUrl && (
             <div className="mt-8 mb-4 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm print:hidden cursor-move w-full">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2 mb-4">3D AR Mesh Viewer</h3>
               <div className="w-full">
                  <Garment3DViewer 
-                    url={data.model3dUrl} 
-                    measurements={data.measurements || []} 
+                    url={displayData.model3dUrl} 
+                    measurements={displayData.measurements || []} 
                     activeSizeTab={activeSizeTab}
-                    baseSize={data?.properties?.baseSize || 'M'}
+                    baseSize={displayData?.properties?.baseSize || 'M'}
                     onUpdateMeasurement={(idx, val) => updateMeasurement(idx, 'value', val.toString())} 
                  />
               </div>
@@ -1404,12 +1474,12 @@ export function TechPackEditor() {
                   {/* Header */}
                   <header className="grid grid-cols-3 items-start mb-8 print:mb-8">
                      <div className="flex flex-col text-left">
-                       <input className="text-2xl print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.season || ''} onChange={e => updateProperty('season', e.target.value)} placeholder="COLLECTION NAME" />
-                       <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={data?.properties?.category || ''} onChange={e => updateProperty('category', e.target.value)} placeholder="SUBTITLE - PAGE NO" />
+                       <input className="text-2xl print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={displayData?.properties?.season || ''} onChange={e => updateProperty('season', e.target.value)} placeholder="COLLECTION NAME" />
+                       <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={displayData?.properties?.category || ''} onChange={e => updateProperty('category', e.target.value)} placeholder="SUBTITLE - PAGE NO" />
                      </div>
                      <div className="flex flex-col items-center justify-center -mt-2 group relative">
-                       {data?.properties?.wovnLogo ? (
-                         <img src={data.properties.wovnLogo} alt="WOVN Logo" className="h-20 print:h-16 object-contain" />
+                       {displayData?.properties?.wovnLogo ? (
+                         <img src={displayData.properties.wovnLogo} alt="WOVN Logo" className="h-20 print:h-16 object-contain" />
                        ) : (
                          <>
                            <div className="text-5xl font-serif tracking-widest font-black text-black">WOV/N</div>
@@ -1426,13 +1496,13 @@ export function TechPackEditor() {
                              }
                          }} />
                        </label>
-                       {data?.properties?.wovnLogo && (
+                       {displayData?.properties?.wovnLogo && (
                          <button onClick={(e) => { e.preventDefault(); updateProperty('wovnLogo', ''); }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
                        )}
                      </div>
                      <div className="flex justify-end group relative">
-                       {data?.properties?.clientLogo ? (
-                         <img src={data.properties.clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />
+                       {displayData?.properties?.clientLogo ? (
+                         <img src={displayData.properties.clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />
                        ) : (
                          <div className="w-14 h-14 bg-black flex items-center justify-center rounded-sm">
                             <span className="text-white font-serif italic text-sm">Client</span>
@@ -1448,7 +1518,7 @@ export function TechPackEditor() {
                              }
                          }} />
                        </label>
-                       {data?.properties?.clientLogo && (
+                       {displayData?.properties?.clientLogo && (
                          <button onClick={(e) => { e.preventDefault(); updateProperty('clientLogo', ''); }} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
                        )}
                      </div>
@@ -1456,8 +1526,8 @@ export function TechPackEditor() {
 
                   {/* Image */}
                   <div className="w-full flex justify-center mb-8 relative group">
-                     {data?.lineSheetImage ? (
-                       <img src={data.lineSheetImage} className="w-[85%] max-w-[550px] aspect-[4/5] object-contain mix-blend-multiply" />
+                     {displayData?.lineSheetImage ? (
+                       <img src={displayData.lineSheetImage} className="w-[85%] max-w-[550px] aspect-[4/5] object-contain mix-blend-multiply" />
                      ) : (
                        <div className="w-[85%] max-w-[550px] aspect-[4/5] bg-gray-50 flex items-center justify-center border border-dashed border-gray-200 rounded-2xl">
                          <span className="text-gray-400 font-bold">Upload Garment Render</span>
@@ -1476,7 +1546,7 @@ export function TechPackEditor() {
                           }} />
                         </label>
 
-                        {data?.lineSheetImage && (
+                        {displayData?.lineSheetImage && (
                           <button onClick={() => setData({...data, lineSheetImage: ''})} className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200 text-xs font-bold hover:bg-red-50 text-red-600">
                             Clear
                           </button>
@@ -1494,27 +1564,27 @@ export function TechPackEditor() {
                      <div className="flex flex-wrap items-start justify-between gap-4 w-full px-2">
                        <div className="space-y-1">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">SIZES</div>
-                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={data?.sizeRun || ''} onChange={e => setData({...data, sizeRun: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={displayData?.sizeRun || ''} onChange={e => setData({...data, sizeRun: e.target.value})} placeholder="-" />
                        </div>
                        <div className="space-y-1 flex-1 min-w-[150px]">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">FABRIC</div>
-                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none" value={data?.shell || ''} onChange={e => setData({...data, shell: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none" value={displayData?.shell || ''} onChange={e => setData({...data, shell: e.target.value})} placeholder="-" />
                        </div>
                        <div className="space-y-1">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">MOQ</div>
-                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[60px]" value={data?.moq || ''} onChange={e => setData({...data, moq: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[60px]" value={displayData?.moq || ''} onChange={e => setData({...data, moq: e.target.value})} placeholder="-" />
                        </div>
                        <div className="space-y-1">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">WHOLESALE</div>
-                          <AutoTextarea className="w-full text-sm print:text-xs font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={data?.wholesale || ''} onChange={e => setData({...data, wholesale: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-sm print:text-xs font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={displayData?.wholesale || ''} onChange={e => setData({...data, wholesale: e.target.value})} placeholder="-" />
                        </div>
                        <div className="space-y-1">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">PRICE (MSRP)</div>
-                          <AutoTextarea className="w-full text-sm print:text-xs font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={data?.msrp || ''} onChange={e => setData({...data, msrp: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-sm print:text-xs font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={displayData?.msrp || ''} onChange={e => setData({...data, msrp: e.target.value})} placeholder="-" />
                        </div>
                        <div className="space-y-1">
                           <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider">DELIVERY</div>
-                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={data?.deliveryWindow || ''} onChange={e => setData({...data, deliveryWindow: e.target.value})} placeholder="-" />
+                          <AutoTextarea className="w-full text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none max-w-[80px]" value={displayData?.deliveryWindow || ''} onChange={e => setData({...data, deliveryWindow: e.target.value})} placeholder="-" />
                        </div>
                      </div>
                   </div>
@@ -1522,7 +1592,7 @@ export function TechPackEditor() {
                   {/* Colors */}
                   <div className="border-t border-b border-gray-100 py-3 mt-6 mb-12 flex items-start gap-4 px-2">
                     <div className="text-[10px] print:text-[8px] uppercase font-bold text-gray-400 tracking-wider shrink-0 w-16 mt-1">COLORS</div>
-                    <AutoTextarea className="w-full flex-1 text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none mt-1" value={data?.availableColors || ''} onChange={e => setData({...data, availableColors: e.target.value})} placeholder="Type colors here..." />
+                    <AutoTextarea className="w-full flex-1 text-xs print:text-[10px] font-bold text-gray-900 bg-transparent outline-none mt-1" value={displayData?.availableColors || ''} onChange={e => setData({...data, availableColors: e.target.value})} placeholder="Type colors here..." />
                   </div>
                </div>
                
@@ -1588,7 +1658,7 @@ export function TechPackEditor() {
                <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-black transition-colors"><X size={20}/></button>
             </div>
              <div className="space-y-4">
-               {data.activityLog?.length ? [...data.activityLog].reverse().map((log: any, i: number) => (
+               {displayData.activityLog?.length ? [...displayData.activityLog].reverse().map((log: any, i: number) => (
                  <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
                     <div className="font-bold text-gray-900 text-sm truncate">{formatName(log.user)}</div>
                     <div className="text-gray-400 text-xs mt-0.5">{new Date(log.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</div>

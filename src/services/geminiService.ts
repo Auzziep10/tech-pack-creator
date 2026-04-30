@@ -138,3 +138,25 @@ export async function gradeSize(measurements: any[], baseSize: string, targetSiz
   }
 }
 
+export async function translateTechPack(techPackData: any, targetLanguage: string) {
+  try {
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ techPackData, targetLanguage })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const { data } = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Translation Error:", error);
+    throw new Error(error.message || "Translation failed due to an unknown issue.");
+  }
+}
+
+
