@@ -16,11 +16,13 @@ const Model = ({
   isMeasuring: boolean, 
   lastPoint: THREE.Vector3 | null, 
   onAddSegment: (pts: THREE.Vector3[]) => void, 
-  onLoadedScale: (s: number) => void 
+  onLoadedScale: (s: number) => void,
+  scaleRatios?: { x: number, y: number, z: number }
 }) => {
   const { camera } = useThree();
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [baseScale, setBaseScale] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -37,7 +39,11 @@ const Model = ({
           const box = new THREE.Box3().setFromObject(group);
           const size = box.getSize(new THREE.Vector3()).length();
           const targetScale = 4.5 / size; 
+          setBaseScale(targetScale);
           group.scale.setScalar(targetScale);
+          if (scaleRatios) {
+            group.scale.set(targetScale * scaleRatios.x, targetScale * scaleRatios.y, targetScale * scaleRatios.z);
+          }
           onLoadedScale(targetScale);
           
           // Force a resize event shortly after load to fix R3F Canvas initial layout shift bugs
@@ -79,6 +85,13 @@ const Model = ({
 
     return () => { active = false; };
   }, [url]);
+
+  useEffect(() => {
+    if (scene && baseScale && scaleRatios) {
+      scene.scale.set(baseScale * scaleRatios.x, baseScale * scaleRatios.y, baseScale * scaleRatios.z);
+      scene.updateMatrixWorld(true);
+    }
+  }, [scene, baseScale, scaleRatios]);
 
   if (error || !scene) return null;
 
@@ -153,10 +166,14 @@ const LIGHT_CONFIG = {
 export const Garment3DViewer = ({ 
   url, 
   measurements = [], 
+  activeSizeTab = 'M',
+  baseSize = 'M',
   onUpdateMeasurement 
 }: { 
   url: string, 
   measurements?: any[], 
+  activeSizeTab?: string,
+  baseSize?: string,
   onUpdateMeasurement?: (idx: number, val: string) => void 
 }) => {
   const [preset, setPreset] = useState<LightPreset>('studio');
@@ -164,6 +181,34 @@ export const Garment3DViewer = ({
   const [tapeSegments, setTapeSegments] = useState<THREE.Vector3[][]>([]);
   const [meshScale, setMeshScale] = useState(1);
   const [selectedTargetPOM, setSelectedTargetPOM] = useState<string>('');
+  
+  const [scaleRatios, setScaleRatios] = useState({ x: 1, y: 1, z: 1 });
+
+  useEffect(() => {
+    let ratioX = 1;
+    let ratioY = 1;
+    
+    if (activeSizeTab && baseSize && activeSizeTab !== baseSize && measurements.length > 0) {
+       const widthMeas = measurements.find((m: any) => m.id?.toLowerCase().includes('chest') || m.point?.toLowerCase().includes('chest') || m.point?.toLowerCase().includes('width'));
+       const lengthMeas = measurements.find((m: any) => m.id?.toLowerCase().includes('length') || m.point?.toLowerCase().includes('length'));
+       
+       if (widthMeas && widthMeas.sizes?.[activeSizeTab] && widthMeas.value) {
+          const baseW = parseFloat(widthMeas.value);
+          const targetW = parseFloat(widthMeas.sizes[activeSizeTab]);
+          if (!isNaN(baseW) && !isNaN(targetW) && baseW > 0) {
+             ratioX = targetW / baseW;
+          }
+       }
+       if (lengthMeas && lengthMeas.sizes?.[activeSizeTab] && lengthMeas.value) {
+          const baseL = parseFloat(lengthMeas.value);
+          const targetL = parseFloat(lengthMeas.sizes[activeSizeTab]);
+          if (!isNaN(baseL) && !isNaN(targetL) && baseL > 0) {
+             ratioY = targetL / baseL;
+          }
+       }
+    }
+    setScaleRatios({ x: ratioX, y: ratioY, z: ratioX });
+  }, [activeSizeTab, baseSize, measurements]);
   
   const config = LIGHT_CONFIG[preset];
 
@@ -315,6 +360,7 @@ export const Garment3DViewer = ({
                      lastPoint={lastPoint}
                      onAddSegment={(pts) => setTapeSegments(prev => [...prev, pts])} 
                      onLoadedScale={setMeshScale}
+                     scaleRatios={scaleRatios}
                   />
                 </Center>
               </Bounds>

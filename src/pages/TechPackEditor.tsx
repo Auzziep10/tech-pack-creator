@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -15,6 +15,7 @@ import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
+import { gradeSize } from '../services/geminiService';
 
 const forceDownload = async (url: string, filename: string) => {
   try {
@@ -177,6 +178,43 @@ export function TechPackEditor() {
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
+
+  const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+  const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
+  const [isGrading, setIsGrading] = useState(false);
+
+  useEffect(() => {
+    if (data?.properties?.baseSize && activeSizeTab === 'M' && data.properties.baseSize !== 'M') {
+       setActiveSizeTab(data.properties.baseSize);
+    }
+  }, [data?.properties?.baseSize]);
+
+  const handleGradeSize = async () => {
+    const baseSize = data?.properties?.baseSize || 'M';
+    if (activeSizeTab === baseSize) return;
+    
+    setIsGrading(true);
+    try {
+      const graded = await gradeSize(data.measurements, baseSize, activeSizeTab, data?.properties?.category || 'Garment');
+      
+      setData((prev: any) => {
+        const newData = { ...prev };
+        newData.measurements = newData.measurements.map((m: any) => {
+           const gradedM = graded.find((gm: any) => gm.id === m.id);
+           if (gradedM) {
+              m.sizes = { ...(m.sizes || {}), [activeSizeTab]: gradedM.value };
+           }
+           return m;
+        });
+        return newData;
+      });
+      pushLog(`Computed size ${activeSizeTab}`);
+    } catch (err: any) {
+      alert(err.message || "Failed to grade size");
+    } finally {
+      setIsGrading(false);
+    }
+  };
 
   const MEASUREMENT_UNIT_KEY = 'global_unit_v2';
   const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>(() => (localStorage.getItem(MEASUREMENT_UNIT_KEY) as 'in' | 'cm') || 'cm');
@@ -565,7 +603,19 @@ export function TechPackEditor() {
 
   const updateMeasurement = (index: number, field: string, value: string) => {
     const newData = { ...data };
-    newData.measurements[index][field] = value;
+    if (field === 'value') {
+       const baseSize = newData.properties?.baseSize || 'M';
+       if (activeSizeTab === baseSize) {
+          newData.measurements[index].value = value;
+       } else {
+          newData.measurements[index].sizes = { 
+             ...(newData.measurements[index].sizes || {}), 
+             [activeSizeTab]: value 
+          };
+       }
+    } else {
+       newData.measurements[index][field] = value;
+    }
     setData(newData);
   };
 
@@ -749,7 +799,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-5 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-6 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
@@ -794,6 +844,16 @@ export function TechPackEditor() {
                  placeholder="N/A"
                  onChange={(e) => updateProperty('gender', e.target.value)}
                />
+             </div>
+             <div className="space-y-0.5">
+               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
+               <select 
+                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                 value={data?.properties?.baseSize || 'M'}
+                 onChange={(e) => updateProperty('baseSize', e.target.value)}
+               >
+                 {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+               </select>
              </div>
           </div>
 
@@ -913,6 +973,24 @@ export function TechPackEditor() {
                            >
                              <Download size={12} />
                            </button>
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                                  const newGallery = [...galleryImages];
+                                  newGallery.splice(idx, 1);
+                                  setGalleryImages(newGallery);
+                                  setData((d: any) => ({ ...d, gallery: newGallery }));
+                                  if (imageUrl === gImg) {
+                                     setImageUrl(newGallery[0] || '');
+                                  }
+                               }
+                             }}
+                             className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                             title="Delete Image"
+                           >
+                             <X size={12} />
+                           </button>
                        </div>
                      ))}
                      <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
@@ -998,6 +1076,26 @@ export function TechPackEditor() {
                     Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
                   </button>
                 </h3>
+
+                <div className="flex items-center justify-between mb-4 print:hidden">
+                  <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 overflow-x-auto max-w-full">
+                    {SIZES.map(size => (
+                      <button 
+                        key={size}
+                        onClick={() => setActiveSizeTab(size)}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                        {size} {data?.properties?.baseSize === size || (!data?.properties?.baseSize && size === 'M') ? '(Base)' : ''}
+                      </button>
+                    ))}
+                  </div>
+                  {activeSizeTab !== (data?.properties?.baseSize || 'M') && (
+                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 ml-4 shrink-0">
+                      <Calculator size={14} className="mr-1 inline-block"/> Compute Size {activeSizeTab}
+                    </Button>
+                  )}
+                </div>
+
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                   <table className="w-full text-xs print:text-[10px] text-left">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
@@ -1020,7 +1118,7 @@ export function TechPackEditor() {
                              <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" value={m.value || ''} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" value={activeSizeTab === (data?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
                           </td>
                           <td className="px-1 py-2 align-top">
                              <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
@@ -1085,6 +1183,8 @@ export function TechPackEditor() {
                  <Garment3DViewer 
                     url={data.model3dUrl} 
                     measurements={data.measurements || []} 
+                    activeSizeTab={activeSizeTab}
+                    baseSize={data?.properties?.baseSize || 'M'}
                     onUpdateMeasurement={(idx, val) => updateMeasurement(idx, 'value', val.toString())} 
                  />
               </div>

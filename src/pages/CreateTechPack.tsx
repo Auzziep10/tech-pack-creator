@@ -89,7 +89,7 @@ export function CreateTechPack() {
     if (!images || anchors.some(a => !anchorValues[a.id]?.trim())) return;
     setStep('generating');
     try {
-      // Append explicitly selected unit so the AI parser generates correct values
+      // Append explicitly selected unit so the parser generates correct values
       const valuesWithUnits = Object.entries(anchorValues).reduce((acc, [k, v]) => {
         acc[k] = `${v} ${unit}`;
         return acc;
@@ -208,7 +208,7 @@ export function CreateTechPack() {
                   <div className="w-16 h-16 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
                   <Sparkles className="absolute inset-0 m-auto text-black animate-pulse" size={20} />
                 </div>
-                <h3 className="text-xl font-serif mt-6 text-gray-900 text-center">Vision Analysis</h3>
+                <h3 className="text-xl font-serif mt-6 text-gray-900 text-center">Garment Scan Processing</h3>
                 <p className="text-gray-500 mt-2 text-center max-w-sm">
                   Scanning garment details, construction features, and silhouette...
                 </p>

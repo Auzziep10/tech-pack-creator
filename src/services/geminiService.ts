@@ -116,3 +116,25 @@ export async function generateTechPack(frontImageUrl: string, backImageUrl: stri
     throw new Error(error.message || "Generation Failed due to an unknown issue.");
   }
 }
+
+export async function gradeSize(measurements: any[], baseSize: string, targetSize: string, garmentType: string) {
+  try {
+    const res = await fetch('/api/grade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ measurements, baseSize, targetSize, garmentType })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const { data } = await res.json();
+    return data;
+  } catch (error: any) {
+    console.error("Gemini Grading Error:", error);
+    throw new Error(error.message || "Grading Failed due to an unknown issue.");
+  }
+}
+

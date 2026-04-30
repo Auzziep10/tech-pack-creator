@@ -57,7 +57,8 @@ The JSON should have the exact following structure matching our official Tech Pa
     "description": "string",
     "pd": "string",
     "td": "string",
-    "designer": "string"
+    "designer": "string",
+    "baseSize": "string"
   },
   "bom": [
     { "category": "Fabric", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
