@@ -476,10 +476,10 @@ export function TechPackEditor() {
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
-        bustCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('bust') || m.name.toLowerCase().includes('chest'))?.value || 0,
-        waistCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('waist'))?.value || 0,
-        hemCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('hem'))?.value || 0,
-        sleeveLengthCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('sleeve'))?.value || 0,
+        bustCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('bust') || m.point?.toLowerCase().includes('chest'))?.value || 0,
+        waistCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('waist'))?.value || 0,
+        hemCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('hem'))?.value || 0,
+        sleeveLengthCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('sleeve'))?.value || 0,
         stretchCoefficient: 1.0,
         renderUrl: galleryImages[0] || imageUrl || null
       };
