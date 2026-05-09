@@ -473,13 +473,20 @@ export function TechPackEditor() {
   const handleSyncToWovn = async () => {
     setIsSyncing(true);
     try {
+      const extractMatrix = (keywords: string[]) => {
+        const m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
+        if (!m) return null;
+        return { base: m.value || 0, grades: m.sizes || {} };
+      };
+
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
-        bustCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('bust') || m.point?.toLowerCase().includes('chest'))?.value || 0,
-        waistCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('waist'))?.value || 0,
-        hemCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('hem'))?.value || 0,
-        sleeveLengthCm: displayData?.measurements?.find((m: any) => m.point?.toLowerCase().includes('sleeve'))?.value || 0,
+        globalUnit: globalUnit || 'cm',
+        chestMatrix: extractMatrix(['chest', 'bust']),
+        waistMatrix: extractMatrix(['waist']),
+        hemMatrix: extractMatrix(['hem']),
+        sleeveMatrix: extractMatrix(['sleeve']),
         stretchCoefficient: 1.0,
         renderUrl: galleryImages[0] || imageUrl || null
       };
