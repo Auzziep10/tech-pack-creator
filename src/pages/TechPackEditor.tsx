@@ -484,7 +484,7 @@ export function TechPackEditor() {
         renderUrl: galleryImages[0] || imageUrl || null
       };
 
-      const response = await fetch('http://localhost:3000/api/webhooks/tech-pack-sync', {
+      const response = await fetch('https://wovn-apparel.vercel.app/api/webhooks/tech-pack-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
