@@ -173,6 +173,7 @@ export function TechPackEditor() {
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
@@ -468,6 +469,39 @@ export function TechPackEditor() {
       setIsLoading(false);
     }
   }, [id, location.state]);
+
+  const handleSyncToWovn = async () => {
+    setIsSyncing(true);
+    try {
+      const payload = {
+        name: packName,
+        baseSize: displayData?.properties?.baseSize || 'M',
+        bustCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('bust') || m.name.toLowerCase().includes('chest'))?.value || 0,
+        waistCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('waist'))?.value || 0,
+        hemCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('hem'))?.value || 0,
+        sleeveLengthCm: displayData?.measurements?.find((m: any) => m.name.toLowerCase().includes('sleeve'))?.value || 0,
+        stretchCoefficient: 1.0,
+        renderUrl: galleryImages[0] || imageUrl || null
+      };
+
+      const response = await fetch('https://wovn-apparel.vercel.app/api/webhooks/tech-pack-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error || 'Sync failed');
+      
+      pushLog('Synced Tech Pack to WOVN Ecosystem');
+      alert('Successfully synced to the WOVN Next.js Dashboard!');
+    } catch (e: any) {
+      console.error('Sync Error:', e);
+      alert('Failed to sync to WOVN: ' + e.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!user) return alert("Must be logged in to save.");
@@ -846,6 +880,11 @@ export function TechPackEditor() {
             <div className="flex items-center gap-2 text-sm">
               <Download size={16} />
               <span className="hidden sm:inline font-semibold">Export</span>
+            </div>
+          </Button>
+          <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="hidden sm:inline font-semibold">Sync to WOVN</span>
             </div>
           </Button>
         </div>
