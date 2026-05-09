@@ -479,6 +479,10 @@ export function TechPackEditor() {
         return { base: m.value || 0, grades: m.sizes || {} };
       };
 
+      const rawImage = galleryImages[0] || imageUrl || null;
+      // Vercel Edge limits payloads to 4.5MB. Base64 images easily exceed this and cause silent "Load failed" connection drops.
+      const safeRenderUrl = (rawImage && rawImage.length > 100000) ? null : rawImage;
+
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
@@ -488,7 +492,7 @@ export function TechPackEditor() {
         hemMatrix: extractMatrix(['hem']),
         sleeveMatrix: extractMatrix(['sleeve']),
         stretchCoefficient: 1.0,
-        renderUrl: galleryImages[0] || imageUrl || null
+        renderUrl: safeRenderUrl
       };
 
       const response = await fetch('https://wovn-apparel.vercel.app/api/webhooks/tech-pack-sync', {
