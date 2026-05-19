@@ -592,6 +592,15 @@ export function TechPackEditor() {
       techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
+      if (techPackDataToSave.properties?.dominantColorways?.length) {
+         for (let i = 0; i < techPackDataToSave.properties.dominantColorways.length; i++) {
+             let cwImg = techPackDataToSave.properties.dominantColorways[i].image;
+             if (cwImg && cwImg.startsWith('data:')) {
+                 techPackDataToSave.properties.dominantColorways[i].image = await uploadBase64Image(cwImg, user.uid);
+             }
+         }
+      }
+
       // Strip root properties that were temporarily injected for the editor UI logic to avoid Firebase undefined nesting errors
       delete techPackDataToSave.userId;
       delete techPackDataToSave.isTeamEditable;
@@ -640,7 +649,7 @@ export function TechPackEditor() {
           const newColors = [...prev];
           for (const cw of resData.colorways) {
              if (!newColors.find(c => c.name === cw.name)) {
-                newColors.push(cw);
+                newColors.push({ ...cw, image: imageString });
              }
           }
           return newColors;
@@ -1863,6 +1872,11 @@ export function TechPackEditor() {
                                 >
                                     ×
                                 </button>
+                                {cw.image && (
+                                    <div className="w-12 h-12 rounded overflow-hidden mb-1 bg-gray-50 flex items-center justify-center border border-gray-100">
+                                        <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
+                                    </div>
+                                )}
                                 <div className="text-sm font-bold text-gray-900 text-center leading-tight mb-1">{cw.name}</div>
                                 <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">L: {cw.lab[0]?.toFixed(1)}</div>
                                 <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">A: {cw.lab[1]?.toFixed(1)}</div>
