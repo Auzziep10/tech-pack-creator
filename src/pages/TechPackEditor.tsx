@@ -480,7 +480,15 @@ export function TechPackEditor() {
       const extractMatrix = (keywords: string[]) => {
         const m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
         if (!m) return null;
-        return { base: m.value || 0, grades: m.sizes || {} };
+        const baseSizeName = displayData?.properties?.baseSize || 'M';
+        const baseVal = m.value || 0;
+        return { 
+          base: baseVal, 
+          grades: {
+            ...m.sizes,
+            [baseSizeName]: baseVal
+          } 
+        };
       };
 
       const rawImage = galleryImages[0] || imageUrl || null;
