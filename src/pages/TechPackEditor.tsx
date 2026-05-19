@@ -177,6 +177,9 @@ export function TechPackEditor() {
   const [isExtractingColors, setIsExtractingColors] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showColorwayModal, setShowColorwayModal] = useState(false);
+  const [colorwayMockupImage, setColorwayMockupImage] = useState<string | null>(null);
+  const [extractedColorways, setExtractedColorways] = useState<any[]>([]);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
@@ -620,30 +623,21 @@ export function TechPackEditor() {
     }
   };
 
-  const extractColors = async (targetImage?: string) => {
-    const imageToAnalyze = targetImage || galleryImages[0];
-    if (!imageToAnalyze) {
-      alert("Please upload at least one image first.");
-      return;
-    }
-    
+  const analyzeColorwayMockup = async (imageString: string) => {
     setIsExtractingColors(true);
+    setExtractedColorways([]);
+    
     try {
-      // In development, call locally if running local nextjs, otherwise prod.
-      // Since web-companion might be running locally, let's use relative path if we can, but they are different ports.
-      // The user has Vercel linked so we can call the prod endpoint.
       const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: imageToAnalyze })
+        body: JSON.stringify({ imageBase64: imageString })
       });
       
       const resData = await response.json();
       if (resData.success && resData.colorways) {
-        const names = resData.colorways.map((c: any) => c.name).join(', ');
-        updateProperty('colorsText', names);
-        updateProperty('dominantColorways', resData.colorways);
+        setExtractedColorways(resData.colorways);
       } else {
         alert("Color extraction failed: " + (resData.error || "Unknown error"));
       }
@@ -1007,7 +1001,7 @@ export function TechPackEditor() {
                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
                  {!checkReadonly() && (
                    <button 
-                     onClick={() => extractColors()}
+                     onClick={() => setShowColorwayModal(true)}
                      disabled={isExtractingColors || galleryImages.length === 0}
                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
                    >
@@ -1204,10 +1198,6 @@ export function TechPackEditor() {
                               setGalleryImages(newGallery);
                               if (!imageUrl && newImages.length > 0) {
                                 setImageUrl(newImages[0]);
-                              }
-                              // Automatically extract colors on new upload if we don't have colors set yet
-                              if (newImages.length > 0 && !displayData?.properties?.colorsText) {
-                                extractColors(newImages[0]);
                               }
                            }
                         }} />
@@ -1821,6 +1811,67 @@ export function TechPackEditor() {
          </div>
       </Modal>
 
+      {/* Colorway Mockup Dialog */}
+      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Extraction">
+         <div className="flex flex-col gap-6 p-2">
+            {!colorwayMockupImage ? (
+                <label className="w-full h-48 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 group bg-gray-50/50">
+                    <span className="text-gray-400 group-hover:text-black font-bold text-2xl leading-none transition-colors mb-2">+</span>
+                    <span className="text-sm font-medium text-gray-500">Drop Colorway Mockup Here</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                       if (e.target.files && e.target.files.length > 0) {
+                          const file = e.target.files[0];
+                          const base64 = await compressImageFile(file, 1600);
+                          setColorwayMockupImage(base64);
+                          analyzeColorwayMockup(base64);
+                       }
+                    }} />
+                </label>
+            ) : (
+                <div className="flex flex-col items-center gap-6">
+                    <img src={colorwayMockupImage} alt="Colorway Mockup" className="max-h-48 rounded-lg object-contain border border-gray-200 shadow-sm" />
+                    
+                    {isExtractingColors ? (
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                            <span className="text-sm font-medium text-gray-500">Analyzing LAB Colors...</span>
+                        </div>
+                    ) : (
+                        extractedColorways.length > 0 ? (
+                            <div className="w-full">
+                                <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center">Extracted Colors</h4>
+                                <div className="flex flex-wrap gap-4 justify-center">
+                                    {extractedColorways.map((cw: any, i: number) => (
+                                        <div key={i} className="flex flex-col items-center gap-1 bg-white p-3 rounded-lg border border-gray-200 shadow-sm min-w-[100px]">
+                                            <div className="text-sm font-bold text-gray-900">{cw.name}</div>
+                                            <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">L: {cw.lab[0]?.toFixed(1)}</div>
+                                            <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">A: {cw.lab[1]?.toFixed(1)}</div>
+                                            <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">B: {cw.lab[2]?.toFixed(1)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button
+                                    className="mt-6 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md"
+                                    onClick={() => {
+                                        const names = extractedColorways.map((c: any) => c.name).join(', ');
+                                        updateProperty('colorsText', names);
+                                        updateProperty('dominantColorways', extractedColorways);
+                                        setShowColorwayModal(false);
+                                        setColorwayMockupImage(null);
+                                        setExtractedColorways([]);
+                                    }}
+                                >
+                                    Apply to Tech Pack
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-sm font-medium text-red-500">Failed to extract colors.</div>
+                        )
+                    )}
+                </div>
+            )}
+         </div>
+      </Modal>
     </div>
   );
 }
