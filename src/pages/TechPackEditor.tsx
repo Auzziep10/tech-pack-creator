@@ -1829,11 +1829,14 @@ export function TechPackEditor() {
       </Modal>
 
       {/* Colorway Mockup Dialog */}
-      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Extraction">
-         <div className="flex flex-col gap-6 p-2">
-            <label className="w-full h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-400 group bg-gray-50/50 transition-colors">
-                <span className="text-gray-400 group-hover:text-black font-bold text-2xl leading-none transition-colors mb-2">+</span>
-                <span className="text-sm font-medium text-gray-500">Drop Colorway Mockup Here</span>
+      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Extraction" maxWidth="max-w-2xl">
+         <div className="flex flex-col gap-6 p-4">
+            <label className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 group bg-gray-50/30 transition-all">
+                <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100 mb-3 group-hover:scale-110 transition-transform">
+                    <Scan className="text-blue-500" size={24} />
+                </div>
+                <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
+                <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                    if (e.target.files && e.target.files.length > 0) {
                       const file = e.target.files[0];
