@@ -851,19 +851,19 @@ export function TechPackEditor() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors">
+      <div className="flex items-center justify-between flex-wrap gap-y-4">
+        <div className="flex items-center gap-4 flex-1 min-w-[200px] mr-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0">
             <ArrowLeft size={20} />
           </button>
           <input 
             value={packName} 
             onChange={(e) => setPackName(e.target.value)} 
-            className="text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1" 
+            className="text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 w-full truncate" 
             placeholder="Garment Name"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {pendingScans.length > 0 && (
             <Button 
                onClick={() => setShowScansInbox(true)} 

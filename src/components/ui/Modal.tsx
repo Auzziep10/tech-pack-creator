@@ -27,13 +27,13 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-lg bg-[#111] border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden"
+            className="relative w-full max-w-lg bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden"
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/[0.02]">
-              <h2 className="text-xl font-semibold text-white">{title}</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-white transition-colors rounded-xl hover:bg-white/5"
+                className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-xl hover:bg-gray-200"
               >
                 <X size={20} />
               </button>
