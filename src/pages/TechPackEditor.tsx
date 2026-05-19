@@ -492,6 +492,10 @@ export function TechPackEditor() {
         hemMatrix: extractMatrix(['hem']),
         sleeveMatrix: extractMatrix(['sleeve']),
         stretchCoefficient: 1.0,
+        occasion: displayData?.properties?.occasion || 'General',
+        dominantColorways: displayData?.properties?.dominantColorways || [
+          { name: 'Default', lab: [50.0, 0.0, 0.0] }
+        ],
         renderUrl: safeRenderUrl
       };
 
@@ -919,7 +923,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-6 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
@@ -945,6 +949,29 @@ export function TechPackEditor() {
                  value={displayData?.properties?.category || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('category', e.target.value)}
+               />
+             </div>
+             <div className="space-y-0.5">
+               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
+               <input 
+                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={displayData?.properties?.occasion || ''}
+                 placeholder="e.g. Mixer"
+                 onChange={(e) => updateProperty('occasion', e.target.value)}
+               />
+             </div>
+             <div className="space-y-0.5">
+               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
+               <input 
+                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 value={displayData?.properties?.colorsText || ''}
+                 placeholder="Navy, Black"
+                 onChange={(e) => {
+                    updateProperty('colorsText', e.target.value);
+                    const parsed = e.target.value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+                    const colorways = parsed.map((name: string) => ({ name, lab: [50.0, 0.0, 0.0] }));
+                    updateProperty('dominantColorways', colorways);
+                 }}
                />
              </div>
              <div className="space-y-0.5">
