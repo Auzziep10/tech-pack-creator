@@ -647,10 +647,9 @@ export function TechPackEditor() {
       if (resData.success && resData.colorways) {
         setExtractedColorways(prev => {
           const newColors = [...prev];
-          for (const cw of resData.colorways) {
-             if (!newColors.find(c => c.name === cw.name)) {
-                newColors.push({ ...cw, image: imageString });
-             }
+          const primaryColor = resData.colorways[0];
+          if (primaryColor && !newColors.find(c => c.name === primaryColor.name)) {
+             newColors.push({ ...primaryColor, image: imageString });
           }
           return newColors;
         });
@@ -1870,7 +1869,16 @@ export function TechPackEditor() {
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-base font-bold text-gray-900 leading-tight mb-2 truncate">{cw.name}</div>
+                                    <input 
+                                        className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
+                                        value={cw.name}
+                                        onChange={(e) => {
+                                            const updated = [...extractedColorways];
+                                            updated[i] = { ...updated[i], name: e.target.value };
+                                            setExtractedColorways(updated);
+                                        }}
+                                        placeholder="Color Name"
+                                    />
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab[0]?.toFixed(1)}</div>
                                         <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab[1]?.toFixed(1)}</div>
