@@ -504,6 +504,8 @@ export function TechPackEditor() {
         hemMatrix: extractMatrix(['hem']),
         sleeveMatrix: extractMatrix(['sleeve']),
         stretchCoefficient: 1.0,
+        garmentType: displayData?.properties?.category || 'Top',
+        audience: displayData?.properties?.audience || 'Unisex',
         occasion: displayData?.properties?.occasion || 'General',
         dominantColorways: displayData?.properties?.dominantColorways || [
           { name: 'Default', lab: [50.0, 0.0, 0.0] }
