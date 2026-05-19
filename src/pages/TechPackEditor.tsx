@@ -953,7 +953,7 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-2 bg-gray-50 p-2 rounded-xl border border-gray-200 mb-4">
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
@@ -996,16 +996,15 @@ export function TechPackEditor() {
                  <option value="Mixer">Mixer</option>
                </select>
              </div>
-             <div className="space-y-0.5">
-               <div className="flex justify-between items-center">
+             <div className="space-y-0.5 relative group">
+               <div className="flex items-center gap-2">
                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
                  {!checkReadonly() && (
                    <button 
                      onClick={() => setShowColorwayModal(true)}
-                     disabled={isExtractingColors || galleryImages.length === 0}
-                     className="text-[10px] font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
+                     className="text-[8px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm transition-colors whitespace-nowrap leading-none border border-blue-100"
                    >
-                     {isExtractingColors ? "Extracting..." : "Extract Colors with AI 🪄"}
+                     Extract 🪄
                    </button>
                  )}
                </div>
