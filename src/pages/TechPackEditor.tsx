@@ -1007,7 +1007,7 @@ export function TechPackEditor() {
                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
                  {!checkReadonly() && (
                    <button 
-                     onClick={extractColors}
+                     onClick={() => extractColors()}
                      disabled={isExtractingColors || galleryImages.length === 0}
                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
                    >
