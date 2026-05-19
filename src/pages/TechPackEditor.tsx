@@ -632,37 +632,7 @@ export function TechPackEditor() {
     }
   };
 
-  const analyzeColorwayMockup = async (imageString: string) => {
-    setIsExtractingColors(true);
-    
-    try {
-      const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: imageString })
-      });
-      
-      const resData = await response.json();
-      if (resData.success && resData.colorways) {
-        setExtractedColorways(prev => {
-          const newColors = [...prev];
-          const primaryColor = resData.colorways[0];
-          if (primaryColor && !newColors.find(c => c.name === primaryColor.name)) {
-             newColors.push({ ...primaryColor, image: imageString });
-          }
-          return newColors;
-        });
-      } else {
-        alert("Color extraction failed: " + (resData.error || "Unknown error"));
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Failed to reach extraction API.");
-    } finally {
-      setIsExtractingColors(false);
-    }
-  };
+  // Colorway mockup queue logic is handled inline below
 
   const handleExport = useReactToPrint({
     contentRef: exportRef,
@@ -1840,32 +1810,53 @@ export function TechPackEditor() {
                 <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
                    if (e.target.files && e.target.files.length > 0) {
                       const files = Array.from(e.target.files);
-                      for (let i = 0; i < files.length; i++) {
-                          const file = files[i];
-                          const base64 = await compressImageFile(file, 1600);
-                          setColorwayMockupImage(base64);
-                          await analyzeColorwayMockup(base64);
+                      const queueItems = files.map((file, i) => ({
+                          id: `queue_${Date.now()}_${i}`,
+                          isPending: true,
+                          image: URL.createObjectURL(file), // instant local preview
+                          file: file,
+                          name: 'Pending...'
+                      }));
+
+                      setExtractedColorways((prev: any) => [...prev, ...queueItems]);
+
+                      for (const item of queueItems) {
+                          // Update status to analyzing
+                          setExtractedColorways((prev: any) => prev.map((c: any) => 
+                              c.id === item.id ? { ...c, name: 'Analyzing...' } : c
+                          ));
+
+                          try {
+                              const base64 = await compressImageFile(item.file, 1600);
+                              const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+                              const response = await fetch(endpoint, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ imageBase64: base64 })
+                              });
+                              const resData = await response.json();
+                              
+                              if (resData.success && resData.colorways) {
+                                  const primaryColor = resData.colorways[0];
+                                  if (primaryColor) {
+                                      setExtractedColorways((prev: any) => prev.map((c: any) => 
+                                          c.id === item.id ? { ...primaryColor, image: base64 } : c
+                                      ));
+                                  } else {
+                                      setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
+                                  }
+                              } else {
+                                  setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
+                              }
+                          } catch (err) {
+                              setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
+                          }
                       }
-                      // Clear preview when all are done so they can see the full list without the last image stuck at the top
-                      setColorwayMockupImage(null);
                    }
                 }} />
             </label>
 
-            {colorwayMockupImage && (
-                <div className="flex justify-center">
-                    <img src={colorwayMockupImage} alt="Colorway Mockup" className="max-h-40 rounded-lg object-contain border border-gray-200 shadow-sm" />
-                </div>
-            )}
-            
-            {isExtractingColors && (
-                <div className="flex flex-col items-center gap-2 py-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span className="text-sm font-medium text-gray-500">Analyzing LAB Colors...</span>
-                </div>
-            )}
-
-            {!isExtractingColors && extractedColorways.length > 0 && (
+            {extractedColorways.length > 0 && (
                 <div className="w-full mt-2">
                     <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
@@ -1877,21 +1868,30 @@ export function TechPackEditor() {
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <input 
-                                        className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
-                                        value={cw.name}
-                                        onChange={(e) => {
-                                            const updated = [...extractedColorways];
-                                            updated[i] = { ...updated[i], name: e.target.value };
-                                            setExtractedColorways(updated);
-                                        }}
-                                        placeholder="Color Name"
-                                    />
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab[0]?.toFixed(1)}</div>
-                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab[1]?.toFixed(1)}</div>
-                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab[2]?.toFixed(1)}</div>
-                                    </div>
+                                    {cw.isPending ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                            <div className="text-sm font-medium text-blue-600 animate-pulse">{cw.name}</div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <input 
+                                                className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
+                                                value={cw.name}
+                                                onChange={(e) => {
+                                                    const updated = [...extractedColorways];
+                                                    updated[i] = { ...updated[i], name: e.target.value };
+                                                    setExtractedColorways(updated);
+                                                }}
+                                                placeholder="Color Name"
+                                            />
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab?.[0]?.toFixed(1)}</div>
+                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab?.[1]?.toFixed(1)}</div>
+                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab?.[2]?.toFixed(1)}</div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                                 <button 
                                     className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
@@ -1908,20 +1908,22 @@ export function TechPackEditor() {
                 </div>
             )}
 
-            <button
-                className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50"
-                disabled={isExtractingColors}
-                onClick={() => {
-                    const names = extractedColorways.map((c: any) => c.name).join(', ');
-                    updateProperty('colorsText', names);
-                    updateProperty('dominantColorways', extractedColorways);
-                    setShowColorwayModal(false);
-                    setColorwayMockupImage(null);
-                    setExtractedColorways([]);
-                }}
-            >
-                Apply to Tech Pack
-            </button>
+            {extractedColorways.length > 0 && (
+                <button
+                    className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={extractedColorways.some((cw: any) => cw.isPending)}
+                    onClick={() => {
+                        const names = extractedColorways.map((c: any) => c.name).join(', ');
+                        updateProperty('colorsText', names);
+                        updateProperty('dominantColorways', extractedColorways);
+                        setShowColorwayModal(false);
+                        setColorwayMockupImage(null);
+                        setExtractedColorways([]);
+                    }}
+                >
+                    Apply to Tech Pack
+                </button>
+            )}
          </div>
       </Modal>
     </div>
