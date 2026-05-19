@@ -1837,12 +1837,17 @@ export function TechPackEditor() {
                 </div>
                 <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
                 <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
-                <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
                    if (e.target.files && e.target.files.length > 0) {
-                      const file = e.target.files[0];
-                      const base64 = await compressImageFile(file, 1600);
-                      setColorwayMockupImage(base64);
-                      analyzeColorwayMockup(base64);
+                      const files = Array.from(e.target.files);
+                      for (let i = 0; i < files.length; i++) {
+                          const file = files[i];
+                          const base64 = await compressImageFile(file, 1600);
+                          setColorwayMockupImage(base64);
+                          await analyzeColorwayMockup(base64);
+                      }
+                      // Clear preview when all are done so they can see the full list without the last image stuck at the top
+                      setColorwayMockupImage(null);
                    }
                 }} />
             </label>
