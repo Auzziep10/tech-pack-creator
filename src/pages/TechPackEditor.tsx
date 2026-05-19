@@ -174,6 +174,7 @@ export function TechPackEditor() {
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isExtractingColors, setIsExtractingColors] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
@@ -619,6 +620,41 @@ export function TechPackEditor() {
     }
   };
 
+  const extractColors = async () => {
+    if (!galleryImages.length) {
+      alert("Please upload at least one image first.");
+      return;
+    }
+    
+    setIsExtractingColors(true);
+    try {
+      // In development, call locally if running local nextjs, otherwise prod.
+      // Since web-companion might be running locally, let's use relative path if we can, but they are different ports.
+      // The user has Vercel linked so we can call the prod endpoint.
+      const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: galleryImages[0] })
+      });
+      
+      const resData = await response.json();
+      if (resData.success && resData.colors) {
+        updateProperty('colorsText', resData.colors);
+        const parsed = resData.colors.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        const colorways = parsed.map((name: string) => ({ name, lab: [50.0, 0.0, 0.0] }));
+        updateProperty('dominantColorways', colorways);
+      } else {
+        alert("Color extraction failed: " + (resData.error || "Unknown error"));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to reach extraction API.");
+    } finally {
+      setIsExtractingColors(false);
+    }
+  };
+
   const handleExport = useReactToPrint({
     contentRef: exportRef,
     documentTitle: `${packName.replace(/\s+/g, '_')}_${viewMode === 'linesheet' ? 'LineSheet' : 'TechPack'}`,
@@ -953,15 +989,32 @@ export function TechPackEditor() {
              </div>
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
-               <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+               <select 
+                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
                  value={displayData?.properties?.occasion || ''}
-                 placeholder="e.g. Mixer"
                  onChange={(e) => updateProperty('occasion', e.target.value)}
-               />
+               >
+                 <option value="" disabled>Select Occasion</option>
+                 <option value="Corporate">Corporate</option>
+                 <option value="Wedding">Wedding</option>
+                 <option value="Night Out">Night Out</option>
+                 <option value="Gym">Gym</option>
+                 <option value="Mixer">Mixer</option>
+               </select>
              </div>
              <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
+               <div className="flex justify-between items-center">
+                 <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
+                 {!checkReadonly() && (
+                   <button 
+                     onClick={extractColors}
+                     disabled={isExtractingColors || galleryImages.length === 0}
+                     className="text-[10px] font-bold text-blue-600 hover:text-blue-800 disabled:opacity-50 transition-colors"
+                   >
+                     {isExtractingColors ? "Extracting..." : "Extract Colors with AI 🪄"}
+                   </button>
+                 )}
+               </div>
                <input 
                  className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.colorsText || ''}
