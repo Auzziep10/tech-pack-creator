@@ -30,6 +30,10 @@ export const compressImageFile = async (file: File, maxWidth = 1600): Promise<st
           return;
         }
 
+        // Fill with white background to prevent transparent PNGs from turning black in JPEG
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+
         ctx.drawImage(img, 0, 0, width, height);
 
         // Compress heavily to WebP to natively shrink PDFs (or JPEG fallback)
