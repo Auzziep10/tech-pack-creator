@@ -1861,26 +1861,31 @@ export function TechPackEditor() {
             {!isExtractingColors && extractedColorways.length > 0 && (
                 <div className="w-full mt-2">
                     <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
-                    <div className="flex flex-wrap gap-4 justify-center max-h-[300px] overflow-y-auto p-2">
+                    <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
                         {extractedColorways.map((cw: any, i: number) => (
-                            <div key={i} className="flex flex-col items-center gap-1 bg-white p-3 rounded-lg border border-gray-200 shadow-sm min-w-[100px] relative group">
-                                <button 
-                                    className="absolute -top-2 -right-2 bg-red-100 text-red-600 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => {
-                                        setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
-                                    }}
-                                >
-                                    ×
-                                </button>
+                            <div key={i} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
                                 {cw.image && (
-                                    <div className="w-12 h-12 rounded overflow-hidden mb-1 bg-gray-50 flex items-center justify-center border border-gray-100">
+                                    <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center border border-gray-100 shadow-inner">
                                         <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
                                     </div>
                                 )}
-                                <div className="text-sm font-bold text-gray-900 text-center leading-tight mb-1">{cw.name}</div>
-                                <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">L: {cw.lab[0]?.toFixed(1)}</div>
-                                <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">A: {cw.lab[1]?.toFixed(1)}</div>
-                                <div className="text-[10px] text-gray-500 font-mono bg-gray-50 px-2 py-1 rounded">B: {cw.lab[2]?.toFixed(1)}</div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-base font-bold text-gray-900 leading-tight mb-2 truncate">{cw.name}</div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab[0]?.toFixed(1)}</div>
+                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab[1]?.toFixed(1)}</div>
+                                        <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab[2]?.toFixed(1)}</div>
+                                    </div>
+                                </div>
+                                <button 
+                                    className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
+                                    onClick={() => {
+                                        setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
+                                    }}
+                                    title="Remove Colorway"
+                                >
+                                    <X size={16} />
+                                </button>
                             </div>
                         ))}
                     </div>
