@@ -800,7 +800,7 @@ export function TechPackEditor() {
     setData(newData);
   };
 
-  const updateProperty = (field: string, value: string) => {
+  const updateProperty = (field: string, value: any) => {
     if (checkReadonly()) return;
     const newData = { ...data };
     if (!newData.properties) newData.properties = {};
