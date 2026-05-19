@@ -620,8 +620,9 @@ export function TechPackEditor() {
     }
   };
 
-  const extractColors = async () => {
-    if (!galleryImages.length) {
+  const extractColors = async (targetImage?: string) => {
+    const imageToAnalyze = targetImage || galleryImages[0];
+    if (!imageToAnalyze) {
       alert("Please upload at least one image first.");
       return;
     }
@@ -635,15 +636,14 @@ export function TechPackEditor() {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: galleryImages[0] })
+        body: JSON.stringify({ imageBase64: imageToAnalyze })
       });
       
       const resData = await response.json();
-      if (resData.success && resData.colors) {
-        updateProperty('colorsText', resData.colors);
-        const parsed = resData.colors.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-        const colorways = parsed.map((name: string) => ({ name, lab: [50.0, 0.0, 0.0] }));
-        updateProperty('dominantColorways', colorways);
+      if (resData.success && resData.colorways) {
+        const names = resData.colorways.map((c: any) => c.name).join(', ');
+        updateProperty('colorsText', names);
+        updateProperty('dominantColorways', resData.colorways);
       } else {
         alert("Color extraction failed: " + (resData.error || "Unknown error"));
       }
@@ -1202,7 +1202,13 @@ export function TechPackEditor() {
                               const newImages = await Promise.all(promises);
                               const newGallery = [...galleryImages, ...newImages];
                               setGalleryImages(newGallery);
-                              if (!imageUrl && newImages.length > 0) setImageUrl(newImages[0]);
+                              if (!imageUrl && newImages.length > 0) {
+                                setImageUrl(newImages[0]);
+                              }
+                              // Automatically extract colors on new upload if we don't have colors set yet
+                              if (newImages.length > 0 && !displayData?.properties?.colorsText) {
+                                extractColors(newImages[0]);
+                              }
                            }
                         }} />
                      </label>
