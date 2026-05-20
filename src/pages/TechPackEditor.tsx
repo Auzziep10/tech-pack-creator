@@ -835,7 +835,7 @@ export function TechPackEditor() {
 
   const updateProperty = (field: string, value: any) => {
     if (checkReadonly()) return;
-    setData(prev => {
+    setData((prev: any) => {
       if (!prev) return prev;
       return {
         ...prev,
