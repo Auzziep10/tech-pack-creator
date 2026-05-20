@@ -835,10 +835,16 @@ export function TechPackEditor() {
 
   const updateProperty = (field: string, value: any) => {
     if (checkReadonly()) return;
-    const newData = { ...data };
-    if (!newData.properties) newData.properties = {};
-    newData.properties[field] = value;
-    setData(newData);
+    setData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        properties: {
+          ...(prev.properties || {}),
+          [field]: value
+        }
+      };
+    });
   };
 
   if (isLoading) return <div className="py-20 text-center text-gray-500">Loading...</div>;
