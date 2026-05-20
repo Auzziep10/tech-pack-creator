@@ -495,6 +495,16 @@ export function TechPackEditor() {
       // Vercel Edge limits payloads to 4.5MB. Base64 images easily exceed this and cause silent "Load failed" connection drops.
       const safeRenderUrl = (rawImage && rawImage.length > 100000) ? null : rawImage;
 
+      let finalColorways = displayData?.properties?.dominantColorways ? [...displayData.properties.dominantColorways] : [
+        { name: 'Default', lab: [50.0, 0.0, 0.0] }
+      ];
+
+      for (let i = 0; i < finalColorways.length; i++) {
+         if (finalColorways[i].image && finalColorways[i].image.startsWith('data:')) {
+             finalColorways[i].image = await uploadBase64Image(finalColorways[i].image, user?.uid || 'guest');
+         }
+      }
+
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
@@ -507,9 +517,7 @@ export function TechPackEditor() {
         garmentType: displayData?.properties?.category || 'Top',
         audience: displayData?.properties?.audience || 'Unisex',
         occasion: displayData?.properties?.occasion || 'General',
-        dominantColorways: displayData?.properties?.dominantColorways || [
-          { name: 'Default', lab: [50.0, 0.0, 0.0] }
-        ],
+        dominantColorways: finalColorways,
         renderUrl: safeRenderUrl
       };
 
