@@ -157,6 +157,21 @@ const formatName = (email?: string | null) => {
   return namePart.split(/[\.\-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
 };
 
+const detectUnitFromMeasurements = (measurements: any[]): 'in' | 'cm' | null => {
+  if (!measurements || !Array.isArray(measurements)) return null;
+  for (const m of measurements) {
+    if (
+      (typeof m.value === 'string' && m.value.includes('/')) ||
+      (typeof m.tolMinus === 'string' && m.tolMinus.includes('/')) ||
+      (typeof m.tolPlus === 'string' && m.tolPlus.includes('/')) ||
+      (typeof m.tolerance === 'string' && m.tolerance.includes('/'))
+    ) {
+      return 'in';
+    }
+  }
+  return null;
+};
+
 export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -429,15 +444,20 @@ export function TechPackEditor() {
   useEffect(() => {
     if (location.state?.techPack) {
       const pack = location.state.techPack;
+      let loadedUnit = pack?.unit;
+      if (!loadedUnit) {
+        loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
+      }
       setData({
         ...pack,
+        unit: loadedUnit || pack?.unit || 'cm',
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
       });
-      if (pack?.unit) {
-        setGlobalUnit(pack.unit);
-        localStorage.setItem(MEASUREMENT_UNIT_KEY, pack.unit);
+      if (loadedUnit) {
+        setGlobalUnit(loadedUnit);
+        localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
       }
       const initialImage = pack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
@@ -455,15 +475,20 @@ export function TechPackEditor() {
       getTechPack(id).then((packInfo) => {
         if (packInfo) {
           const pack = packInfo.techPack;
+          let loadedUnit = pack?.unit;
+          if (!loadedUnit) {
+            loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
+          }
           setData({
             ...pack,
+            unit: loadedUnit || pack?.unit || 'cm',
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
             activityLog: packInfo.activityLog
           });
-          if (pack?.unit) {
-            setGlobalUnit(pack.unit);
-            localStorage.setItem(MEASUREMENT_UNIT_KEY, pack.unit);
+          if (loadedUnit) {
+            setGlobalUnit(loadedUnit);
+            localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
           }
           const initialImage = pack?.images?.original || packInfo.imageUrl;
           setImageUrl(initialImage);
