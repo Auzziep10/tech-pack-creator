@@ -104,6 +104,7 @@ export function CreateTechPack() {
         queueItem?.wovnItem?.garment_name || garmentType,
         queueItem?.wovnItem
       );
+      data.unit = unit;
       
       let finalImageUrl = images.frontUrl;
       if (images.file && user) {

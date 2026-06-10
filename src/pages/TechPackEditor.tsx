@@ -279,7 +279,7 @@ export function TechPackEditor() {
         tolPlus: autoConvert(m.tolPlus, nextUnit),
         tolerance: autoConvert(m.tolerance, nextUnit)
       }));
-      return { ...prev, measurements: newMs };
+      return { ...prev, measurements: newMs, unit: nextUnit };
     });
   };
 
@@ -423,17 +423,22 @@ export function TechPackEditor() {
 
   useEffect(() => {
     if (location.state?.techPack) {
+      const pack = location.state.techPack;
       setData({
-        ...location.state.techPack,
+        ...pack,
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
       });
-      const initialImage = location.state.techPack?.images?.original || location.state.image || '';
+      if (pack?.unit) {
+        setGlobalUnit(pack.unit);
+        localStorage.setItem(MEASUREMENT_UNIT_KEY, pack.unit);
+      }
+      const initialImage = pack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
       
 
-      const initialGallery = location.state.techPack?.gallery || [];
+      const initialGallery = pack?.gallery || [];
       if (initialImage && !initialGallery.includes(initialImage)) {
          initialGallery.unshift(initialImage);
       }
@@ -444,17 +449,22 @@ export function TechPackEditor() {
     } else if (id && id !== 'draft') {
       getTechPack(id).then((packInfo) => {
         if (packInfo) {
+          const pack = packInfo.techPack;
           setData({
-            ...packInfo.techPack,
+            ...pack,
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
             activityLog: packInfo.activityLog
           });
-          const initialImage = packInfo.techPack?.images?.original || packInfo.imageUrl;
+          if (pack?.unit) {
+            setGlobalUnit(pack.unit);
+            localStorage.setItem(MEASUREMENT_UNIT_KEY, pack.unit);
+          }
+          const initialImage = pack?.images?.original || packInfo.imageUrl;
           setImageUrl(initialImage);
           
 
-          const initialGallery = packInfo.techPack?.gallery || [];
+          const initialGallery = pack?.gallery || [];
           if (initialImage && !initialGallery.includes(initialImage)) {
              initialGallery.unshift(initialImage);
           }
