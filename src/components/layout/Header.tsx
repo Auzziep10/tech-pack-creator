@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProfileSettingsModal } from '../ui/ProfileSettingsModal';
 
 export function Header() {
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -59,7 +59,16 @@ export function Header() {
         {showProfile && (
            <div className="absolute top-12 right-0 w-64 bg-white border border-gray-100 rounded-xl shadow-lg p-2 z-50 animate-in slide-in-from-top-2 fade-in">
              <div className="px-3 py-2 border-b border-gray-50 mb-1">
-               <p className="font-bold text-gray-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis">{user?.displayName || 'Designer'}</p>
+               <div className="flex items-center justify-between gap-2 mb-1">
+                 <p className="font-bold text-gray-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]">{user?.displayName || 'Designer'}</p>
+                 <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                   (profile?.role || 'staff') === 'admin' 
+                     ? 'bg-purple-100 text-purple-700' 
+                     : 'bg-gray-100 text-gray-600'
+                 }`}>
+                   {profile?.role || 'staff'}
+                 </span>
+               </div>
                <p className="text-gray-500 text-xs truncate">{user?.email}</p>
              </div>
              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left" onClick={() => { setShowProfile(false); setShowSettingsModal(true); }}>

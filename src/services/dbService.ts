@@ -99,32 +99,24 @@ export const uploadBase64Image = async (base64String: string, userId: string): P
 };
 
 export const getUserAndCompanyTechPacks = async (userId: string, companyId: string) => {
-  if (userId === companyId) {
-    const q = query(collection(db, 'techPacks'), where("companyId", "==", companyId));
-    const snap = await getDocs(q);
-    const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
-    return results.sort((a, b) => {
-      const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-      const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
-      return timeB - timeA;
-    });
-  }
-
-  const qCompany = query(collection(db, 'techPacks'), where("companyId", "==", companyId));
-  const qUser = query(collection(db, 'techPacks'), where("userId", "==", userId));
-
-  const [snapCompany, snapUser] = await Promise.all([getDocs(qCompany), getDocs(qUser)]);
-  
-  const map = new Map<string, TechPackData>();
-  snapCompany.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() } as TechPackData));
-  snapUser.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() } as TechPackData));
-  
-  const results = Array.from(map.values());
+  const q = query(collection(db, 'techPacks'));
+  const snap = await getDocs(q);
+  const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
   return results.sort((a, b) => {
     const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
     const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
     return timeB - timeA;
   });
+};
+
+export const getAllUsers = async (): Promise<any[]> => {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(doc => doc.data());
+};
+
+export const updateUserRole = async (uid: string, role: 'admin' | 'staff') => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { role });
 };
 
 export const getTechPack = async (id: string) => {

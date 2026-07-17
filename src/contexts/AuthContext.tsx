@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 
 export interface UserProfile {
@@ -8,6 +8,7 @@ export interface UserProfile {
   email: string | null;
   name?: string;
   companyId: string;
+  role?: 'admin' | 'staff';
 }
 
 interface AuthContextType {
@@ -40,30 +41,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const snap = await getDoc(userRef);
         
         if (!snap.exists()) {
-          // Create initial profile where companyId is just their own UID
+          // Find if there are admins
+          const usersRef = collection(db, 'users');
+          const adminsQuery = query(usersRef, where('role', '==', 'admin'));
+          const adminsSnap = await getDocs(adminsQuery);
+          const role = adminsSnap.empty ? 'admin' : 'staff';
+
+          // Create initial profile where companyId is 'default_company'
           const newProfile: UserProfile = {
             uid: u.uid,
             email: u.email,
             name: u.displayName || undefined,
-            companyId: u.uid, // Default company
+            companyId: 'default_company',
+            role: role
           };
           await setDoc(userRef, newProfile);
           setProfile(newProfile);
         } else {
-          // Bulletproof patch preventing accidental legacy account team unbinding
+          // Migrate legacy user profile
           const data = snap.data() as UserProfile;
-          if (!data.companyId) {
-             data.companyId = u.uid;
-             await setDoc(userRef, data, { merge: true });
+          let needsUpdate = false;
+          const updatedData = { ...data };
+
+          if (data.companyId !== 'default_company') {
+             updatedData.companyId = 'default_company';
+             needsUpdate = true;
           }
-          setProfile(data);
+
+          if (!data.role) {
+             const usersRef = collection(db, 'users');
+             const adminsQuery = query(usersRef, where('role', '==', 'admin'));
+             const adminsSnap = await getDocs(adminsQuery);
+             updatedData.role = adminsSnap.empty ? 'admin' : 'staff';
+             needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+             await setDoc(userRef, updatedData, { merge: true });
+          }
+          setProfile(updatedData);
         }
 
-        // Listen for live updates (e.g., when they join a company)
+        // Listen for live updates
         unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const liveData = docSnap.data() as UserProfile;
-            if (!liveData.companyId) liveData.companyId = u.uid;
+            if (liveData.companyId !== 'default_company') {
+              liveData.companyId = 'default_company';
+            }
             setProfile(liveData);
           }
         });

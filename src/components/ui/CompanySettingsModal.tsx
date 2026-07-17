@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, CheckCircle2, Building, Users } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, UserProfile } from '../../contexts/AuthContext';
 import { db } from '../../services/firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { fetchAllWovnCustomers } from '../../services/wovnService';
+import { getAllUsers, updateUserRole } from '../../services/dbService';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -25,6 +26,10 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
   const [wovnCustomerIds, setWovnCustomerIds] = useState<string[]>([]);
   const [availableWovnCustomers, setAvailableWovnCustomers] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Team Management State
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
 
   useEffect(() => {
@@ -66,8 +71,21 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
          } catch(e) { console.error(e) }
       };
 
+      const loadUsers = async () => {
+         setUsersLoading(true);
+         try {
+           const allUsers = await getAllUsers();
+           setUsers(allUsers);
+         } catch (e) {
+           console.error("Failed to load users:", e);
+         } finally {
+           setUsersLoading(false);
+         }
+      };
+
       loadCompanySettings();
       fetchWovnOptions();
+      loadUsers();
     }
   }, [isOpen, profile, user]);
 
@@ -137,13 +155,23 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
     }
   };
 
+  const handleRoleChange = async (uid: string, newRole: 'admin' | 'staff') => {
+    try {
+      await updateUserRole(uid, newRole);
+      setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+    } catch (e) {
+      console.error("Failed to update role:", e);
+      alert("Failed to update team member's role.");
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300">
         <header className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-serif font-bold text-gray-900 flex items-center gap-2">
             <Building className="text-blue-600" size={20} />
-            Company Settings
+            Team Settings
           </h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-100">
             <X size={20} />
@@ -163,6 +191,7 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
               value={companyName}
               onChange={e => setCompanyName(e.target.value)}
               placeholder="e.g. Acme Apparel"
+              disabled={profile.role !== 'admin'}
             />
             
             <div className="space-y-2">
@@ -182,7 +211,8 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                              if (e.target.checked) setWovnCustomerIds(prev => [...prev, c.id]);
                              else setWovnCustomerIds(prev => prev.filter(id => id !== c.id));
                           }}
-                          className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black"
+                          disabled={profile.role !== 'admin'}
+                          className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black disabled:opacity-50"
                         />
                         <div className="flex flex-col">
                            <span className="text-sm font-semibold text-gray-900 leading-tight">{c.company || c.name || `Customer #${c.id}`}</span>
@@ -195,9 +225,67 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
               </div>
             </div>
             
-            <Button onClick={handleSaveCompanyProfile} disabled={isSaving} className="w-full bg-black text-white hover:bg-gray-800 mt-2">
-              {isSaving ? 'Saving...' : 'Save Profile Settings'}
-            </Button>
+            {profile.role === 'admin' ? (
+              <Button onClick={handleSaveCompanyProfile} disabled={isSaving} className="w-full bg-black text-white hover:bg-gray-800 mt-2">
+                {isSaving ? 'Saving...' : 'Save Profile Settings'}
+              </Button>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1 text-center font-medium">Only Administrators can modify company profile settings.</p>
+            )}
+          </div>
+
+          <div className="w-full h-px bg-gray-100" />
+
+          {/* Team Members & Roles Section */}
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                <Users size={16} /> Team Members & Roles
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {profile.role === 'admin' 
+                  ? "Manage roles for your team members." 
+                  : "View your team members and roles."}
+              </p>
+            </div>
+
+            {usersLoading ? (
+              <div className="text-sm text-gray-400 py-2">Loading team members...</div>
+            ) : (
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 bg-gray-50/50 max-h-60 overflow-y-auto">
+                {users.map(u => (
+                  <div key={u.uid} className="p-3 flex items-center justify-between">
+                    <div className="flex flex-col min-w-0 mr-2">
+                      <span className="text-sm font-semibold text-gray-900 truncate">
+                        {u.name || 'Unnamed Member'} {u.uid === user?.uid && <span className="text-xs text-blue-600 font-normal">(You)</span>}
+                      </span>
+                      <span className="text-xs text-gray-500 truncate font-mono">{u.email}</span>
+                    </div>
+                    
+                    <div>
+                      {profile.role === 'admin' && u.uid !== user?.uid ? (
+                        <select
+                          value={u.role || 'staff'}
+                          onChange={(e) => handleRoleChange(u.uid, e.target.value as 'admin' | 'staff')}
+                          className="bg-white border border-gray-200 rounded-lg text-xs font-semibold px-2 py-1 focus:outline-none focus:ring-1 focus:ring-black focus:border-black"
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      ) : (
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
+                          (u.role || 'staff') === 'admin' 
+                            ? 'bg-purple-100 text-purple-700' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {u.role || 'staff'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="w-full h-px bg-gray-100" />
@@ -217,60 +305,6 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                 {copied ? <CheckCircle2 size={20} className="text-green-600" /> : <Copy size={20} />}
               </Button>
             </div>
-          </div>
-
-          <div className="w-full h-px bg-gray-100" />
-
-          {/* Join Another Company Section */}
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
-                  <Users size={16} /> Join a Team
-                </h3>
-                {profile.companyId !== profile.uid && (
-                  <Button 
-                    variant="secondary" 
-                    onClick={async () => {
-                      const userRef = doc(db, 'users', profile.uid);
-                      await updateDoc(userRef, { companyId: profile.uid });
-
-                      // Take user's existing tech packs out of the team's workspace
-                      const qUserPacks = query(collection(db, 'techPacks'), where("userId", "==", profile.uid));
-                      const userPacksSnap = await getDocs(qUserPacks);
-                      
-                      const batch = writeBatch(db);
-                      userPacksSnap.docs.forEach(d => {
-                          batch.update(d.ref, { companyId: profile.uid });
-                      });
-                      await batch.commit();
-
-                      alert("Successfully disconnected from team.");
-                      window.location.reload();
-                    }}
-                    className="bg-red-50 text-red-600 hover:bg-red-100 border-transparent hover:border-red-200 shrink-0 text-xs px-3 py-1.5 h-auto transition-colors"
-                  >
-                    Disconnect
-                  </Button>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 mt-1">Have an invite code from a colleague? Enter it below to seamlessly switch your active workplace.</p>
-            </div>
-
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Input 
-                  placeholder="Enter 6-digit code..." 
-                  value={inputCode} 
-                  onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                  maxLength={6}
-                />
-              </div>
-              <Button onClick={handleJoin} disabled={loading || inputCode.length < 5} className="bg-black hover:bg-gray-800 text-white rounded-lg px-6 shrink-0">
-                {loading ? 'Joining...' : 'Join'}
-              </Button>
-            </div>
-            {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
           </div>
         </div>
       </div>

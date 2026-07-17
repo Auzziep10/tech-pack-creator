@@ -269,7 +269,7 @@ export function Dashboard() {
                        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                     </div>
                   )}
-                  {(!isSelectMode && pack.userId === user?.uid) && (
+                  {(!isSelectMode && (profile?.role === 'admin' || pack.userId === user?.uid)) && (
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                      <button 
                        onClick={(e) => handleDelete(e, pack.id)}
