@@ -3,7 +3,7 @@ import fs from "fs";
 
 async function main() {
   const genAI = new GoogleGenerativeAI("AIzaSyCNKTlfiRkC5pvSyYazOp4FomEvtBI2Ivc");
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
   
   const prompt = `Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack.
 

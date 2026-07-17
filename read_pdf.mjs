@@ -3,7 +3,7 @@ import fs from 'fs';
 const apiKey = "AIzaSyCU09BVfANflT7Le4Ynyf8S3zOKwpPr5XQ";
 
 async function main() {
-  const uri = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const uri = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
   const base64Data = fs.readFileSync('Tech pack.pdf').toString('base64');
   
   const res = await fetch(uri, {
