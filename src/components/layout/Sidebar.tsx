@@ -14,7 +14,7 @@ export function Sidebar({ isCollapsed = false, setIsCollapsed = () => {} }: { is
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
-    <aside className={`h-screen shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 fixed left-0 top-0 z-30 transition-all duration-300 ${isCollapsed ? 'w-20 items-center' : 'w-64'}`}>
+    <aside className={`h-[100dvh] shrink-0 border-r border-gray-200 bg-white flex flex-col p-4 fixed left-0 top-0 z-30 transition-all duration-300 ${isCollapsed ? 'w-20 items-center' : 'w-64'}`}>
       <div className={`flex items-center mb-8 mt-2 ${isCollapsed ? 'justify-center w-full' : 'w-full px-2 justify-between'}`}>
         {isCollapsed ? (
           <button 
@@ -43,7 +43,7 @@ export function Sidebar({ isCollapsed = false, setIsCollapsed = () => {} }: { is
         )}
       </div>
 
-      <nav className={`flex-1 space-y-2 mt-4 w-full`}>
+      <nav className={`flex-1 min-h-0 overflow-y-auto space-y-2 mt-4 w-full`}>
         {links.map((link) => (
           <NavLink
             key={link.to}
