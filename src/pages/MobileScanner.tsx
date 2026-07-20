@@ -214,7 +214,7 @@ export function MobileScanner() {
        const blob = await res.blob();
        const file = new File([blob], `scan_${sessionId}_${scanSide}.jpg`, { type: 'image/jpeg' });
        
-       const uploadedUrl = await uploadGarmentImage(file, `${sessionId}_${scanSide}`);
+       const uploadedUrl = await uploadGarmentImage(file, auth.currentUser?.uid || `${sessionId}_${scanSide}`);
        
        if (scanSide === 'front') {
          await updateScanSessionFront(sessionId, uploadedUrl);

@@ -25,7 +25,7 @@ export function QuickCameraScanner() {
       setIsUploading(true);
       try {
         const file = e.target.files[0];
-        const uploadedUrl = await uploadGarmentImage(file, `detail_scan_${sessionId}`);
+        const uploadedUrl = await uploadGarmentImage(file, auth.currentUser?.uid || `detail_scan_${sessionId}`);
         
         await setDoc(doc(db, 'companionUploads', sessionId!), {
           imageUrl: uploadedUrl,
