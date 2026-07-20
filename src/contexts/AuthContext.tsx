@@ -36,66 +36,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       
-      if (u) {
-        const userRef = doc(db, 'users', u.uid);
-        const snap = await getDoc(userRef);
-        
-        if (!snap.exists()) {
-          // Find if there are admins
-          const usersRef = collection(db, 'users');
-          const adminsQuery = query(usersRef, where('role', '==', 'admin'));
-          const adminsSnap = await getDocs(adminsQuery);
-          const role = adminsSnap.empty ? 'admin' : 'staff';
+      try {
+        if (u && !u.isAnonymous) {
+          const userRef = doc(db, 'users', u.uid);
+          const snap = await getDoc(userRef);
+          
+          if (!snap.exists()) {
+            // Find if there are admins
+            const usersRef = collection(db, 'users');
+            const adminsQuery = query(usersRef, where('role', '==', 'admin'));
+            const adminsSnap = await getDocs(adminsQuery);
+            const role = adminsSnap.empty ? 'admin' : 'staff';
 
-          // Create initial profile where companyId is 'default_company'
-          const newProfile: UserProfile = {
-            uid: u.uid,
-            email: u.email,
-            name: u.displayName || undefined,
-            companyId: 'default_company',
-            role: role
-          };
-          await setDoc(userRef, newProfile);
-          setProfile(newProfile);
-        } else {
-          // Migrate legacy user profile
-          const data = snap.data() as UserProfile;
-          let needsUpdate = false;
-          const updatedData = { ...data };
+            // Create initial profile where companyId is 'default_company'
+            const newProfile: UserProfile = {
+              uid: u.uid,
+              email: u.email,
+              name: u.displayName || undefined,
+              companyId: 'default_company',
+              role: role
+            };
+            await setDoc(userRef, newProfile);
+            setProfile(newProfile);
+          } else {
+            // Migrate legacy user profile
+            const data = snap.data() as UserProfile;
+            let needsUpdate = false;
+            const updatedData = { ...data };
 
-          if (data.companyId !== 'default_company') {
-             updatedData.companyId = 'default_company';
-             needsUpdate = true;
-          }
-
-          if (!data.role) {
-             const usersRef = collection(db, 'users');
-             const adminsQuery = query(usersRef, where('role', '==', 'admin'));
-             const adminsSnap = await getDocs(adminsQuery);
-             updatedData.role = adminsSnap.empty ? 'admin' : 'staff';
-             needsUpdate = true;
-          }
-
-          if (needsUpdate) {
-             await setDoc(userRef, updatedData, { merge: true });
-          }
-          setProfile(updatedData);
-        }
-
-        // Listen for live updates
-        unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const liveData = docSnap.data() as UserProfile;
-            if (liveData.companyId !== 'default_company') {
-              liveData.companyId = 'default_company';
+            if (data.companyId !== 'default_company') {
+               updatedData.companyId = 'default_company';
+               needsUpdate = true;
             }
-            setProfile(liveData);
+
+            if (!data.role) {
+               const usersRef = collection(db, 'users');
+               const adminsQuery = query(usersRef, where('role', '==', 'admin'));
+               const adminsSnap = await getDocs(adminsQuery);
+               updatedData.role = adminsSnap.empty ? 'admin' : 'staff';
+               needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+               await setDoc(userRef, updatedData, { merge: true });
+            }
+            setProfile(updatedData);
           }
-        });
-      } else {
+
+          // Listen for live updates
+          unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const liveData = docSnap.data() as UserProfile;
+              if (liveData.companyId !== 'default_company') {
+                liveData.companyId = 'default_company';
+              }
+              setProfile(liveData);
+            }
+          });
+        } else {
+          setProfile(null);
+        }
+      } catch (err) {
+        console.error("Error loading user profile:", err);
         setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {

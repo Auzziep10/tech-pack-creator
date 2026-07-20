@@ -12,7 +12,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user || user.isAnonymous) return <Navigate to="/login" replace />;
   return <Layout>{children}</Layout>;
 }
 
