@@ -105,6 +105,38 @@ export function CreateTechPack() {
         queueItem?.wovnItem
       );
       data.unit = unit;
+
+      if (unit === 'in') {
+        const decimalToNearestFractionStr = (decimal: number, denominator: number = 8): string => {
+          const whole = Math.floor(decimal);
+          const fraction = decimal - whole;
+          const num = Math.round(fraction * denominator);
+          if (num === 0) return whole === 0 ? "0" : whole.toString();
+          if (num === denominator) return (whole + 1).toString();
+          let n = num, d = denominator;
+          while (n % 2 === 0 && d % 2 === 0) { n /= 2; d /= 2; }
+          if (whole === 0) return `${n}/${d}`;
+          return `${whole} ${n}/${d}`;
+        };
+
+        const convertCmToIn = (valStr: string | undefined) => {
+          if (!valStr || !valStr.trim()) return valStr;
+          const float = parseFloat(valStr);
+          if (isNaN(float)) return valStr;
+          const dec = float / 2.54;
+          return decimalToNearestFractionStr(dec, 8);
+        };
+
+        if (data.measurements && Array.isArray(data.measurements)) {
+          data.measurements = data.measurements.map((m: any) => ({
+            ...m,
+            value: convertCmToIn(m.value),
+            tolMinus: convertCmToIn(m.tolMinus),
+            tolPlus: convertCmToIn(m.tolPlus),
+            tolerance: convertCmToIn(m.tolerance)
+          }));
+        }
+      }
       
       let finalImageUrl = images.frontUrl;
       if (images.file && user) {

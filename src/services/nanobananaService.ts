@@ -59,3 +59,29 @@ export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
     throw err;
   }
 }
+
+export async function generateInvisibleMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/mannequin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data;
+
+  } catch (err) {
+    console.error("Invisible Mannequin Error:", err);
+    throw err;
+  }
+}

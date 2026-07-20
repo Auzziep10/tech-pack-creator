@@ -94,7 +94,7 @@ const AutoTextarea = ({ value, onChange, className, placeholder }: { value: stri
   );
 };
 
-const RichTextCallouts = ({ value, onChange, className, placeholder }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string }) => {
+const RichTextCallouts = ({ value, onChange, className, placeholder, readOnly = false }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string, readOnly?: boolean }) => {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -143,8 +143,8 @@ const RichTextCallouts = ({ value, onChange, className, placeholder }: { value: 
 
   return (
     <div 
-      onClick={() => setIsEditing(true)}
-      className={`${className} cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors`}
+      onClick={() => !readOnly && setIsEditing(true)}
+      className={`${className} ${!readOnly ? 'cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200' : ''} transition-colors`}
     >
       {renderRichText(value)}
     </div>
@@ -380,6 +380,25 @@ export function TechPackEditor() {
     } finally {
       setIsVectorizing(false);
     }
+  };
+
+  const handleGenerateMannequin = async (gender: string, garmentType: string, viewPoint: string): Promise<string> => {
+    const { generateInvisibleMockup } = await import('../services/nanobananaService');
+    return await generateInvisibleMockup(imageUrl, garmentType, gender, viewPoint);
+  };
+
+  const handleSaveMannequinImage = async (base64Image: string) => {
+    if (!user) {
+      throw new Error("You must be logged in to save images.");
+    }
+    const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
+    setGalleryImages(prev => {
+      const newGallery = [uploadedUrl, ...prev];
+      setData((d: any) => ({ ...d, gallery: newGallery }));
+      return newGallery;
+    });
+    setImageUrl(uploadedUrl);
+    pushLog(`Created Invisible Mannequin mockup successfully`);
   };
 
   const [pendingScans, setPendingScans] = useState<any[]>([]);
@@ -1114,6 +1133,8 @@ export function TechPackEditor() {
                         measurements={displayData.measurements}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
+                        onGenerateMannequin={handleGenerateMannequin}
+                        onSaveMannequinImage={handleSaveMannequinImage}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
@@ -1286,26 +1307,25 @@ export function TechPackEditor() {
                     </div>
                   </div>
 
-                  {isCreator && (
-                    <div className="print-force-new-page">
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
-                        <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
-                      </div>
-                      <div className="text-xs print:text-[10px] text-gray-700 w-full block">
-                        <RichTextCallouts 
-                          className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
-                          value={
-                            typeof displayData.callouts === 'string' 
-                              ? displayData.callouts 
-                              : (Array.isArray(displayData.callouts) && displayData.callouts.length > 0)
-                                ? displayData.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
-                                : ''
-                          }
-                          onChange={(val: string) => updateConstruction(val)}
-                        />
-                      </div>
+                  <div className="print-force-new-page">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
+                      <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                     </div>
-                  )}
+                    <div className="text-xs print:text-[10px] text-gray-700 w-full block">
+                      <RichTextCallouts 
+                        className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
+                        readOnly={!canEdit}
+                        value={
+                          typeof displayData.callouts === 'string' 
+                            ? displayData.callouts 
+                            : (Array.isArray(displayData.callouts) && displayData.callouts.length > 0)
+                              ? displayData.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
+                              : ''
+                        }
+                        onChange={(val: string) => updateConstruction(val)}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right Column (Digital) / Bottom Column (Print) */}
