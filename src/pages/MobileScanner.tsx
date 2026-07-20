@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
 import Cropper from 'react-easy-crop';
+import { signInAnonymously } from 'firebase/auth';
+import { auth } from '../services/firebase';
 
 // Helper function to extract the visually cropped portion of the image into a neat JPEG
 const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
@@ -141,6 +143,13 @@ export function MobileScanner() {
   };
 
   useEffect(() => {
+    // Authenticate anonymously if not already signed in
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(err => {
+        console.error("Anonymous authentication failed", err);
+      });
+    }
+
     initDevices();
     setIsInitializing(false);
     
@@ -215,9 +224,9 @@ export function MobileScanner() {
          await completeScanSession(sessionId, uploadedUrl);
          setSuccess(true);
        }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Upload failed", err);
-      alert("Failed to send image. Please try again.");
+      alert(`Failed to send image: ${err?.message || err}`);
     } finally {
       setIsUploading(false);
     }

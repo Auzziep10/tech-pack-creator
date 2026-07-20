@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Camera, CheckCircle2 } from 'lucide-react';
 import { uploadGarmentImage } from '../services/dbService';
-import { db } from '../services/firebase';
+import { db, auth } from '../services/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { signInAnonymously } from 'firebase/auth';
 
 export function QuickCameraScanner() {
   const { sessionId } = useParams();
   const [isUploading, setIsUploading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    // Authenticate anonymously if not already signed in
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(err => {
+        console.error("Anonymous authentication failed", err);
+      });
+    }
+  }, []);
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -23,9 +33,9 @@ export function QuickCameraScanner() {
         });
         
         setSuccess(true);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Camera upload failed", err);
-        alert("Failed to send image. Please try again.");
+        alert(`Failed to send image: ${err?.message || err}`);
       } finally {
         setIsUploading(false);
       }
