@@ -1993,7 +1993,7 @@ export function TechPackEditor() {
                    onClick={() => setColorwayTab('generate')}
                    className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${colorwayTab === 'generate' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                 >
-                   <Sparkles size={16} /> Generate AI Colorways
+                   <Sparkles size={16} /> Generate Colorways
                 </button>
                 <button
                    onClick={() => setColorwayTab('upload')}
