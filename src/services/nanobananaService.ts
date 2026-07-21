@@ -174,3 +174,30 @@ export async function generateCoreSpecs(imageUrl: string, garmentType: string, u
     throw err;
   }
 }
+
+export async function clarifyMeasurements(measurements: any[], garmentType: string): Promise<any[]> {
+  try {
+    const res = await fetch('/api/clarify-measurements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        measurements,
+        garmentType
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data || [];
+
+  } catch (err) {
+    console.error("Clarify Measurements Error:", err);
+    throw err;
+  }
+}

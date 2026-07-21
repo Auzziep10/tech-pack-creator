@@ -209,6 +209,7 @@ export function TechPackEditor() {
   const [isGrading, setIsGrading] = useState(false);
   const [isExpandingPOMs, setIsExpandingPOMs] = useState(false);
   const [isGeneratingCoreSpecs, setIsGeneratingCoreSpecs] = useState(false);
+  const [isClarifying, setIsClarifying] = useState(false);
 
   const LANGUAGES = ['English', 'Spanish', 'Mandarin', 'Vietnamese', 'Portuguese', 'Italian', 'French', 'Turkish', 'Bengali'];
   const [activeLanguage, setActiveLanguage] = useState('English');
@@ -549,6 +550,41 @@ export function TechPackEditor() {
       alert("Failed to generate core measurements: " + e.message);
     } finally {
       setIsGeneratingCoreSpecs(false);
+    }
+  };
+
+  const handleClarifyInstructions = async () => {
+    if (!displayData?.measurements?.length) {
+      alert("No measurements found to clarify.");
+      return;
+    }
+    setIsClarifying(true);
+    try {
+      const { clarifyMeasurements } = await import('../services/nanobananaService');
+      const clarified = await clarifyMeasurements(
+        displayData.measurements,
+        displayData?.properties?.category || packName || 'Garment'
+      );
+
+      if (clarified && clarified.length > 0) {
+        setData((prev: any) => {
+          const currentMs = (prev.measurements || []).map((m: any) => {
+            const match = clarified.find((c: any) => c.id === m.id || c.point?.toLowerCase() === m.point?.toLowerCase());
+            if (match && match.description) {
+              return { ...m, description: match.description };
+            }
+            return m;
+          });
+          pushLog("Clarified measurement instructions successfully");
+          return { ...prev, measurements: currentMs };
+        });
+      } else {
+        alert("Failed to clarify measurement instructions.");
+      }
+    } catch (err: any) {
+      alert("Failed to clarify instructions: " + err.message);
+    } finally {
+      setIsClarifying(false);
     }
   };
 
@@ -1562,6 +1598,18 @@ export function TechPackEditor() {
                             <Sparkles size={11} />
                           )}
                           {isExpandingPOMs ? 'Generating...' : 'Generate More'}
+                        </button>
+                        <button 
+                          onClick={handleClarifyInstructions} 
+                          disabled={isClarifying}
+                          className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isClarifying ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                          ) : (
+                            <Sparkles size={11} className="text-indigo-600" />
+                          )}
+                          {isClarifying ? 'Clarifying...' : 'Clarify Instructions'}
                         </button>
                       </>
                     )}

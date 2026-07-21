@@ -53,10 +53,11 @@ CRITICAL CONSTRAINTS:
 1. DO NOT duplicate any of the existing points of measure listed above.
 2. Mathematically scale the values of the new measurements to perfectly match the proportions of the existing measurements.
 3. VERY IMPORTANT: Output the new measurement values in the exact same unit as the existing ones (${unit === 'in' ? 'inches' : 'centimeters'}). If the unit is inches, format values as clean numbers or fractions (e.g. "19", "1 1/2", "9 3/4"). If centimeters, use decimal numbers.
+5. For the \`description\` field of every measurement, write a very clear, step-by-step instruction on exactly how to take that measurement on the physical garment. DO NOT use technical industry jargon (like "sweep", "POM", etc.) that is confusing to non-designers.
 4. Return ONLY a valid JSON object in this exact format (no markdown wrappers, no backticks):
 {
   "newMeasurements": [
-    { "id": "string (standard apparel ID e.g. CO002, AH001, CF001)", "point": "string (name of POM)", "description": "string (brief measurement instruction)", "value": "string (the scaled value)", "tolMinus": "string (e.g. 1/8 or 0.5)", "tolPlus": "string" }
+    { "id": "string (standard apparel ID e.g. CO002, AH001, CF001)", "point": "string (name of POM)", "description": "string (clear, layperson instruction on exactly how and where to measure)", "value": "string (the scaled value)", "tolMinus": "string (e.g. 1/8 or 0.5)", "tolPlus": "string" }
   ]
 }`;
 
