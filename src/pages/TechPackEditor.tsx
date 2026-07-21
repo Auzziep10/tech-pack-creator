@@ -1430,15 +1430,18 @@ export function TechPackEditor() {
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
                   <div className="flex items-center gap-2 print:hidden">
                     {!checkReadonly() && (
-                      <Button 
-                        size="sm" 
+                      <button 
                         onClick={handleExpandMeasurements} 
-                        isLoading={isExpandingPOMs}
                         disabled={isExpandingPOMs}
-                        className="text-[10px] font-sans font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5"
+                        className="text-[10px] font-sans font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Sparkles size={11} /> Generate More
-                      </Button>
+                        {isExpandingPOMs ? (
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                        ) : (
+                          <Sparkles size={11} />
+                        )}
+                        {isExpandingPOMs ? 'Generating...' : 'Generate More'}
+                      </button>
                     )}
                     <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
                       Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
