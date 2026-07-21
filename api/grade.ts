@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const { measurements, baseSize, targetSize, garmentType } = req.body;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `You are an expert technical pattern maker and garment grader.
 The user has a "${garmentType}" tech pack with base measurements in size ${baseSize}.

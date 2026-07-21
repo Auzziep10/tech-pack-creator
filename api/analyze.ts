@@ -28,7 +28,7 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing frontPart image data.' });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `You are an expert technical product designer.
 Analyze this product mockup. 
