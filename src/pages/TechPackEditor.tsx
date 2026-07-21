@@ -667,14 +667,27 @@ export function TechPackEditor() {
          }
       }
 
+      const chest = extractMatrix(['chest', 'bust']);
+      const defaultMatrix = chest || {
+        base: 22,
+        grades: {
+          [displayData?.properties?.baseSize || 'M']: 22
+        }
+      };
+
+      const finalChest = chest || defaultMatrix;
+      const finalWaist = extractMatrix(['waist']) || finalChest;
+      const finalHem = extractMatrix(['hem']) || finalChest;
+      const finalSleeve = extractMatrix(['sleeve']);
+
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
         globalUnit: globalUnit || 'cm',
-        chestMatrix: extractMatrix(['chest', 'bust']),
-        waistMatrix: extractMatrix(['waist']),
-        hemMatrix: extractMatrix(['hem']),
-        sleeveMatrix: extractMatrix(['sleeve']),
+        chestMatrix: finalChest,
+        waistMatrix: finalWaist,
+        hemMatrix: finalHem,
+        sleeveMatrix: finalSleeve,
         stretchCoefficient: 1.0,
         garmentType: displayData?.properties?.category || 'Top',
         audience: displayData?.properties?.audience || 'Unisex',
