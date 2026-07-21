@@ -208,6 +208,7 @@ export function TechPackEditor() {
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
   const [isGrading, setIsGrading] = useState(false);
   const [isExpandingPOMs, setIsExpandingPOMs] = useState(false);
+  const [isGeneratingCoreSpecs, setIsGeneratingCoreSpecs] = useState(false);
 
   const LANGUAGES = ['English', 'Spanish', 'Mandarin', 'Vietnamese', 'Portuguese', 'Italian', 'French', 'Turkish', 'Bengali'];
   const [activeLanguage, setActiveLanguage] = useState('English');
@@ -480,6 +481,74 @@ export function TechPackEditor() {
       alert("Failed to generate additional measurements: " + e.message);
     } finally {
       setIsExpandingPOMs(false);
+    }
+  };
+
+  const handleGenerateCoreSpecs = async () => {
+    setIsGeneratingCoreSpecs(true);
+    try {
+      const { generateCoreSpecs } = await import('../services/nanobananaService');
+      const corePOMs = await generateCoreSpecs(
+        imageUrl,
+        displayData?.properties?.category || packName || 'Garment',
+        globalUnit || 'in',
+        displayData?.properties?.baseSize || 'M'
+      );
+
+      if (corePOMs && corePOMs.length > 0) {
+        setData((prev: any) => {
+          const currentMs = [...(prev.measurements || [])];
+          
+          const chestIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return (name.includes('chest') || name.includes('bust')) && !name.includes('pocket') && !name.includes('height');
+          });
+          const waistIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('waist') && !name.includes('height');
+          });
+          const hemIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('hem') && !name.includes('height') && !name.includes('rib') && !name.includes('cuff');
+          });
+          const sleeveIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('sleeve') && !name.includes('cuff') && !name.includes('height') && !name.includes('width') && !name.includes('opening') && !name.includes('rib');
+          });
+
+          corePOMs.forEach((coreM: any) => {
+            let targetIndex = -1;
+            if (coreM.id === 'CH001') targetIndex = chestIndex;
+            else if (coreM.id === 'WS001') targetIndex = waistIndex;
+            else if (coreM.id === 'HM001') targetIndex = hemIndex;
+            else if (coreM.id === 'SL001') targetIndex = sleeveIndex;
+
+            if (targetIndex !== -1) {
+              currentMs[targetIndex] = {
+                ...currentMs[targetIndex],
+                value: coreM.value,
+                description: coreM.description || currentMs[targetIndex].description
+              };
+            } else {
+              currentMs.push({
+                ...coreM,
+                sizes: {
+                  [displayData?.properties?.baseSize || 'M']: coreM.value
+                }
+              });
+            }
+          });
+
+          pushLog(`Successfully updated/generated core matching measurements`);
+          return { ...prev, measurements: currentMs };
+        });
+      } else {
+        alert("Gemini did not return any core measurements.");
+      }
+    } catch (e: any) {
+      alert("Failed to generate core measurements: " + e.message);
+    } finally {
+      setIsGeneratingCoreSpecs(false);
     }
   };
 
@@ -1469,18 +1538,32 @@ export function TechPackEditor() {
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
                   <div className="flex items-center gap-2 print:hidden">
                     {!checkReadonly() && (
-                      <button 
-                        onClick={handleExpandMeasurements} 
-                        disabled={isExpandingPOMs}
-                        className="text-[10px] font-sans font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isExpandingPOMs ? (
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                        ) : (
-                          <Sparkles size={11} />
-                        )}
-                        {isExpandingPOMs ? 'Generating...' : 'Generate More'}
-                      </button>
+                      <>
+                        <button 
+                          onClick={handleGenerateCoreSpecs} 
+                          disabled={isGeneratingCoreSpecs}
+                          className="text-[10px] font-sans font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingCoreSpecs ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          ) : (
+                            <Sparkles size={11} />
+                          )}
+                          {isGeneratingCoreSpecs ? 'Generating...' : 'Generate Core Specs'}
+                        </button>
+                        <button 
+                          onClick={handleExpandMeasurements} 
+                          disabled={isExpandingPOMs}
+                          className="text-[10px] font-sans font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isExpandingPOMs ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                          ) : (
+                            <Sparkles size={11} />
+                          )}
+                          {isExpandingPOMs ? 'Generating...' : 'Generate More'}
+                        </button>
+                      </>
                     )}
                     <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
                       Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}

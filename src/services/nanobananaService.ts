@@ -143,3 +143,34 @@ export async function expandMeasurements(imageUrl: string, existingMeasurements:
     throw err;
   }
 }
+
+export async function generateCoreSpecs(imageUrl: string, garmentType: string, unit: string, baseSize: string): Promise<any[]> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/generate-core-specs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        frontPart: { inlineData: { data: base64Data, mimeType } },
+        garmentType,
+        unit,
+        baseSize
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data?.coreMeasurements || [];
+
+  } catch (err) {
+    console.error("Generate Core Specs Error:", err);
+    throw err;
+  }
+}
