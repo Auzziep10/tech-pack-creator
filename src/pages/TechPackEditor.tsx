@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -196,6 +196,11 @@ export function TechPackEditor() {
   const [colorwayMockupImage, setColorwayMockupImage] = useState<string | null>(null);
   const [extractedColorways, setExtractedColorways] = useState<any[]>([]);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
+  const [colorwayTab, setColorwayTab] = useState<'generate' | 'upload'>('generate');
+  const [recolorBaseImage, setRecolorBaseImage] = useState('');
+  const [recolorHex, setRecolorHex] = useState('#1D4ED8');
+  const [recolorName, setRecolorName] = useState('Cobalt Blue');
+  const [isRecoloring, setIsRecoloring] = useState(false);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const annotatorRef = useRef<HTMLDivElement>(null);
 
@@ -399,6 +404,45 @@ export function TechPackEditor() {
     });
     setImageUrl(uploadedUrl);
     pushLog(`Created Invisible Mannequin mockup successfully`);
+  };
+
+  const handleRecolorGarment = async (baseImage: string, hexColor: string): Promise<string> => {
+    const { recolorGarmentImage } = await import('../services/nanobananaService');
+    return await recolorGarmentImage(baseImage, hexColor);
+  };
+
+  const handleRecolorAndExtract = async () => {
+    if (!recolorBaseImage || !recolorHex) return;
+    setIsRecoloring(true);
+    try {
+      const generatedBase64 = await handleRecolorGarment(recolorBaseImage, recolorHex);
+      
+      const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: generatedBase64 })
+      });
+      const resData = await response.json();
+      
+      const newColorway: any = {
+        id: `recolor_${Date.now()}`,
+        name: recolorName || 'Recolored',
+        hex: recolorHex,
+        image: generatedBase64,
+        lab: [50.0, 0.0, 0.0]
+      };
+
+      if (resData.success && resData.colorways && resData.colorways[0]) {
+        newColorway.lab = resData.colorways[0].lab || [50.0, 0.0, 0.0];
+      }
+
+      setExtractedColorways(prev => [...prev, newColorway]);
+    } catch (err: any) {
+      alert("Failed to recolor: " + err.message);
+    } finally {
+      setIsRecoloring(false);
+    }
   };
 
   const [pendingScans, setPendingScans] = useState<any[]>([]);
@@ -1065,8 +1109,10 @@ export function TechPackEditor() {
                  {!checkReadonly() && (
                    <button 
                      onClick={() => {
-                       setExtractedColorways(displayData?.properties?.dominantColorways || []);
-                       setShowColorwayModal(true);
+                        setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                        setRecolorBaseImage(imageUrl);
+                        setColorwayTab('generate');
+                        setShowColorwayModal(true);
                      }}
                      className="text-[8px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm transition-colors whitespace-nowrap leading-none border border-blue-100"
                    >
@@ -1878,133 +1924,272 @@ export function TechPackEditor() {
       </Modal>
 
       {/* Colorway Mockup Dialog */}
-      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Extraction" maxWidth="max-w-2xl">
-         <div className="flex flex-col gap-6 p-4">
-            <label className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 group bg-gray-50/30 transition-all">
-                <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100 mb-3 group-hover:scale-110 transition-transform">
-                    <Scan className="text-blue-500" size={24} />
+      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Management" maxWidth="max-w-3xl">
+          <div className="flex flex-col gap-6 p-4">
+             {/* Tabs Header */}
+             <div className="flex border-b border-gray-200">
+                <button
+                   onClick={() => setColorwayTab('generate')}
+                   className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${colorwayTab === 'generate' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                   <Sparkles size={16} /> Generate AI Colorways
+                </button>
+                <button
+                   onClick={() => setColorwayTab('upload')}
+                   className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${colorwayTab === 'upload' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                   <Upload size={16} /> Upload Swatches
+                </button>
+             </div>
+
+             {colorwayTab === 'generate' ? (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                   {/* Left Column: Base Image Selection */}
+                   <div className="md:col-span-5 space-y-4">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block">Base Mockup Image</label>
+                      <div className="aspect-[3/4] bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden flex items-center justify-center relative p-2">
+                         {recolorBaseImage ? (
+                            <img src={recolorBaseImage} className="w-full h-full object-contain" alt="Recolor Base" />
+                         ) : (
+                            <div className="text-gray-400 text-xs italic">No base image selected</div>
+                         )}
+                         {isRecoloring && (
+                            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                               <div className="text-xs font-bold text-black uppercase tracking-widest animate-pulse">Recoloring Garment...</div>
+                            </div>
+                         )}
+                      </div>
+                      
+                      {galleryImages.length > 1 && (
+                         <div className="space-y-1.5">
+                            <label className="text-[9px] uppercase tracking-widest font-bold text-gray-400 block">Select Base Image</label>
+                            <div className="flex gap-2 overflow-x-auto pb-1 max-w-full">
+                               {galleryImages.map((img, idx) => (
+                                  <button
+                                     key={idx}
+                                     onClick={() => setRecolorBaseImage(img)}
+                                     className={`w-12 h-16 border rounded-lg overflow-hidden flex-shrink-0 bg-gray-50 p-0.5 transition-all ${recolorBaseImage === img ? 'border-black ring-2 ring-black/10' : 'border-gray-200 hover:border-gray-400'}`}
+                                  >
+                                     <img src={img} className="w-full h-full object-contain" />
+                                  </button>
+                               ))}
+                            </div>
+                         </div>
+                      )}
+                   </div>
+
+                   {/* Right Column: Colors Picker and Presets */}
+                   <div className="md:col-span-7 space-y-6">
+                      <div className="space-y-4">
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Color Name</label>
+                            <input
+                               type="text"
+                               value={recolorName}
+                               onChange={e => setRecolorName(e.target.value)}
+                               className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all"
+                               placeholder="e.g. Cobalt Blue"
+                            />
+                         </div>
+
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Select Color Code</label>
+                            <div className="flex gap-3">
+                               <div className="w-12 h-12 rounded-xl border border-gray-200 overflow-hidden relative flex-shrink-0">
+                                  <input
+                                     type="color"
+                                     value={recolorHex}
+                                     onChange={e => setRecolorHex(e.target.value)}
+                                     className="absolute inset-0 w-full h-full p-0 border-0 cursor-pointer scale-150"
+                                  />
+                               </div>
+                               <input
+                                  type="text"
+                                  value={recolorHex}
+                                  onChange={e => setRecolorHex(e.target.value)}
+                                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 text-sm font-mono outline-none focus:border-black transition-all"
+                                  placeholder="#FFFFFF"
+                               />
+                            </div>
+                         </div>
+
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2.5 block">Premium Color Presets</label>
+                            <div className="grid grid-cols-4 gap-2">
+                               {[
+                                  { name: 'Cobalt Blue', hex: '#1D4ED8' },
+                                  { name: 'Forest Green', hex: '#065F46' },
+                                  { name: 'Rust Orange', hex: '#9A3412' },
+                                  { name: 'Terracotta', hex: '#C86B4D' },
+                                  { name: 'Sand Beige', hex: '#D0C9B6' },
+                                  { name: 'Charcoal Grey', hex: '#374151' },
+                                  { name: 'Burgundy', hex: '#5F1D33' },
+                                  { name: 'Lavender', hex: '#7C3AED' }
+                               ].map((preset, idx) => (
+                                  <button
+                                     key={idx}
+                                     onClick={() => {
+                                        setRecolorHex(preset.hex);
+                                        setRecolorName(preset.name);
+                                     }}
+                                     className="flex items-center gap-1.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all text-left"
+                                  >
+                                     <span className="w-4 h-4 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: preset.hex }}></span>
+                                     <span className="text-[10px] font-bold text-gray-700 truncate">{preset.name}</span>
+                                  </button>
+                               ))}
+                            </div>
+                         </div>
+                      </div>
+
+                      <Button
+                         onClick={handleRecolorAndExtract}
+                         disabled={isRecoloring || !recolorBaseImage}
+                         isLoading={isRecoloring}
+                         className="w-full bg-black text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                      >
+                         <Sparkles size={14} /> Generate Recolor Mockup
+                      </Button>
+                   </div>
                 </div>
-                <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
-                <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
-                   if (e.target.files && e.target.files.length > 0) {
-                      const files = Array.from(e.target.files);
-                      const queueItems = files.map((file, i) => ({
-                          id: `queue_${Date.now()}_${i}`,
-                          isPending: true,
-                          image: URL.createObjectURL(file), // instant local preview
-                          file: file,
-                          name: 'Pending...'
-                      }));
+             ) : (
+                <label className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 group bg-gray-50/30 transition-all">
+                    <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100 mb-3 group-hover:scale-110 transition-transform">
+                        <Scan className="text-blue-500" size={24} />
+                    </div>
+                    <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
+                    <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                       if (e.target.files && e.target.files.length > 0) {
+                          const files = Array.from(e.target.files);
+                          const queueItems = files.map((file, i) => ({
+                              id: `queue_${Date.now()}_${i}`,
+                              isPending: true,
+                              image: URL.createObjectURL(file),
+                              file: file,
+                              name: 'Pending...'
+                          }));
 
-                      setExtractedColorways((prev: any) => [...prev, ...queueItems]);
+                          setExtractedColorways((prev: any) => [...prev, ...queueItems]);
 
-                      for (const item of queueItems) {
-                          // Update status to analyzing
-                          setExtractedColorways((prev: any) => prev.map((c: any) => 
-                              c.id === item.id ? { ...c, name: 'Analyzing...' } : c
-                          ));
+                          for (const item of queueItems) {
+                              setExtractedColorways((prev: any) => prev.map((c: any) => 
+                                  c.id === item.id ? { ...c, name: 'Analyzing...' } : c
+                              ));
 
-                          try {
-                              const base64 = await compressImageFile(item.file, 1600);
-                              const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
-                              const response = await fetch(endpoint, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ imageBase64: base64 })
-                              });
-                              const resData = await response.json();
-                              
-                              if (resData.success && resData.colorways) {
-                                  const primaryColor = resData.colorways[0];
-                                  if (primaryColor) {
-                                      setExtractedColorways((prev: any) => prev.map((c: any) => 
-                                          c.id === item.id ? { ...primaryColor, image: base64 } : c
-                                      ));
+                              try {
+                                  const base64 = await compressImageFile(item.file, 1600);
+                                  const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+                                  const response = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ imageBase64: base64 })
+                                  });
+                                  const resData = await response.json();
+                                  
+                                  if (resData.success && resData.colorways) {
+                                      const primaryColor = resData.colorways[0];
+                                      if (primaryColor) {
+                                          setExtractedColorways((prev: any) => prev.map((c: any) => 
+                                              c.id === item.id ? { ...primaryColor, image: base64 } : c
+                                          ));
+                                      } else {
+                                          setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
+                                      }
                                   } else {
                                       setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                                   }
-                              } else {
+                              } catch (err) {
                                   setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                               }
-                          } catch (err) {
-                              setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                           }
-                      }
-                   }
-                }} />
-            </label>
+                       }
+                    }} />
+                </label>
+             )}
 
-            {extractedColorways.length > 0 && (
-                <div className="w-full mt-2">
-                    <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
-                    <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
-                        {extractedColorways.map((cw: any, i: number) => (
-                            <div key={i} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
-                                {cw.image && (
-                                    <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center border border-gray-100 shadow-inner">
-                                        <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    {cw.isPending ? (
-                                        <div className="flex items-center gap-3">
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                            <div className="text-sm font-medium text-blue-600 animate-pulse">{cw.name}</div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <input 
-                                                className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
-                                                value={cw.name}
-                                                onChange={(e) => {
-                                                    const updated = [...extractedColorways];
-                                                    updated[i] = { ...updated[i], name: e.target.value };
-                                                    setExtractedColorways(updated);
-                                                }}
-                                                placeholder="Color Name"
-                                            />
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab?.[0]?.toFixed(1)}</div>
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab?.[1]?.toFixed(1)}</div>
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab?.[2]?.toFixed(1)}</div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                <button 
-                                    className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
-                                    onClick={() => {
-                                        setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
-                                    }}
-                                    title="Remove Colorway"
-                                >
-                                    <X size={16} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+             {extractedColorways.length > 0 && (
+                 <div className="w-full mt-2">
+                     <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
+                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
+                         {extractedColorways.map((cw: any, i: number) => (
+                             <div key={i} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
+                                 {cw.image && (
+                                     <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center border border-gray-100 shadow-inner">
+                                         <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
+                                     </div>
+                                 )}
+                                 <div className="flex-1 min-w-0">
+                                     {cw.isPending ? (
+                                         <div className="flex items-center gap-3">
+                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                             <div className="text-sm font-medium text-blue-600 animate-pulse">{cw.name}</div>
+                                         </div>
+                                     ) : (
+                                         <>
+                                             <input 
+                                                 className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
+                                                 value={cw.name}
+                                                 onChange={(e) => {
+                                                     const updated = [...extractedColorways];
+                                                     updated[i] = { ...updated[i], name: e.target.value };
+                                                     setExtractedColorways(updated);
+                                                 }}
+                                                 placeholder="Color Name"
+                                             />
+                                             <div className="flex items-center gap-2 flex-wrap">
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab?.[0]?.toFixed(1)}</div>
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab?.[1]?.toFixed(1)}</div>
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab?.[2]?.toFixed(1)}</div>
+                                             </div>
+                                         </>
+                                     )}
+                                 </div>
+                                 <button 
+                                     className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
+                                     onClick={() => {
+                                         setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
+                                     }}
+                                     title="Remove Colorway"
+                                 >
+                                     <X size={16} />
+                                 </button>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+             )}
 
-            {extractedColorways.length > 0 && (
-                <button
-                    className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={extractedColorways.some((cw: any) => cw.isPending)}
-                    onClick={() => {
-                        const names = extractedColorways.map((c: any) => c.name).join(', ');
-                        updateProperty('colorsText', names);
-                        updateProperty('dominantColorways', extractedColorways);
-                        setShowColorwayModal(false);
-                        setColorwayMockupImage(null);
-                        setExtractedColorways([]);
-                    }}
-                >
-                    Apply to Tech Pack
-                </button>
-            )}
-         </div>
-      </Modal>
+             {extractedColorways.length > 0 && (
+                 <button
+                     className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                     disabled={extractedColorways.some((cw: any) => cw.isPending)}
+                     onClick={() => {
+                         const names = extractedColorways.map((c: any) => c.name).join(', ');
+                         updateProperty('colorsText', names);
+                         updateProperty('dominantColorways', extractedColorways);
+                         
+                         // Automatically append newly generated colorway mockups to the tech pack's main photo gallery
+                         const newImages = extractedColorways.map((c: any) => c.image).filter((img: string) => img && img.startsWith('data:') && !galleryImages.includes(img));
+                         if (newImages.length > 0) {
+                            setGalleryImages((prev: string[]) => {
+                               const updated = [...prev, ...newImages];
+                               setData((d: any) => ({ ...d, gallery: updated }));
+                               return updated;
+                            });
+                         }
+
+                         setShowColorwayModal(false);
+                         setColorwayMockupImage(null);
+                         setExtractedColorways([]);
+                     }}
+                 >
+                     Apply to Tech Pack
+                 </button>
+             )}
+          </div>
+       </Modal>
     </div>
   );
 }

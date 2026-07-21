@@ -85,3 +85,29 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
     throw err;
   }
 }
+
+export async function recolorGarmentImage(imageUrl: string, colorHex: string): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/recolor', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ base64Data, mimeType, colorHex })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data;
+
+  } catch (err) {
+    console.error("Recoloring Error:", err);
+    throw err;
+  }
+}
