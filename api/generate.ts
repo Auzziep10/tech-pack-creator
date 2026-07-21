@@ -28,7 +28,7 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing frontPart image data.' });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash" });
     
     const prompt = `You are an expert technical product designer.
 Analyze this product mockup. It was previously classified as a "${garmentType}".
@@ -74,7 +74,8 @@ The JSON should have the exact following structure matching our official Tech Pa
 
 Carefully identify the specific style, silhouette, and features of the product in the image to populate the \`properties\` accurately.
 For \`bom\`, accurately guess the materials, washes, hardware, trims, and labels required to construct this specific product.
-For \`measurements\`, use the provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON. Include at least 6-10 key measurements (cm only) using standard technical IDs (like BW001, LEN246, SLV426, HGT121, WID001). 
+For \`measurements\`, use the provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON.
+Provide a comprehensive list of all standard apparel points of measure (POM) for this specific garment type. For a hoodie or sweatshirt, you MUST include: Chest Width, Body Length, Shoulder Width, Sleeve Length, Bottom Hem Opening, Hood Height, Hood Width, Neck Opening/Width, Front Neck Drop, Back Neck Drop, Armhole Height (Straight/Curve), Cuff Height, Bottom Hem Height, and Kangaroo Pocket Dimensions. A professional, production-ready tech pack MUST contain a rich list of 12 to 18 detailed measurements (cm only) using standard technical IDs (like BW001, LEN246, SLV426, HGT121, WID001, etc.).
 For \`callouts\`, write a comprehensive, systematic outline detailing how the product is constructed from beginning to end (e.g., proper sequence from Cutting => Assembly => Finishing). Use rigorous bullet points and line breaks.`;
 
     const parts: any[] = [prompt, frontPart];
