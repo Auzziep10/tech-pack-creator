@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Rebuild trigger to force Vercel build queue sync
 export const maxDuration = 60;
 
 export default async function handler(req: any, res: any) {
