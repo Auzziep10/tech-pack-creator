@@ -614,7 +614,33 @@ export function TechPackEditor() {
     setIsSyncing(true);
     try {
       const extractMatrix = (keywords: string[]) => {
-        const m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
+        let m = null;
+        
+        const findMatch = (incl: string[], excl: string[]) => {
+          return displayData?.measurements?.find((x: any) => {
+            const name = (x.point || '').toLowerCase();
+            const matchesIncl = incl.some(k => name.includes(k));
+            const matchesExcl = excl.some(k => name.includes(k));
+            return matchesIncl && !matchesExcl;
+          });
+        };
+
+        if (keywords.includes('sleeve')) {
+          m = findMatch(['sleeve'], ['cuff', 'height', 'rib', 'width', 'opening', 'cap', 'bicep']);
+          if (!m) m = findMatch(['sleeve', 'length'], []);
+        } else if (keywords.includes('hem')) {
+          m = findMatch(['hem'], ['height', 'rib', 'cuff']);
+          if (!m) m = findMatch(['bottom', 'opening', 'sweep'], []);
+        } else if (keywords.includes('chest') || keywords.includes('bust')) {
+          m = findMatch(['chest', 'bust'], ['pocket', 'height', 'width from']);
+        } else if (keywords.includes('waist')) {
+          m = findMatch(['waist'], ['height']);
+        }
+
+        if (!m) {
+          m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
+        }
+
         if (!m) return null;
         const baseSizeName = displayData?.properties?.baseSize || 'M';
         const baseVal = m.value || 0;
