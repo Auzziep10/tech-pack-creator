@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
 import Cropper from 'react-easy-crop';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
 // Helper function to extract the visually cropped portion of the image into a neat JPEG
@@ -53,6 +53,7 @@ export function MobileScanner() {
   const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Post-Capture Cropper States
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -144,16 +145,22 @@ export function MobileScanner() {
 
   useEffect(() => {
     // Authenticate anonymously if not already signed in
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(err => {
-        console.error("Anonymous authentication failed", err);
-      });
-    }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthLoading(false);
+      } else {
+        signInAnonymously(auth).catch(err => {
+          console.error("Anonymous authentication failed", err);
+          setIsAuthLoading(false);
+        });
+      }
+    });
 
     initDevices();
     setIsInitializing(false);
     
     return () => {
+      unsubscribeAuth();
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
   }, []);
@@ -246,7 +253,14 @@ export function MobileScanner() {
     );
   }
 
-  if (isInitializing) return <div className="min-h-screen bg-black" />;
+  if (isInitializing || isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+        <div className="w-10 h-10 border-4 border-gray-600 border-t-white rounded-full animate-spin mb-4" />
+        <p className="text-gray-400 font-sans">Initializing secure session...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black flex flex-col overflow-hidden relative font-sans">

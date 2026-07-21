@@ -4,20 +4,28 @@ import { Camera, CheckCircle2 } from 'lucide-react';
 import { uploadGarmentImage } from '../services/dbService';
 import { db, auth } from '../services/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 export function QuickCameraScanner() {
   const { sessionId } = useParams();
   const [isUploading, setIsUploading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   useEffect(() => {
     // Authenticate anonymously if not already signed in
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(err => {
-        console.error("Anonymous authentication failed", err);
-      });
-    }
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthLoading(false);
+      } else {
+        signInAnonymously(auth).catch(err => {
+          console.error("Anonymous authentication failed", err);
+          setIsAuthLoading(false);
+        });
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,6 +60,15 @@ export function QuickCameraScanner() {
         <p className="text-gray-500 text-lg max-w-xs mx-auto">
           The image has been instantly sent to your desktop. You can close this tab.
         </p>
+      </div>
+    );
+  }
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
+        <div className="w-10 h-10 border-4 border-gray-600 border-t-white rounded-full animate-spin mb-4" />
+        <p className="text-gray-400 font-sans">Initializing secure session...</p>
       </div>
     );
   }
