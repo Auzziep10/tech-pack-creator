@@ -111,3 +111,35 @@ export async function recolorGarmentImage(imageUrl: string, colorHex: string): P
     throw err;
   }
 }
+
+export async function expandMeasurements(imageUrl: string, existingMeasurements: any[], baseSize: string, garmentType: string, unit: string): Promise<any[]> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/expand-measurements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        frontPart: { inlineData: { data: base64Data, mimeType } },
+        existingMeasurements,
+        baseSize,
+        garmentType,
+        unit
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data?.newMeasurements || [];
+
+  } catch (err) {
+    console.error("Expand Measurements Error:", err);
+    throw err;
+  }
+}

@@ -207,6 +207,7 @@ export function TechPackEditor() {
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
   const [isGrading, setIsGrading] = useState(false);
+  const [isExpandingPOMs, setIsExpandingPOMs] = useState(false);
 
   const LANGUAGES = ['English', 'Spanish', 'Mandarin', 'Vietnamese', 'Portuguese', 'Italian', 'French', 'Turkish', 'Bengali'];
   const [activeLanguage, setActiveLanguage] = useState('English');
@@ -442,6 +443,43 @@ export function TechPackEditor() {
       alert("Failed to recolor: " + err.message);
     } finally {
       setIsRecoloring(false);
+    }
+  };
+
+  const handleExpandMeasurements = async () => {
+    setIsExpandingPOMs(true);
+    try {
+      const { expandMeasurements } = await import('../services/nanobananaService');
+      const newPOMs = await expandMeasurements(
+        imageUrl,
+        displayData?.measurements || [],
+        displayData?.properties?.baseSize || 'M',
+        displayData?.properties?.category || packName || 'Garment',
+        globalUnit || 'in'
+      );
+      
+      if (newPOMs && newPOMs.length > 0) {
+        setData((prev: any) => {
+          const currentMs = prev.measurements || [];
+          // Avoid duplicate IDs or names (case-insensitive)
+          const filteredNew = newPOMs.filter((nm: any) => 
+            !currentMs.some((cm: any) => cm.id === nm.id || cm.point?.toLowerCase() === nm.point?.toLowerCase())
+          );
+          if (filteredNew.length === 0) {
+            alert("No additional measurements could be found that aren't already listed.");
+            return prev;
+          }
+          const updated = [...currentMs, ...filteredNew];
+          pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`);
+          return { ...prev, measurements: updated };
+        });
+      } else {
+        alert("Gemini did not return any new measurements for this garment type.");
+      }
+    } catch (e: any) {
+      alert("Failed to generate additional measurements: " + e.message);
+    } finally {
+      setIsExpandingPOMs(false);
     }
   };
 
@@ -737,9 +775,19 @@ export function TechPackEditor() {
         finalActivityLog,
         displayData.isTeamEditable ?? true
       );
-      if (id === 'draft') {
-        navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
-      }
+      
+      // Update browser history state to ensure page refreshes display the saved values
+      navigate(`/pack/${savedId}`, { 
+        replace: true, 
+        state: { 
+          techPack: sanitizedTechPackData, 
+          image: finalGalleryImages[0] || imageUrl, 
+          name: packName,
+          userId: displayData.userId || user.uid,
+          isTeamEditable: displayData.isTeamEditable ?? true,
+          activityLog: finalActivityLog
+        } 
+      });
     } catch (e: any) {
       console.error(e);
       alert("Failed to save tech pack: \n\n" + (e.message || String(e)));
@@ -1380,9 +1428,22 @@ export function TechPackEditor() {
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
-                  <button onClick={toggleUnit} className="print:hidden text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
-                    Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
-                  </button>
+                  <div className="flex items-center gap-2 print:hidden">
+                    {!checkReadonly() && (
+                      <Button 
+                        size="sm" 
+                        onClick={handleExpandMeasurements} 
+                        isLoading={isExpandingPOMs}
+                        disabled={isExpandingPOMs}
+                        className="text-[10px] font-sans font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5"
+                      >
+                        <Sparkles size={11} /> Generate More
+                      </Button>
+                    )}
+                    <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
+                      Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
+                    </button>
+                  </div>
                 </h3>
 
                 <div className="flex items-center justify-between mb-4 print:hidden">
