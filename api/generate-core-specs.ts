@@ -35,7 +35,7 @@ Analyze this product image of a "${garmentType || 'Garment'}".
 Your task is to estimate and generate the four core points of measure (POM) required for 3D fit matching in size ${baseSize || 'M'} (expressed in ${unit === 'in' ? 'inches' : 'centimeters'}):
 1. Chest Width / Bust Width (measured flat across the chest, 1 inch below armhole)
 2. Waist Width (measured flat across the narrowest part of the waist)
-3. Hem Width / Sweep Opening (measured flat across the bottom opening)
+3. Hem Width (measured flat across the bottom opening of the garment)
 4. Sleeve Length (measured from Center Back Neck or shoulder seam to cuff hem - choose appropriate based on garment style)
 
 CONSTRAINTS:
@@ -44,10 +44,10 @@ CONSTRAINTS:
 3. Return ONLY a valid JSON object in this exact format (no markdown wrappers, no backticks):
 {
   "coreMeasurements": [
-    { "id": "CH001", "point": "Chest Width", "description": "Flat chest width, 1 inch below armhole", "value": "string (estimated value)" },
-    { "id": "WS001", "point": "Waist Width", "description": "Flat waist width", "value": "string (estimated value)" },
-    { "id": "HM001", "point": "Hem Width", "description": "Flat bottom hem opening sweep", "value": "string (estimated value)" },
-    { "id": "SL001", "point": "Sleeve Length", "description": "Sleeve length from shoulder/CB to cuff", "value": "string (estimated value)" }
+    { "id": "CH001", "point": "Chest Width", "description": "Measure flat across the chest, 1 inch below the armhole seam from edge to edge.", "value": "string (estimated value)" },
+    { "id": "WS001", "point": "Waist Width", "description": "Measure flat across the narrowest part of the waist from edge to edge.", "value": "string (estimated value)" },
+    { "id": "HM001", "point": "Hem Width", "description": "Measure flat straight across the bottom opening of the garment from edge to edge.", "value": "string (estimated value)" },
+    { "id": "SL001", "point": "Sleeve Length", "description": "Measure from the collar seam/shoulder/CB neck down to the end of the sleeve cuff.", "value": "string (estimated value)" }
   ]
 }`;
 
