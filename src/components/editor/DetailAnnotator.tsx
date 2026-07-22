@@ -22,13 +22,23 @@ interface DetailAnnotatorProps {
   onRemoveImage?: (index: number) => void;
   onAddImageClick?: () => void;
   qrTriggerNode?: React.ReactNode;
+  isLocked?: boolean;
+  onToggleLock?: (locked: boolean) => void;
 }
 
-export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage, onAddImageClick, qrTriggerNode }: DetailAnnotatorProps) {
+export function DetailAnnotator({ 
+  images, 
+  details, 
+  onUpdateDetail, 
+  onRemoveImage, 
+  onAddImageClick, 
+  qrTriggerNode,
+  isLocked = false,
+  onToggleLock
+}: DetailAnnotatorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [isLocked, setIsLocked] = useState(false);
   const [draggedItem, setDraggedItem] = useState<{ id: string; part: 'badge' | 'lineEnd' } | null>(null);
 
   // Global pointer listeners for smooth dragging
@@ -119,7 +129,9 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
         {/* Lock / Unlock Toggle Button */}
         <button
           onClick={() => {
-            setIsLocked(!isLocked);
+            if (onToggleLock) {
+              onToggleLock(!isLocked);
+            }
             setActiveId(null); // Clear active placement state when locking
           }}
           className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 shrink-0 border ml-auto ${

@@ -1065,6 +1065,14 @@ export function TechPackEditor() {
     setData(newData);
   };
 
+  const updateDetailModuleVal = (modIndex: number, field: string, value: any) => {
+    if (checkReadonly()) return;
+    const newData = { ...data };
+    if (!newData.detailModules) newData.detailModules = ensureDetailModules();
+    newData.detailModules[modIndex][field] = value;
+    setData(newData);
+  };
+
   const updateDetailDesc = (modIndex: number, index: number, description: string) => {
     if (checkReadonly()) return;
     const newData = { ...data };
@@ -1782,6 +1790,8 @@ export function TechPackEditor() {
                                    images={images} 
                                    details={mod.details || []}
                                    onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
+                                   isLocked={!!mod.isLocked}
+                                   onToggleLock={(locked) => updateDetailModuleVal(mIdx, 'isLocked', locked)}
                                    onRemoveImage={(imgIdx) => {
                                       const newImages = [...images];
                                       newImages.splice(imgIdx, 1);
