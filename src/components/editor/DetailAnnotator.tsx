@@ -223,7 +223,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     return (
                       <div 
                         key={d.id}
-                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto z-20"
+                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto z-20 group"
                         style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
                       >
                         {d.iconUrl && (
@@ -237,7 +237,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                           }`}
                           onPointerDown={isActive && !isLocked ? (e) => handleStartDrag(e, d.id, 'badge') : undefined}
                         >
-                          <span className="group-hover:hidden">{d.id}</span>
+                          <span className={isActive && !isLocked ? "group-hover:hidden" : ""}>{d.id}</span>
                           {isActive && !isLocked && (
                             <button 
                               onClick={(e) => removeSticker(e, dIdx)} 
