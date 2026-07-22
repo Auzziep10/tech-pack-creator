@@ -10,6 +10,7 @@ export interface DetailItem {
   id: string; // e.g., "1", "2"
   description: string;
   position: Point | null; // null if not placed yet
+  lineEndPosition?: Point | null; // end of callout line
   imageIndex?: number;
   iconUrl?: string;
 }
@@ -27,6 +28,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [draggedItem, setDraggedItem] = useState<{ id: string; part: 'badge' | 'lineEnd' } | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!activeId || !containerRef.current) return;
@@ -44,7 +46,40 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
 
   const removeSticker = (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
-    onUpdateDetail(index, { ...details[index], position: null, imageIndex: undefined });
+    onUpdateDetail(index, { ...details[index], position: null, lineEndPosition: null, imageIndex: undefined });
+  };
+
+  const handleStartDrag = (e: React.PointerEvent, id: string, part: 'badge' | 'lineEnd') => {
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDraggedItem({ id, part });
+  };
+
+  const handleDragMove = (e: React.PointerEvent, id: string, part: 'badge' | 'lineEnd') => {
+    if (!draggedItem || draggedItem.id !== id || draggedItem.part !== part || !containerRef.current) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    
+    const index = details.findIndex(d => d.id === id);
+    if (index !== -1) {
+      const updated = { ...details[index] };
+      if (part === 'badge') {
+        updated.position = { x, y };
+      } else {
+        updated.lineEndPosition = { x, y };
+      }
+      onUpdateDetail(index, updated);
+    }
+  };
+
+  const handleDragEnd = (e: React.PointerEvent, id: string, part: 'badge' | 'lineEnd') => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setDraggedItem(null);
   };
 
   const activeImageUrl = images[activeImageIndex];
@@ -93,6 +128,62 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     draggable={false}
                     className={`max-w-full h-auto object-contain pointer-events-none rounded-lg shadow-sm ${images.length > 1 ? 'max-h-[700px] print:max-h-[3.2in]' : 'max-h-[700px] print:max-h-[5in]'}`}
                   />
+                  
+                  {/* SVG Lines Layer */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                    {details.map((d) => {
+                      const targetIdx = d.imageIndex ?? 0;
+                      if (!d.position || !d.lineEndPosition || targetIdx !== imgIdx) return null;
+                      return (
+                        <g key={`line-${d.id}`}>
+                          {/* White outline for high contrast */}
+                          <line 
+                            x1={`${d.position.x}%`} 
+                            y1={`${d.position.y}%`} 
+                            x2={`${d.lineEndPosition.x}%`} 
+                            y2={`${d.lineEndPosition.y}%`} 
+                            stroke="#ffffff" 
+                            strokeWidth="4.5"
+                            strokeLinecap="round"
+                          />
+                          {/* Red main line */}
+                          <line 
+                            x1={`${d.position.x}%`} 
+                            y1={`${d.position.y}%`} 
+                            x2={`${d.lineEndPosition.x}%`} 
+                            y2={`${d.lineEndPosition.y}%`} 
+                            stroke="#ef4444" 
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                          {/* Endpoint dot */}
+                          <circle 
+                            cx={`${d.lineEndPosition.x}%`} 
+                            cy={`${d.lineEndPosition.y}%`} 
+                            r="4" 
+                            fill="#ef4444" 
+                            stroke="#ffffff" 
+                            strokeWidth="1.5"
+                          />
+                          {/* Draggable endpoint handle (only screen, hidden in print, only on active image) */}
+                          {isActive && (
+                            <circle 
+                              cx={`${d.lineEndPosition.x}%`} 
+                              cy={`${d.lineEndPosition.y}%`} 
+                              r="10" 
+                              fill="transparent" 
+                              stroke="#ef4444" 
+                              strokeWidth="2"
+                              className="cursor-move pointer-events-auto hover:fill-red-500/20 active:fill-red-500/40 transition-colors print:hidden"
+                              onPointerDown={(e) => handleStartDrag(e, d.id, 'lineEnd')}
+                              onPointerMove={(e) => handleDragMove(e, d.id, 'lineEnd')}
+                              onPointerUp={(e) => handleDragEnd(e, d.id, 'lineEnd')}
+                            />
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
               
                   {/* Stickers Layer for this specific image */}
                   {details.map((d, dIdx) => {
@@ -101,7 +192,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     return (
                       <div 
                         key={d.id}
-                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer group pointer-events-auto z-10"
+                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto z-20"
                         style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
                       >
                         {d.iconUrl && (
@@ -109,12 +200,18 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                             <img src={d.iconUrl} alt="Seam icon" className="w-full h-full object-contain" />
                           </div>
                         )}
-                        <div className="flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md">
+                        <div 
+                          className="flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md cursor-move group select-none"
+                          onPointerDown={isActive ? (e) => handleStartDrag(e, d.id, 'badge') : undefined}
+                          onPointerMove={isActive ? (e) => handleDragMove(e, d.id, 'badge') : undefined}
+                          onPointerUp={isActive ? (e) => handleDragEnd(e, d.id, 'badge') : undefined}
+                        >
                           <span className="group-hover:hidden">{d.id}</span>
                           {isActive && (
                             <button 
                               onClick={(e) => removeSticker(e, dIdx)} 
-                              className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full cursor-pointer"
                             >
                               <X size={12} />
                             </button>

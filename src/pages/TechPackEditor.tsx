@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -1911,6 +1911,34 @@ export function TechPackEditor() {
                                    <div className="w-8 h-6 bg-white border border-gray-200 rounded shrink-0 p-0.5 shadow-sm">
                                       <img src={detail.iconUrl} className="w-full h-full object-contain pointer-events-none" />
                                    </div>
+                                )}
+                                {detail.position && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const hasLine = !!detail.lineEndPosition;
+                                      const updatedDetail = { ...detail };
+                                      if (hasLine) {
+                                        updatedDetail.lineEndPosition = null;
+                                      } else {
+                                        const basePos = detail.position || { x: 50, y: 50 };
+                                        updatedDetail.lineEndPosition = { 
+                                          x: Math.max(5, Math.min(95, basePos.x + 10)), 
+                                          y: Math.max(5, Math.min(95, basePos.y + 10)) 
+                                        };
+                                      }
+                                      updateDetailObj(mIdx, index, updatedDetail);
+                                    }}
+                                    className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-colors shrink-0 flex items-center gap-1 border ${
+                                      detail.lineEndPosition
+                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                    title={detail.lineEndPosition ? "Remove Callout Line" : "Add Callout Line"}
+                                  >
+                                    <TrendingUp size={12} className={detail.lineEndPosition ? "text-red-500" : "text-gray-400"} />
+                                    {detail.lineEndPosition ? "Callout" : "Line"}
+                                  </button>
                                 )}
                               </div>
                               <button 
