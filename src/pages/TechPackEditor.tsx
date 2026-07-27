@@ -901,7 +901,7 @@ export function TechPackEditor() {
         techPackDataToSave.detailImage = await uploadBase64Image(techPackDataToSave.detailImage, user.uid);
       }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
-      techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
+      techPackDataToSave.images.original = imageUrl;
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       if (techPackDataToSave.properties?.dominantColorways?.length) {
