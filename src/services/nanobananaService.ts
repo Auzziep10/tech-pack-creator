@@ -201,3 +201,29 @@ export async function clarifyMeasurements(measurements: any[], garmentType: stri
     throw err;
   }
 }
+
+export async function eraseBrandingRegion(imageUrl: string, maskBase64: string): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/erase-branding', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ base64Data, mimeType, maskBase64, maskMimeType: 'image/png' })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data.data;
+
+  } catch (err) {
+    console.error("Erase Branding Error:", err);
+    throw err;
+  }
+}

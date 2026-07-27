@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { motion, useMotionValue } from 'framer-motion';
+import { eraseBrandingRegion } from '../../services/nanobananaService';
 
 interface Point {
   x: number;
@@ -21,6 +23,7 @@ interface GarmentAnnotatorProps {
   isVectorizing?: boolean;
   onGenerateMannequin?: (gender: string, garmentType: string, viewPoint: string) => Promise<string>;
   onSaveMannequinImage?: (imgUrl: string) => Promise<void>;
+  onSaveErasedImage?: (imgUrl: string) => Promise<void>;
 }
 
 export function GarmentAnnotator({ 
@@ -29,7 +32,8 @@ export function GarmentAnnotator({
   onVectorize, 
   isVectorizing,
   onGenerateMannequin,
-  onSaveMannequinImage
+  onSaveMannequinImage,
+  onSaveErasedImage
 }: GarmentAnnotatorProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -49,6 +53,16 @@ export function GarmentAnnotator({
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
   const [mannequinError, setMannequinError] = useState('');
 
+  // Branding Eraser States
+  const [isEraserMode, setIsEraserMode] = useState(false);
+  const [isErasing, setIsErasing] = useState(false);
+  const [isSavingErased, setIsSavingErased] = useState(false);
+  const [erasedResultImage, setErasedResultImage] = useState<string | null>(null);
+  const [eraserWidth, setEraserWidth] = useState(128);
+  const [eraserHeight, setEraserHeight] = useState(64);
+  const eraserX = useMotionValue(0);
+  const eraserY = useMotionValue(0);
+
   const handleGenerateMannequin = async () => {
     if (!onGenerateMannequin) return;
     setIsGeneratingMannequin(true);
@@ -63,6 +77,65 @@ export function GarmentAnnotator({
       setMannequinError(err.message || 'Failed to generate floating garment. Please try again.');
     } finally {
       setIsGeneratingMannequin(false);
+    }
+  };
+
+  const handleRunEraser = async () => {
+    if (!containerRef.current) return;
+    const bounds = containerRef.current.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) {
+      alert("Garment container not ready. Please try again.");
+      return;
+    }
+    setIsErasing(true);
+    try {
+      const canvas = document.createElement('canvas');
+      const garmentImg = new Image();
+      garmentImg.crossOrigin = "anonymous";
+      garmentImg.src = erasedResultImage || imageUrl;
+
+      await new Promise((resolve, reject) => {
+        garmentImg.onload = resolve;
+        garmentImg.onerror = reject;
+      });
+
+      canvas.width = garmentImg.naturalWidth;
+      canvas.height = garmentImg.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not get canvas context");
+
+      // Draw white background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Determine scale factor
+      const scale = Math.max(canvas.width / bounds.width, canvas.height / bounds.height);
+
+      // Eraser position in container space relative to center
+      const centerX = canvas.width / 2 + eraserX.get() * scale;
+      const centerY = canvas.height / 2 + eraserY.get() * scale;
+
+      // Draw black rectangle
+      const drawW = eraserWidth * scale;
+      const drawH = eraserHeight * scale;
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(centerX - drawW / 2, centerY - drawH / 2, drawW, drawH);
+
+      const maskBase64 = canvas.toDataURL('image/png');
+
+      // Call nanobanana service to erase branding region
+      const erased = await eraseBrandingRegion(erasedResultImage || imageUrl, maskBase64);
+      
+      setErasedResultImage(erased);
+      setIsEraserMode(false);
+      eraserX.set(0);
+      eraserY.set(0);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to erase branding. Please try again.');
+    } finally {
+      setIsErasing(false);
     }
   };
 
@@ -143,7 +216,10 @@ export function GarmentAnnotator({
          </select>
          
          <button 
-           onClick={() => setIsDrawingMode(!isDrawingMode)}
+           onClick={() => {
+             setIsDrawingMode(!isDrawingMode);
+             setIsEraserMode(false);
+           }}
            disabled={!selectedMeasurement}
            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
              !selectedMeasurement ? 'opacity-50 cursor-not-allowed bg-gray-100 text-gray-400' :
@@ -188,9 +264,68 @@ export function GarmentAnnotator({
               Invisible Mannequin
             </Button>
           )}
+
+          {/* Branding Eraser / Save / Reset Controls in Toolbar */}
+          {!erasedResultImage && (
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => {
+                setIsEraserMode(!isEraserMode);
+                setIsDrawingMode(false);
+                setSelectedMeasurement('');
+              }}
+              className={`gap-2 border shadow-sm mx-2 transition-all ${
+                isEraserMode 
+                  ? 'bg-red-600 border-red-600 text-white hover:bg-red-700 hover:border-red-700' 
+                  : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+              }`}
+            >
+              <Eraser size={14} />
+              {isEraserMode ? 'Eraser Active' : 'Branding Eraser'}
+            </Button>
+          )}
+
+          {erasedResultImage && onSaveErasedImage && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                try {
+                  setIsSavingErased(true);
+                  await onSaveErasedImage(erasedResultImage);
+                  setErasedResultImage(null);
+                } catch (err: any) {
+                  alert(err.message || 'Failed to save erased image.');
+                } finally {
+                  setIsSavingErased(false);
+                }
+              }}
+              isLoading={isSavingErased}
+              className="gap-2 bg-emerald-600 border border-emerald-600 hover:bg-emerald-700 text-white shadow-sm mx-2 transition-all font-bold"
+            >
+              <CheckCircle2 size={14} />
+              Save Erased Image
+            </Button>
+          )}
+
+          {erasedResultImage && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setErasedResultImage(null)}
+              className="gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200 shadow-sm mx-2 transition-all"
+            >
+              <X size={14} />
+              Reset Image
+            </Button>
+          )}
          
          <button 
-           onClick={() => setIsFullscreen(false)}
+           onClick={() => {
+             setIsFullscreen(false);
+             setIsEraserMode(false);
+           }}
            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors ml-auto"
            title="Exit Fullscreen"
          >
@@ -218,7 +353,7 @@ export function GarmentAnnotator({
             className={`relative flex max-w-full max-h-full pointer-events-auto ${isDrawingMode ? 'cursor-crosshair' : ''}`}
           >
             <img 
-              src={imageUrl} 
+              src={erasedResultImage || imageUrl} 
               alt="Garment Artboard" 
               draggable={false}
               className={`max-w-full max-h-full object-contain pointer-events-none transition-all duration-700 ${
@@ -274,6 +409,40 @@ export function GarmentAnnotator({
             />
             )}
           </svg>
+
+          {/* Draggable Eraser Bounding Box Overlay */}
+          {!erasedResultImage && isEraserMode && (
+            <motion.div
+              drag
+              dragMomentum={false}
+              dragElastic={0}
+              dragConstraints={containerRef}
+              style={{ 
+                x: eraserX, 
+                y: eraserY,
+                width: eraserWidth,
+                height: eraserHeight,
+                marginLeft: -eraserWidth / 2,
+                marginTop: -eraserHeight / 2
+              }}
+              className="absolute top-1/2 left-1/2 flex items-center justify-center cursor-move z-30"
+            >
+              <div className="w-full h-full border-2 border-dashed border-red-500 bg-red-500/20 relative shadow-lg" />
+            </motion.div>
+          )}
+
+          {/* Eraser Loading Overlay */}
+          {isErasing && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex flex-col items-center justify-center p-12 text-center z-50">
+              <div className="w-16 h-16 border-4 border-zinc-900 border-t-transparent rounded-full animate-spin mb-6"></div>
+              <h3 className="font-serif text-2xl mb-2 text-gray-900">
+                Erasing Branding
+              </h3>
+              <p className="text-gray-500 text-sm">
+                Analyzing the region and seamlessly blending the fabric texture...
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -288,6 +457,72 @@ export function GarmentAnnotator({
              </Button>
           </div>
         )}
+
+      {/* Eraser Control Panel below Canvas */}
+      {!erasedResultImage && isEraserMode && (
+        <div className="w-full bg-red-50/40 p-5 rounded-2xl border border-red-100 space-y-4 animate-in slide-in-from-bottom duration-200 shrink-0 mx-auto max-w-5xl">
+          <div className="space-y-3">
+            <div>
+              <h4 className="text-xs font-bold text-red-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Eraser size={14} className="text-red-600 animate-pulse" /> Branding Eraser
+              </h4>
+              <p className="text-[11px] text-red-700/80">Drag the red box over the logo/branding area you want to remove, adjust the size, then click Confirm.</p>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button
+                type="button"
+                onClick={handleRunEraser}
+                disabled={isErasing}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                {isErasing ? 'Erasing...' : 'Confirm Erase'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEraserMode(false);
+                  eraserX.set(0);
+                  eraserY.set(0);
+                }}
+                className="flex-1 bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-zinc-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-red-100/60">
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] uppercase font-bold tracking-widest text-red-800">
+                <span>Box Width</span>
+                <span>{eraserWidth}px</span>
+              </div>
+              <input
+                type="range"
+                min="32"
+                max="256"
+                value={eraserWidth}
+                onChange={(e) => setEraserWidth(parseInt(e.target.value))}
+                className="w-full accent-red-600 cursor-pointer"
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] uppercase font-bold tracking-widest text-red-800">
+                <span>Box Height</span>
+                <span>{eraserHeight}px</span>
+              </div>
+              <input
+                type="range"
+                min="16"
+                max="256"
+                value={eraserHeight}
+                onChange={(e) => setEraserHeight(parseInt(e.target.value))}
+                className="w-full accent-red-600 cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
       </div>
       
       {showMannequinModal && (

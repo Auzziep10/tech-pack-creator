@@ -409,6 +409,20 @@ export function TechPackEditor() {
     pushLog(`Created Invisible Mannequin mockup successfully`);
   };
 
+  const handleSaveErasedImage = async (base64Image: string) => {
+    if (!user) {
+      throw new Error("You must be logged in to save images.");
+    }
+    const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
+    setGalleryImages(prev => {
+      const newGallery = [uploadedUrl, ...prev];
+      setData((d: any) => ({ ...d, gallery: newGallery }));
+      return newGallery;
+    });
+    setImageUrl(uploadedUrl);
+    pushLog(`Erased garment logo/branding successfully`);
+  };
+
   const handleRecolorGarment = async (baseImage: string, hexColor: string): Promise<string> => {
     const { recolorGarmentImage } = await import('../services/nanobananaService');
     return await recolorGarmentImage(baseImage, hexColor);
@@ -1381,6 +1395,7 @@ export function TechPackEditor() {
                         isVectorizing={isVectorizing}
                         onGenerateMannequin={handleGenerateMannequin}
                         onSaveMannequinImage={handleSaveMannequinImage}
+                        onSaveErasedImage={handleSaveErasedImage}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
