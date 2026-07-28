@@ -132,6 +132,10 @@ export function GarmentAnnotator({
       setIsEraserMode(false);
       eraserX.set(0);
       eraserY.set(0);
+
+      if (onSaveErasedImage) {
+        await onSaveErasedImage(erased);
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Failed to erase branding. Please try again.');
