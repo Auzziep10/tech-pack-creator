@@ -400,13 +400,45 @@ export function TechPackEditor() {
       throw new Error("You must be logged in to save images.");
     }
     const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
-    setGalleryImages(prev => {
-      const newGallery = [uploadedUrl, ...prev];
-      setData((d: any) => ({ ...d, gallery: newGallery }));
-      return newGallery;
-    });
+    const newGallery = [uploadedUrl, ...galleryImages.filter(img => img !== uploadedUrl)];
+    setGalleryImages(newGallery);
     setImageUrl(uploadedUrl);
-    pushLog(`Created Invisible Mannequin mockup successfully`);
+
+    const updatedData = {
+      ...data,
+      gallery: newGallery,
+      images: {
+        ...(data.images || {}),
+        original: uploadedUrl
+      }
+    };
+    setData(updatedData);
+
+    if (id && id !== 'draft') {
+      try {
+        const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+        delete sanitizedData.userId;
+        delete sanitizedData.isTeamEditable;
+        delete sanitizedData.activityLog;
+
+        await saveTechPack(
+          user.uid,
+          profile?.companyId || user.uid,
+          packName,
+          uploadedUrl,
+          sanitizedData,
+          user.email || 'Unknown',
+          id,
+          displayData.activityLog || [],
+          displayData.isTeamEditable ?? true
+        );
+        pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`);
+      } catch (err) {
+        console.error("Auto-save after mannequin failed:", err);
+      }
+    } else {
+      pushLog(`Created Invisible Mannequin mockup successfully`);
+    }
   };
 
   const handleSaveErasedImage = async (base64Image: string) => {
@@ -414,13 +446,45 @@ export function TechPackEditor() {
       throw new Error("You must be logged in to save images.");
     }
     const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
-    setGalleryImages(prev => {
-      const newGallery = [uploadedUrl, ...prev];
-      setData((d: any) => ({ ...d, gallery: newGallery }));
-      return newGallery;
-    });
+    const newGallery = [uploadedUrl, ...galleryImages.filter(img => img !== uploadedUrl)];
+    setGalleryImages(newGallery);
     setImageUrl(uploadedUrl);
-    pushLog(`Erased garment logo/branding successfully`);
+
+    const updatedData = {
+      ...data,
+      gallery: newGallery,
+      images: {
+        ...(data.images || {}),
+        original: uploadedUrl
+      }
+    };
+    setData(updatedData);
+
+    if (id && id !== 'draft') {
+      try {
+        const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+        delete sanitizedData.userId;
+        delete sanitizedData.isTeamEditable;
+        delete sanitizedData.activityLog;
+
+        await saveTechPack(
+          user.uid,
+          profile?.companyId || user.uid,
+          packName,
+          uploadedUrl,
+          sanitizedData,
+          user.email || 'Unknown',
+          id,
+          displayData.activityLog || [],
+          displayData.isTeamEditable ?? true
+        );
+        pushLog(`Erased garment logo/branding & saved tech pack successfully`);
+      } catch (err) {
+        console.error("Auto-save after erasing failed:", err);
+      }
+    } else {
+      pushLog(`Erased garment logo/branding successfully`);
+    }
   };
 
   const handleRecolorGarment = async (baseImage: string, hexColor: string): Promise<string> => {
@@ -926,7 +990,7 @@ export function TechPackEditor() {
         user.uid, 
         profile?.companyId || user.uid, 
         packName, 
-        finalGalleryImages[0] || imageUrl, 
+        imageUrl || finalGalleryImages[0], 
         sanitizedTechPackData, 
         user.email || 'Unknown',
         existingId,
@@ -939,7 +1003,7 @@ export function TechPackEditor() {
         replace: true, 
         state: { 
           techPack: sanitizedTechPackData, 
-          image: finalGalleryImages[0] || imageUrl, 
+          image: imageUrl || finalGalleryImages[0], 
           name: packName,
           userId: displayData.userId || user.uid,
           isTeamEditable: displayData.isTeamEditable ?? true,
