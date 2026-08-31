@@ -1350,34 +1350,42 @@ export function TechPackEditor() {
                {displayData?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
             </Button>
           )}
-          {!canEdit && (
-            <div className="bg-orange-50 border border-orange-200 text-orange-600 px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-2 shrink-0">
-               <Lock size={14} /> View Only
+
+          {/* Save Button */}
+          <Button 
+            onClick={handleSave} 
+            disabled={isTechPackLocked || isSaving} 
+            isLoading={isSaving} 
+            variant="secondary" 
+            className={`px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm ${
+              isTechPackLocked 
+                ? 'opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border border-gray-200' 
+                : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 font-semibold">
+              <Save size={15} />
+              <span>Save</span>
             </div>
-          )}
-          {canEdit && (
-            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm">
-              <div className="flex items-center gap-1.5 font-semibold">
-                <Save size={15} />
-                <span>Save</span>
-              </div>
-            </Button>
-          )}
+          </Button>
+
+          {/* Lock / Unlock Toggle Button */}
           <Button 
             onClick={toggleLock} 
             variant="secondary" 
             className={`px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm transition-all border ${
               isTechPackLocked 
-                ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 font-bold shadow-sm' 
-                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                ? 'bg-black text-white hover:bg-gray-800 border-black font-bold shadow-sm' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200 font-semibold'
             }`}
             title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
           >
             <div className="flex items-center gap-1.5 font-semibold">
-              {isTechPackLocked ? <Lock size={15} /> : <Unlock size={15} />}
+              {isTechPackLocked ? <Lock size={15} className="text-white" /> : <Unlock size={15} className="text-gray-500" />}
               <span>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
             </div>
           </Button>
+
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
@@ -1396,17 +1404,17 @@ export function TechPackEditor() {
       </div>
 
       {isTechPackLocked && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 print:hidden">
+        <div className="bg-gray-900 border border-gray-800 text-white px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 print:hidden">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
-            <Lock size={16} className="text-amber-600 shrink-0" />
+            <Lock size={16} className="text-gray-300 shrink-0" />
             <span>Tech Pack is Locked — All specifications, measurements, and images are protected from updates</span>
           </div>
           <Button 
             size="sm" 
             onClick={toggleLock}
-            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl py-1 px-3 shrink-0"
+            className="bg-white hover:bg-gray-100 text-black text-xs font-bold rounded-xl py-1 px-3 shrink-0 border border-white"
           >
-            <Unlock size={14} className="mr-1 inline" /> Unlock Tech Pack
+            <Unlock size={14} className="mr-1 inline text-black" /> Unlock Tech Pack
           </Button>
         </div>
       )}
