@@ -31,8 +31,8 @@ export default async function handler(req: any, res: any) {
     const FIT_DESCRIPTIONS: Record<string, string> = {
       Fitted: "FITTED SILHOUETTE: Form-fitting style hugging the mannequin body contours snugly with minimal excess fabric, defined waist/torso structure, and clean form-fitting lines.",
       Standard: "STANDARD SILHOUETTE: Classic regular fit with a natural, comfortable drape around the mannequin body without being tight or oversized.",
-      Loose: "LOOSE SILHOUETTE: Relaxed, roomy fit with extra fabric volume, soft comfortable drape, wider body space, and casual ease around the mannequin torso.",
-      Boxy: "BOXY SILHOUETTE: Structured, square silhouette with a straight drop from the shoulders down to a wide, flat hem, featuring a broader chest and distinct oversized boxy cut."
+      Loose: "LOOSE SILHOUETTE: Relaxed, comfortable fit with soft fluid drape that naturally follows body contours. Slightly easy through chest and torso while maintaining a gentle tailored shape—NOT stiff, square, wide, or boxy.",
+      Boxy: "BOXY SILHOUETTE: Distinctly wide, square silhouette with structured straight-down drop from the shoulders to a broad flat hem, featuring an oversized square boxy cut."
     };
 
     const activeFitInstruction = fitStyle && FIT_DESCRIPTIONS[fitStyle] ? FIT_DESCRIPTIONS[fitStyle] : FIT_DESCRIPTIONS['Standard'];
