@@ -43,8 +43,8 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  // Aspect ratio state: 'free' | '4:5' | '1:1' | '3:4' | 'full'
-  const [aspectMode, setAspectMode] = useState<'free' | '4:5' | '1:1' | '3:4' | 'full'>('free');
+  // Aspect ratio state: default to '4:5' vertical for perfect Tech Pack card fitting!
+  const [aspectMode, setAspectMode] = useState<'free' | '4:5' | '1:1' | '3:4' | 'full'>('4:5');
 
   // Crop box percentage values relative to displayed image: 0 to 100
   const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number }>({
@@ -72,7 +72,30 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     naturalSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
-    emitPixelCrop(cropBox);
+    
+    // Automatically apply 4:5 vertical ratio crop box on load to fit card perfectly
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    const targetRatio = 4 / 5;
+    let newBox = { x: 5, y: 5, w: 90, h: 90 };
+
+    const imgRatio = (nw * 0.9) / (nh * 0.9);
+    if (imgRatio > targetRatio) {
+      const targetW = ((nh * 0.9 * targetRatio) / nw) * 100;
+      newBox.x = Math.max(0, (100 - targetW) / 2);
+      newBox.w = targetW;
+      newBox.y = 5;
+      newBox.h = 90;
+    } else {
+      const targetH = (((nw * 0.9) / targetRatio) / nh) * 100;
+      newBox.y = Math.max(0, (100 - targetH) / 2);
+      newBox.h = targetH;
+      newBox.x = 5;
+      newBox.w = 90;
+    }
+
+    setCropBox(newBox);
+    emitPixelCrop(newBox);
   };
 
   // Adjust crop box when aspect ratio preset button is clicked

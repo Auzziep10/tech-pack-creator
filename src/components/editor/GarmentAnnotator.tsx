@@ -4,6 +4,53 @@ import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2,
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
+import { FreeCropper } from '../../pages/MobileScanner';
+
+// Helper function to extract the visually cropped portion of the image into a high-res 2K JPEG
+const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> => {
+  const image = new Image();
+  image.crossOrigin = 'Anonymous';
+  image.src = imageSrc;
+  await new Promise(resolve => image.onload = resolve);
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx || !pixelCrop || !pixelCrop.width || !pixelCrop.height) return imageSrc;
+
+  let targetW = pixelCrop.width;
+  let targetH = pixelCrop.height;
+  const maxDim = 2048;
+  if (targetW > maxDim || targetH > maxDim) {
+    if (targetW > targetH) {
+      targetH = Math.round((targetH * maxDim) / targetW);
+      targetW = maxDim;
+    } else {
+      targetW = Math.round((targetW * maxDim) / targetH);
+      targetH = maxDim;
+    }
+  }
+
+  canvas.width = targetW;
+  canvas.height = targetH;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, targetW, targetH);
+
+  ctx.drawImage(
+    image,
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    targetW,
+    targetH
+  );
+
+  return canvas.toDataURL('image/jpeg', 0.92);
+};
 
 interface Point {
   x: number;
@@ -55,6 +102,11 @@ export function GarmentAnnotator({
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
   const [mannequinError, setMannequinError] = useState('');
   const [isTrimming, setIsTrimming] = useState(false);
+
+  // Manual Crop States
+  const [showManualCropModal, setShowManualCropModal] = useState(false);
+  const [manualCropPixels, setManualCropPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [isSavingManualCrop, setIsSavingManualCrop] = useState(false);
 
   // Branding Eraser States
   const [isEraserMode, setIsEraserMode] = useState(false);
@@ -300,7 +352,18 @@ export function GarmentAnnotator({
               title="Crop out excess white background to fill full height"
             >
               <Crop size={14} />
-              Auto-Crop Full Size
+              Auto-Crop
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowManualCropModal(true)}
+              className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+              title="Manually adjust crop handles on photo"
+            >
+              <Crop size={14} />
+              Crop Photo
             </Button>
 
             {/* Branding Eraser / Save / Reset Controls in Toolbar */}
@@ -564,17 +627,72 @@ export function GarmentAnnotator({
              <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleAutoTrimCurrent();
+                  setShowManualCropModal(true);
                 }}
-                disabled={isTrimming}
-                className="px-3.5 py-2 bg-white text-black font-bold rounded-xl shadow-xl hover:bg-gray-100 transition-all text-xs flex items-center gap-1.5 border border-gray-200"
-                title="Auto-crop excess white background to fill full size"
+                className="px-3.5 py-2 bg-black text-white font-bold rounded-xl shadow-xl hover:bg-gray-800 transition-all text-xs flex items-center gap-1.5 border border-black"
+                title="Crop photo to fit full size"
              >
-                <Crop size={14} className={isTrimming ? 'animate-spin' : ''} />
-                {isTrimming ? 'Cropping...' : 'Auto-Crop Full Size'}
+                <Crop size={14} />
+                Crop Photo
              </button>
           </div>
         )}
+
+      {/* Manual Crop Modal */}
+      {showManualCropModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[250] flex flex-col p-4 sm:p-8" onClick={() => setShowManualCropModal(false)}>
+          <div className="bg-black border border-white/20 rounded-3xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col h-full max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-black/90">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-white/50 mb-0.5">Crop Tool</p>
+                <h3 className="font-serif text-xl sm:text-2xl text-white font-bold">Crop & Frame Garment</h3>
+              </div>
+              <button onClick={() => setShowManualCropModal(false)} className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 relative bg-black min-h-0 w-full">
+              <FreeCropper
+                imageSrc={erasedResultImage || imageUrl}
+                onCropComplete={(pixels) => setManualCropPixels(pixels)}
+              />
+            </div>
+
+            <div className="p-4 sm:p-6 border-t border-white/10 bg-black/90 flex items-center justify-end gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowManualCropModal(false)}
+                className="px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <Button
+                onClick={async () => {
+                  if (!manualCropPixels) return;
+                  setIsSavingManualCrop(true);
+                  try {
+                    const cropped = await getCroppedImg(erasedResultImage || imageUrl, manualCropPixels);
+                    setErasedResultImage(cropped);
+                    if (onSaveErasedImage) {
+                      await onSaveErasedImage(cropped);
+                    }
+                    setShowManualCropModal(false);
+                  } catch (err: any) {
+                    alert(err?.message || "Failed to crop image.");
+                  } finally {
+                    setIsSavingManualCrop(false);
+                  }
+                }}
+                isLoading={isSavingManualCrop}
+                className="bg-white text-black hover:bg-gray-200 px-6 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors shadow-lg"
+              >
+                Apply & Save Crop
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showMannequinModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowMannequinModal(false)}>

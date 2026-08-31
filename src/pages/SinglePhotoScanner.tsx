@@ -7,7 +7,7 @@ import { auth, db } from '../services/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { FreeCropper } from './MobileScanner';
 
-// Helper function to extract the visually cropped portion of the image into a neat JPEG
+// Helper function to extract the visually cropped portion of the image into a high-res 2K JPEG
 const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> => {
   const image = new Image();
   image.src = imageSrc;
@@ -18,8 +18,25 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number
   
   if (!ctx || !pixelCrop || !pixelCrop.width || !pixelCrop.height) return imageSrc;
 
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // Scale crops up to crisp 2K resolution (up to 2048px) matching original scans
+  let targetW = pixelCrop.width;
+  let targetH = pixelCrop.height;
+  const maxDim = 2048;
+  if (targetW > maxDim || targetH > maxDim) {
+    if (targetW > targetH) {
+      targetH = Math.round((targetH * maxDim) / targetW);
+      targetW = maxDim;
+    } else {
+      targetW = Math.round((targetW * maxDim) / targetH);
+      targetH = maxDim;
+    }
+  }
+
+  canvas.width = targetW;
+  canvas.height = targetH;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, targetW, targetH);
 
   ctx.drawImage(
     image,
@@ -29,11 +46,11 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height
+    targetW,
+    targetH
   );
 
-  return canvas.toDataURL('image/jpeg', 0.95);
+  return canvas.toDataURL('image/jpeg', 0.92);
 };
 
 export function SinglePhotoScanner() {
