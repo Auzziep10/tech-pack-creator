@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -63,6 +63,11 @@ export function GarmentAnnotator({
   const [eraserHeight, setEraserHeight] = useState(64);
   const eraserX = useMotionValue(0);
   const eraserY = useMotionValue(0);
+
+  // Reset local erased image override whenever the active gallery image changes
+  useEffect(() => {
+    setErasedResultImage(null);
+  }, [imageUrl]);
 
   const handleGenerateMannequin = async () => {
     if (!onGenerateMannequin) return;
