@@ -1,10 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers, RotateCw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { FreeCropper } from '../../pages/MobileScanner';
+
+// Helper function to rotate an image 90 degrees clockwise or counter-clockwise
+const rotateImage90Degrees = async (imageSrc: string, direction: 'cw' | 'ccw' = 'cw'): Promise<string> => {
+  const image = new Image();
+  image.crossOrigin = 'Anonymous';
+  image.src = imageSrc;
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = reject;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalHeight;
+  canvas.height = image.naturalWidth;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return imageSrc;
+
+  if (direction === 'cw') {
+    ctx.translate(canvas.width, 0);
+    ctx.rotate((90 * Math.PI) / 180);
+  } else {
+    ctx.translate(0, canvas.height);
+    ctx.rotate((-90 * Math.PI) / 180);
+  }
+
+  ctx.drawImage(image, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.92);
+};
 
 // Helper function to extract the visually cropped portion of the image into a high-res 2K JPEG
 const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> => {
@@ -117,6 +145,7 @@ export function GarmentAnnotator({
   const [flatlayError, setFlatlayError] = useState('');
 
   const [isTrimming, setIsTrimming] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
 
   // Manual Crop States
   const [showManualCropModal, setShowManualCropModal] = useState(false);
@@ -137,6 +166,23 @@ export function GarmentAnnotator({
   useEffect(() => {
     setErasedResultImage(null);
   }, [imageUrl]);
+
+  const handleRotateImage = async (direction: 'cw' | 'ccw' = 'cw') => {
+    setIsRotating(true);
+    try {
+      const current = erasedResultImage || imageUrl;
+      const rotated = await rotateImage90Degrees(current, direction);
+      setErasedResultImage(rotated);
+      if (onSaveErasedImage) {
+        await onSaveErasedImage(rotated);
+      }
+    } catch (err: any) {
+      console.error("Rotate error:", err);
+      alert(err?.message || "Failed to rotate image.");
+    } finally {
+      setIsRotating(false);
+    }
+  };
 
   const handleAutoTrimCurrent = async () => {
     setIsTrimming(true);
@@ -411,6 +457,19 @@ export function GarmentAnnotator({
               Crop Photo
             </Button>
 
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleRotateImage('cw')}
+              isLoading={isRotating}
+              disabled={isRotating}
+              className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+              title="Rotate image 90° clockwise"
+            >
+              <RotateCw size={14} />
+              Rotate 90°
+            </Button>
+
             {/* Branding Eraser / Save / Reset Controls in Toolbar */}
             {!erasedResultImage && (
               <Button 
@@ -669,6 +728,18 @@ export function GarmentAnnotator({
                 <Maximize size={16} />
                 Edit & Annotate Image
              </Button>
+             <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRotateImage('cw');
+                }}
+                disabled={isRotating}
+                className="px-3.5 py-2 bg-black text-white font-bold rounded-xl shadow-xl hover:bg-gray-800 transition-all text-xs flex items-center gap-1.5 border border-black disabled:opacity-50"
+                title="Rotate image 90° clockwise"
+             >
+                <RotateCw size={14} />
+                Rotate 90°
+             </button>
              <button
                 onClick={(e) => {
                   e.stopPropagation();
