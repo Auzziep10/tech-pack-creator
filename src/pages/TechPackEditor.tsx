@@ -202,6 +202,8 @@ export function TechPackEditor() {
   const [recolorName, setRecolorName] = useState('Cobalt Blue');
   const [isRecoloring, setIsRecoloring] = useState(false);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
+  const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
+  const [galleryScanSessionId, setGalleryScanSessionId] = useState<string | null>(null);
   const annotatorRef = useRef<HTMLDivElement>(null);
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
@@ -697,6 +699,19 @@ export function TechPackEditor() {
           const docData = change.doc.data();
           const docId = change.doc.id;
           
+          if (docData.imageUrl && docId.startsWith(`${user.uid}_${id}_gallery_`)) {
+             const newImgUrl = docData.imageUrl;
+             setGalleryImages((prev) => {
+                if (prev.includes(newImgUrl)) return prev;
+                const newGallery = [...prev, newImgUrl];
+                setData((d: any) => ({ ...d, gallery: newGallery }));
+                return newGallery;
+             });
+             setImageUrl((prev) => prev || newImgUrl);
+             setShowAddPhotoModal(false);
+             deleteDoc(doc(db, 'companionUploads', docId)).catch(() => {});
+          }
+
           if (docData.imageUrl && docId.startsWith(`${user.uid}_${id}_detail_`)) {
              const mIdxStr = docId.split('_detail_')[1];
              const mIdx = parseInt(mIdxStr, 10);
@@ -1598,40 +1613,36 @@ export function TechPackEditor() {
                            </button>
                        </div>
                      ))}
-                     <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
-                        <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
-                           if (e.target.files) {
-                              const files = Array.from(e.target.files);
-                              const promises = files.map(file => compressImageFile(file, 1600));
-                              const newImages = await Promise.all(promises);
-                              const newGallery = [...galleryImages, ...newImages];
-                              setGalleryImages(newGallery);
-                              if (!imageUrl && newImages.length > 0) {
-                                setImageUrl(newImages[0]);
-                              }
-                           }
-                        }} />
-                     </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                          setGalleryScanSessionId(session);
+                          setShowAddPhotoModal(true);
+                        }}
+                        className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
+                        title="Add Image or Scan with Phone"
+                      >
+                         <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
+                      </button>
                   </div>
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
-                  <label className="cursor-pointer group flex flex-col items-center gap-4">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                      setGalleryScanSessionId(session);
+                      setShowAddPhotoModal(true);
+                    }}
+                    className="cursor-pointer group flex flex-col items-center gap-4"
+                  >
                      <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
                         <span className="text-2xl leading-none font-bold">+</span>
                      </div>
                      <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
-                     <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
-                         if (e.target.files && e.target.files.length > 0) {
-                            const files = Array.from(e.target.files);
-                            const promises = files.map(file => compressImageFile(file, 1600));
-                            const newImages = await Promise.all(promises);
-                            setGalleryImages(newImages);
-                            setImageUrl(newImages[0]);
-                         }
-                      }} />
-                  </label>
+                  </button>
                 </div>
               )}
                     </div>
@@ -2558,8 +2569,70 @@ export function TechPackEditor() {
                      Apply to Tech Pack
                  </button>
              )}
+           </div>
+        </Modal>
+
+        {/* Add Photo Modal (Computer Upload or Phone Camera QR) */}
+        <Modal
+          isOpen={showAddPhotoModal}
+          onClose={() => setShowAddPhotoModal(false)}
+          title="Add Garment Photo"
+        >
+          <div className="space-y-6 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Option 1: Computer Upload */}
+              <label className="p-6 border-2 border-gray-200 hover:border-black rounded-2xl cursor-pointer flex flex-col items-center justify-center text-center transition-all group bg-gray-50/50 hover:bg-gray-50">
+                <Upload size={36} className="text-gray-400 group-hover:text-black mb-3 transition-colors" />
+                <span className="font-bold text-gray-900 text-sm">Upload from Computer</span>
+                <span className="text-xs text-gray-500 mt-1">Select files from your device</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      const files = Array.from(e.target.files);
+                      const promises = files.map(file => compressImageFile(file, 1600));
+                      const newImages = await Promise.all(promises);
+                      const newGallery = [...galleryImages, ...newImages];
+                      setGalleryImages(newGallery);
+                      setData((d: any) => ({ ...d, gallery: newGallery }));
+                      if (!imageUrl && newImages.length > 0) {
+                        setImageUrl(newImages[0]);
+                      }
+                      setShowAddPhotoModal(false);
+                    }
+                  }}
+                />
+              </label>
+
+              {/* Option 2: Phone Camera QR Code */}
+              <div className="p-6 border-2 border-blue-200 bg-blue-50/40 rounded-2xl flex flex-col items-center justify-center text-center">
+                <Smartphone size={32} className="text-blue-600 mb-1" />
+                <span className="font-bold text-gray-900 text-sm">Scan with Phone Camera</span>
+                <span className="text-xs text-gray-500 mt-0.5 mb-3">Snap 1 photo & crop directly on phone</span>
+                
+                {galleryScanSessionId && (
+                  <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm flex flex-col items-center">
+                    <QRCodeSVG
+                      value={`${window.location.origin}/single-scan/${galleryScanSessionId}`}
+                      size={150}
+                    />
+                    <a
+                      href={`${window.location.origin}/single-scan/${galleryScanSessionId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-bold text-blue-600 hover:underline mt-2.5 flex items-center gap-1"
+                    >
+                      <span>Open Camera Link</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-       </Modal>
-    </div>
+        </Modal>
+     </div>
   );
 }
