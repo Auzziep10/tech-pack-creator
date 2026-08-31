@@ -8,6 +8,7 @@ export interface FolderData {
   companyId: string;
   userId: string;
   parentId?: string | null;
+  sortOrder?: number;
   createdAt?: any;
 }
 
@@ -24,6 +25,7 @@ export interface TechPackData {
   activityLog?: any[];
   isTeamEditable?: boolean;
   folderId?: string | null;
+  sortOrder?: number;
 }
 
 export const uploadAllBase64InObject = async (obj: any, userId: string): Promise<any> => {
@@ -285,6 +287,26 @@ export const moveTechPacksToFolder = async (packIds: string[], folderId: string 
       folderId: folderId || null,
       updatedAt: serverTimestamp()
     });
+  });
+  await batch.commit();
+};
+
+export const updateFolderOrders = async (orders: { id: string; sortOrder: number }[]): Promise<void> => {
+  if (orders.length === 0) return;
+  const batch = writeBatch(db);
+  orders.forEach(({ id, sortOrder }) => {
+    const ref = doc(db, 'folders', id);
+    batch.update(ref, { sortOrder });
+  });
+  await batch.commit();
+};
+
+export const updateTechPackOrders = async (orders: { id: string; sortOrder: number }[]): Promise<void> => {
+  if (orders.length === 0) return;
+  const batch = writeBatch(db);
+  orders.forEach(({ id, sortOrder }) => {
+    const ref = doc(db, 'techPacks', id);
+    batch.update(ref, { sortOrder });
   });
   await batch.commit();
 };

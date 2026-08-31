@@ -26,7 +26,9 @@ import {
   updateFolderParent,
   deleteFolder, 
   updateTechPackFolder, 
-  moveTechPacksToFolder 
+  moveTechPacksToFolder,
+  updateFolderOrders,
+  updateTechPackOrders
 } from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -56,6 +58,11 @@ export function Dashboard() {
   });
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [reorderTarget, setReorderTarget] = useState<{
+    id: string;
+    type: 'folder' | 'garment';
+    position: 'before' | 'after';
+  } | null>(null);
 
   // Sync activeFolderId to sessionStorage
   useEffect(() => {
@@ -244,11 +251,148 @@ export function Dashboard() {
     }
   };
 
-  // Drag and Drop into Folder
+  // Drag Hover Over Card Handler
+  const handleCardDragOver = (e: React.DragEvent, id: string, type: 'folder' | 'garment') => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const position = e.clientX < midX ? 'before' : 'after';
+
+    if (type === 'folder') {
+      const isNearEdge = e.clientX < rect.left + rect.width * 0.25 || e.clientX > rect.left + rect.width * 0.75;
+      if (!isNearEdge) {
+        setReorderTarget(null);
+        setDragOverFolderId(id);
+        return;
+      }
+    }
+
+    setDragOverFolderId(null);
+    setReorderTarget({ id, type, position });
+  };
+
+  // Drop on Card (Reorder or Drop Into Folder)
+  const handleDropOnCard = async (e: React.DragEvent, targetId: string, targetType: 'folder' | 'garment') => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentReorder = reorderTarget;
+    setReorderTarget(null);
+    setDragOverFolderId(null);
+
+    const draggedFolderId = e.dataTransfer.getData('folder-id');
+    const draggedGarmentId = e.dataTransfer.getData('text/plain');
+
+    // 1. Reordering garments relative to another garment
+    if (draggedGarmentId && targetType === 'garment') {
+      if (draggedGarmentId === targetId) return;
+
+      const currentList = [...visibleGarments];
+      const draggedIndex = currentList.findIndex(p => p.id === draggedGarmentId);
+      if (draggedIndex === -1) return;
+
+      const [movedItem] = currentList.splice(draggedIndex, 1);
+      let insertIndex = currentList.findIndex(p => p.id === targetId);
+      if (insertIndex === -1) insertIndex = currentList.length;
+      if (currentReorder?.position === 'after') {
+        insertIndex += 1;
+      }
+      currentList.splice(insertIndex, 0, movedItem);
+
+      const updatedOrders: { id: string; sortOrder: number }[] = [];
+      const updatedGarmentsMap = new Map<string, number>();
+
+      currentList.forEach((item, index) => {
+        if (item.id) {
+          const newOrder = (index + 1) * 10;
+          updatedOrders.push({ id: item.id, sortOrder: newOrder });
+          updatedGarmentsMap.set(item.id, newOrder);
+        }
+      });
+
+      setTechPacks(prev =>
+        prev.map(p => (p.id && updatedGarmentsMap.has(p.id) ? { ...p, sortOrder: updatedGarmentsMap.get(p.id) } : p))
+      );
+
+      try {
+        await updateTechPackOrders(updatedOrders);
+      } catch (err) {
+        console.error("Error updating tech pack orders:", err);
+      }
+      return;
+    }
+
+    // 2. Reordering folders relative to another folder
+    if (draggedFolderId && targetType === 'folder' && currentReorder) {
+      if (draggedFolderId === targetId) return;
+
+      const currentList = [...visibleFolders];
+      const draggedIndex = currentList.findIndex(f => f.id === draggedFolderId);
+      if (draggedIndex === -1) return;
+
+      const [movedItem] = currentList.splice(draggedIndex, 1);
+      let insertIndex = currentList.findIndex(f => f.id === targetId);
+      if (insertIndex === -1) insertIndex = currentList.length;
+      if (currentReorder.position === 'after') {
+        insertIndex += 1;
+      }
+      currentList.splice(insertIndex, 0, movedItem);
+
+      const updatedOrders: { id: string; sortOrder: number }[] = [];
+      const updatedFoldersMap = new Map<string, number>();
+
+      currentList.forEach((item, index) => {
+        if (item.id) {
+          const newOrder = (index + 1) * 10;
+          updatedOrders.push({ id: item.id, sortOrder: newOrder });
+          updatedFoldersMap.set(item.id, newOrder);
+        }
+      });
+
+      setFolders(prev =>
+        prev.map(f => (f.id && updatedFoldersMap.has(f.id) ? { ...f, sortOrder: updatedFoldersMap.get(f.id) } : f))
+      );
+
+      try {
+        await updateFolderOrders(updatedOrders);
+      } catch (err) {
+        console.error("Error updating folder orders:", err);
+      }
+      return;
+    }
+
+    // 3. Dropping garment INTO folder
+    if (draggedGarmentId && targetType === 'folder') {
+      const destId = targetId === 'ALL' || targetId === 'UNASSIGNED' ? null : targetId;
+      try {
+        await updateTechPackFolder(draggedGarmentId, destId);
+        setTechPacks(prev => prev.map(p => (p.id === draggedGarmentId ? { ...p, folderId: destId } : p)));
+      } catch (err) {
+        console.error("Error dropping pack into folder:", err);
+      }
+      return;
+    }
+
+    // 4. Moving subfolder into parent folder
+    if (draggedFolderId && targetType === 'folder' && !currentReorder) {
+      const destId = targetId === 'ALL' || targetId === 'UNASSIGNED' ? null : targetId;
+      if (draggedFolderId === destId) return;
+      try {
+        await updateFolderParent(draggedFolderId, destId);
+        if (profile?.companyId) await loadFolders(profile.companyId);
+      } catch (err) {
+        console.error("Error moving folder:", err);
+      }
+      return;
+    }
+  };
+
+  // Drag and Drop into Breadcrumbs / Root
   const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverFolderId(null);
+    setReorderTarget(null);
 
     const draggedFolderId = e.dataTransfer.getData('folder-id');
     const packId = e.dataTransfer.getData('text/plain');
@@ -302,27 +446,43 @@ export function Dashboard() {
   };
 
   // Directory Level Items
-  // 1. Visible subfolders at current level
+  // 1. Visible subfolders at current level (Sorted by sortOrder)
   const getVisibleFolders = (): FolderData[] => {
+    let list: FolderData[] = [];
     if (activeFolderId === 'ALL') {
-      return folders.filter(f => !f.parentId);
+      list = folders.filter(f => !f.parentId);
+    } else if (activeFolderId === 'UNASSIGNED') {
+      list = [];
+    } else {
+      list = folders.filter(f => f.parentId === activeFolderId);
     }
-    if (activeFolderId === 'UNASSIGNED') {
-      return [];
-    }
-    return folders.filter(f => f.parentId === activeFolderId);
+    return list.sort((a, b) => {
+      const orderA = a.sortOrder !== undefined ? a.sortOrder : 999999;
+      const orderB = b.sortOrder !== undefined ? b.sortOrder : 999999;
+      if (orderA !== orderB) return orderA - orderB;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   };
   const visibleFolders = getVisibleFolders();
 
-  // 2. Visible garments directly inside current folder level
+  // 2. Visible garments directly inside current folder level (Sorted by sortOrder)
   const getVisibleGarments = (): TechPackData[] => {
+    let list: TechPackData[] = [];
     if (activeFolderId === 'ALL') {
-      return techPacks.filter(p => !p.folderId);
+      list = techPacks.filter(p => !p.folderId);
+    } else if (activeFolderId === 'UNASSIGNED') {
+      list = techPacks.filter(p => !p.folderId);
+    } else {
+      list = techPacks.filter(p => p.folderId === activeFolderId);
     }
-    if (activeFolderId === 'UNASSIGNED') {
-      return techPacks.filter(p => !p.folderId);
-    }
-    return techPacks.filter(p => p.folderId === activeFolderId);
+    return list.sort((a, b) => {
+      const orderA = a.sortOrder !== undefined ? a.sortOrder : 999999;
+      const orderB = b.sortOrder !== undefined ? b.sortOrder : 999999;
+      if (orderA !== orderB) return orderA - orderB;
+      const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+      const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+      return timeB - timeA;
+    });
   };
   const visibleGarments = getVisibleGarments();
 
@@ -591,6 +751,8 @@ export function Dashboard() {
             const totalCount = getFolderTotalCount(folder.id);
             const isMenuOpen = activeFolderMenuId === folder.id;
             const isDragTarget = dragOverFolderId === folder.id;
+            const isReorderBefore = Boolean(reorderTarget && reorderTarget.id === folder.id && reorderTarget.position === 'before');
+            const isReorderAfter = Boolean(reorderTarget && reorderTarget.id === folder.id && reorderTarget.position === 'after');
 
             return (
               <GlassCard
@@ -599,13 +761,19 @@ export function Dashboard() {
                 onDragStart={(e) => {
                   if (folder.id) e.dataTransfer.setData('folder-id', folder.id);
                 }}
-                onDragOver={(e) => e.preventDefault()}
-                onDragEnter={() => setDragOverFolderId(folder.id || null)}
-                onDragLeave={() => setDragOverFolderId(null)}
-                onDrop={(e) => handleDropOnFolder(e, folder.id!)}
+                onDragOver={(e) => handleCardDragOver(e, folder.id!, 'folder')}
+                onDragLeave={() => {
+                  setDragOverFolderId(null);
+                  setReorderTarget(null);
+                }}
+                onDrop={(e) => handleDropOnCard(e, folder.id!, 'folder')}
                 onClick={() => setActiveFolderId(folder.id!)}
-                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md border-gray-200 ${
+                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md border-gray-200 relative ${
                   isDragTarget ? 'border-2 border-blue-500 ring-4 ring-blue-500/20 scale-[1.02]' : 'hover:border-gray-400'
+                } ${
+                  isReorderBefore ? 'ring-2 ring-blue-500 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-2 before:bg-blue-600 before:z-30 before:rounded-l-2xl shadow-lg' : ''
+                } ${
+                  isReorderAfter ? 'ring-2 ring-blue-500 after:absolute after:right-0 after:top-0 after:bottom-0 after:w-2 after:bg-blue-600 after:z-30 after:rounded-r-2xl shadow-lg' : ''
                 }`}
               >
                 {/* Folder Top Thumbnail Box */}
@@ -707,6 +875,8 @@ export function Dashboard() {
           {visibleGarments.map(pack => {
             const isSelected = pack.id ? selectedPacks.includes(pack.id) : false;
             const folderName = pack.folderId ? folderMap[pack.folderId] : null;
+            const isReorderBefore = Boolean(reorderTarget && reorderTarget.id === pack.id && reorderTarget.position === 'before');
+            const isReorderAfter = Boolean(reorderTarget && reorderTarget.id === pack.id && reorderTarget.position === 'after');
 
             return (
               <GlassCard 
@@ -715,6 +885,9 @@ export function Dashboard() {
                 onDragStart={(e) => {
                   if (pack.id) e.dataTransfer.setData('text/plain', pack.id);
                 }}
+                onDragOver={(e) => handleCardDragOver(e, pack.id!, 'garment')}
+                onDragLeave={() => setReorderTarget(null)}
+                onDrop={(e) => handleDropOnCard(e, pack.id!, 'garment')}
                 onClick={() => {
                   if (isSelectMode && pack.id) {
                     setSelectedPacks(prev => isSelected ? prev.filter(id => id !== pack.id) : [...prev, pack.id as string]);
@@ -723,7 +896,15 @@ export function Dashboard() {
                     navigate(`/pack/${pack.id}`, { state: { ...pack, fromFolderId: activeFolderId } });
                   }
                 }}
-                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md ${isSelectMode ? 'hover:border-blue-400' : 'hover:border-gray-400'} ${isSelected ? 'border-2 border-black ring-4 ring-black/10' : ''}`}
+                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md relative ${
+                  isSelectMode ? 'hover:border-blue-400' : 'hover:border-gray-400'
+                } ${
+                  isSelected ? 'border-2 border-black ring-4 ring-black/10' : ''
+                } ${
+                  isReorderBefore ? 'ring-2 ring-blue-500 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-2 before:bg-blue-600 before:z-30 before:rounded-l-2xl shadow-lg' : ''
+                } ${
+                  isReorderAfter ? 'ring-2 ring-blue-500 after:absolute after:right-0 after:top-0 after:bottom-0 after:w-2 after:bg-blue-600 after:z-30 after:rounded-r-2xl shadow-lg' : ''
+                }`}
               >
                 <div className="aspect-[4/3] bg-white relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
                   {isSelectMode && (
