@@ -1920,7 +1920,7 @@ export function TechPackEditor() {
                                  <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={async (e) => {
                                     if (e.target.files && e.target.files.length > 0) {
                                        const files = Array.from(e.target.files);
-                                       const promises = files.map(file => compressImageFile(file, 1600));
+                                       const promises = files.map(file => compressImageFile(file, 2048));
                                        const compressedDataUrLs = await Promise.all(promises);
                                        
                                        setData((prev: any) => {
@@ -2460,7 +2460,7 @@ export function TechPackEditor() {
                               ));
 
                               try {
-                                  const base64 = await compressImageFile(item.file, 1600);
+                                  const base64 = await compressImageFile(item.file, 2048);
                                   const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
                                   const response = await fetch(endpoint, {
                                     method: 'POST',
@@ -2593,7 +2593,7 @@ export function TechPackEditor() {
                   onChange={async (e) => {
                     if (e.target.files && e.target.files.length > 0) {
                       const files = Array.from(e.target.files);
-                      const promises = files.map(file => compressImageFile(file, 1600));
+                      const promises = files.map(file => compressImageFile(file, 2048));
                       const newImages = await Promise.all(promises);
                       const newGallery = [...galleryImages, ...newImages];
                       setGalleryImages(newGallery);
