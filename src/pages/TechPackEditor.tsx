@@ -1367,24 +1367,19 @@ export function TechPackEditor() {
               <Save size={15} />
               <span>Save</span>
             </div>
-          </Button>
-
-          {/* Lock / Unlock Toggle Button */}
-          <Button 
+          </Button>          {/* Lock / Unlock Toggle Button */}
+          <button 
             onClick={toggleLock} 
-            variant="secondary" 
-            className={`px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm transition-all border ${
+            className={`px-3.5 sm:px-4 h-9 shrink-0 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
               isTechPackLocked 
-                ? 'bg-black text-white hover:bg-gray-800 border-black font-bold shadow-sm' 
-                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200 font-semibold'
+                ? 'bg-black text-white hover:bg-gray-800 border-black shadow-sm' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
             }`}
             title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
           >
-            <div className="flex items-center gap-1.5 font-semibold">
-              {isTechPackLocked ? <Lock size={15} className="text-white" /> : <Unlock size={15} className="text-gray-500" />}
-              <span>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
-            </div>
-          </Button>
+            {isTechPackLocked ? <Lock size={15} className="text-white" /> : <Unlock size={15} className="text-gray-500" />}
+            <span className={isTechPackLocked ? "text-white font-bold" : "text-gray-700 font-semibold"}>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
+          </button>
 
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
@@ -1409,13 +1404,13 @@ export function TechPackEditor() {
             <Lock size={16} className="text-gray-300 shrink-0" />
             <span>Tech Pack is Locked — All specifications, measurements, and images are protected from updates</span>
           </div>
-          <Button 
-            size="sm" 
+          <button 
             onClick={toggleLock}
-            className="bg-white hover:bg-gray-100 text-black text-xs font-bold rounded-xl py-1 px-3 shrink-0 border border-white"
+            className="bg-white hover:bg-gray-100 text-gray-900 text-xs font-bold rounded-xl py-1.5 px-3.5 shrink-0 border border-white shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Unlock size={14} className="mr-1 inline text-black" /> Unlock Tech Pack
-          </Button>
+            <Unlock size={14} className="text-gray-900 shrink-0" />
+            <span>Unlock Tech Pack</span>
+          </button>
         </div>
       )}
 
@@ -1554,6 +1549,7 @@ export function TechPackEditor() {
                       <GarmentAnnotator 
                         imageUrl={imageUrl} 
                         measurements={displayData.measurements}
+                        isLocked={isTechPackLocked}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                         onGenerateMannequin={handleGenerateMannequin}
@@ -1580,8 +1576,9 @@ export function TechPackEditor() {
                      {galleryImages.map((gImg, idx) => (
                        <div 
                           key={idx} 
-                          draggable
+                          draggable={!isTechPackLocked}
                           onDragStart={(e) => {
+                            if (checkReadonly()) return;
                             e.dataTransfer.setData('text/plain', idx.toString());
                             e.dataTransfer.effectAllowed = 'move';
                           }}
@@ -1614,14 +1611,14 @@ export function TechPackEditor() {
                             }
                           }}
 
-                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
                           onClick={() => setImageUrl(gImg)}
                        >
                           <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
                           {idx === 0 && (
                               <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm">MAIN</div>
                            )}
-                            {idx !== 0 && (
+                            {idx !== 0 && !isTechPackLocked && (
                               <button 
                                 onClick={async (e) => {
                                   e.stopPropagation();
@@ -1661,59 +1658,70 @@ export function TechPackEditor() {
                            >
                              <Download size={12} />
                            </button>
-                           <button
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               if (checkReadonly()) return;
-                               if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
-                                  const newGallery = [...galleryImages];
-                                  newGallery.splice(idx, 1);
-                                  setGalleryImages(newGallery);
-                                  setData((d: any) => ({ ...d, gallery: newGallery }));
-                                  if (imageUrl === gImg) {
-                                     setImageUrl(newGallery[0] || '');
-                                  }
-                               }
-                             }}
-                             className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                             title="Delete Image"
-                           >
-                             <X size={12} />
-                           </button>
+                           {!isTechPackLocked && (
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (checkReadonly()) return;
+                                 if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                                    const newGallery = [...galleryImages];
+                                    newGallery.splice(idx, 1);
+                                    setGalleryImages(newGallery);
+                                    setData((d: any) => ({ ...d, gallery: newGallery }));
+                                    if (imageUrl === gImg) {
+                                       setImageUrl(newGallery[0] || '');
+                                    }
+                                 }
+                               }}
+                               className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                               title="Delete Image"
+                             >
+                               <X size={12} />
+                             </button>
+                           )}
                        </div>
-                     ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (checkReadonly()) return;
-                          const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
-                          setGalleryScanSessionId(session);
-                          setShowAddPhotoModal(true);
-                        }}
-                        className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
-                        title="Add Image or Scan with Phone"
-                      >
-                         <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
-                      </button>
-                  </div>
+                      ))}
+                      {!isTechPackLocked && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (checkReadonly()) return;
+                            const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                            setGalleryScanSessionId(session);
+                            setShowAddPhotoModal(true);
+                          }}
+                          className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
+                          title="Add Image or Scan with Phone"
+                        >
+                           <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
+                        </button>
+                      )}
+                   </div>
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (checkReadonly()) return;
-                      const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
-                      setGalleryScanSessionId(session);
-                      setShowAddPhotoModal(true);
-                    }}
-                    className="cursor-pointer group flex flex-col items-center gap-4"
-                  >
-                     <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
-                        <span className="text-2xl leading-none font-bold">+</span>
-                     </div>
-                     <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
-                  </button>
+                  {!isTechPackLocked ? (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (checkReadonly()) return;
+                        const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                        setGalleryScanSessionId(session);
+                        setShowAddPhotoModal(true);
+                      }}
+                      className="cursor-pointer group flex flex-col items-center gap-4"
+                    >
+                       <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
+                          <span className="text-2xl leading-none font-bold">+</span>
+                       </div>
+                       <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <Lock size={24} />
+                      <span className="text-xs font-bold uppercase tracking-wider">Garment Photo Locked</span>
+                    </div>
+                  )}
                 </div>
               )}
                     </div>

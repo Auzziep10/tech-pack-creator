@@ -67,6 +67,7 @@ interface Annotation {
 interface GarmentAnnotatorProps {
   imageUrl: string;
   measurements: any[];
+  isLocked?: boolean;
   onVectorize?: () => void;
   isVectorizing?: boolean;
   onGenerateMannequin?: (gender: string, garmentType: string, viewPoint: string, fitStyle: string) => Promise<string>;
@@ -78,6 +79,7 @@ interface GarmentAnnotatorProps {
 export function GarmentAnnotator({ 
   imageUrl, 
   measurements, 
+  isLocked = false,
   onVectorize, 
   isVectorizing,
   onGenerateMannequin,
@@ -658,7 +660,7 @@ export function GarmentAnnotator({
         )}
       </div>
 
-      {!isFullscreen && (
+      {!isFullscreen && !isLocked && (
           <div 
             className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center gap-2.5 opacity-0 hover:opacity-100 cursor-pointer" 
             onClick={() => setIsFullscreen(true)}
