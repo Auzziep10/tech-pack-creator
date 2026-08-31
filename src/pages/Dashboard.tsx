@@ -14,7 +14,7 @@ import {
   Home,
   FolderOpen
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   getUserAndCompanyTechPacks, 
@@ -42,17 +42,27 @@ const formatName = (email?: string | null) => {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   const [techPacks, setTechPacks] = useState<TechPackData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   
-  // Folders State
+  // Folders State - initialize from location.state or sessionStorage
   const [folders, setFolders] = useState<FolderData[]>([]);
-  const [activeFolderId, setActiveFolderId] = useState<string>('ALL'); // 'ALL' | 'UNASSIGNED' | folderId
+  const [activeFolderId, setActiveFolderId] = useState<string>(() => {
+    return (location.state as any)?.activeFolderId || sessionStorage.getItem('activeFolderId') || 'ALL';
+  });
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+
+  // Sync activeFolderId to sessionStorage
+  useEffect(() => {
+    if (activeFolderId) {
+      sessionStorage.setItem('activeFolderId', activeFolderId);
+    }
+  }, [activeFolderId]);
 
   // Folder Modal State
   const [folderModalState, setFolderModalState] = useState<{
@@ -709,7 +719,8 @@ export function Dashboard() {
                   if (isSelectMode && pack.id) {
                     setSelectedPacks(prev => isSelected ? prev.filter(id => id !== pack.id) : [...prev, pack.id as string]);
                   } else {
-                    navigate(`/pack/${pack.id}`, { state: pack });
+                    sessionStorage.setItem('activeFolderId', activeFolderId);
+                    navigate(`/pack/${pack.id}`, { state: { ...pack, fromFolderId: activeFolderId } });
                   }
                 }}
                 className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md ${isSelectMode ? 'hover:border-blue-400' : 'hover:border-gray-400'} ${isSelected ? 'border-2 border-black ring-4 ring-black/10' : ''}`}

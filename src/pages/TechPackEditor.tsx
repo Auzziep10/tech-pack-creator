@@ -1007,6 +1007,8 @@ export function TechPackEditor() {
         displayData.isTeamEditable ?? true
       );
       
+      const currentFromFolder = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
+
       // Update browser history state to ensure page refreshes display the saved values
       navigate(`/pack/${savedId}`, { 
         replace: true, 
@@ -1016,7 +1018,8 @@ export function TechPackEditor() {
           name: packName,
           userId: displayData.userId || user.uid,
           isTeamEditable: displayData.isTeamEditable ?? true,
-          activityLog: finalActivityLog
+          activityLog: finalActivityLog,
+          fromFolderId: currentFromFolder
         } 
       });
     } catch (e: any) {
@@ -1243,11 +1246,18 @@ export function TechPackEditor() {
     );
   }
 
+  const handleBack = () => {
+    const returnFolderId = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
+    const targetFolder = returnFolderId || 'ALL';
+    sessionStorage.setItem('activeFolderId', targetFolder);
+    navigate('/', { state: { activeFolderId: targetFolder } });
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-y-4">
         <div className="flex items-center gap-4 flex-1 min-w-[200px] mr-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0">
+          <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0" title="Back to Garment Location">
             <ArrowLeft size={20} />
           </button>
           <input 
