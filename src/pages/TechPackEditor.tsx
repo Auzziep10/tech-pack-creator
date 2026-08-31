@@ -2531,7 +2531,7 @@ export function TechPackEditor() {
                          updateProperty('dominantColorways', extractedColorways);
                          
                          // Automatically append newly generated colorway mockups to the tech pack's main photo gallery
-                         const newImages = extractedColorways.map((c: any) => c.image).filter((img: string) => img && img.startsWith('data:') && !galleryImages.includes(img));
+                         const newImages = extractedColorways.map((c: any) => c.image).filter((img: string) => img && !galleryImages.includes(img));
                          if (newImages.length > 0) {
                             setGalleryImages((prev: string[]) => {
                                const updated = [...prev, ...newImages];
