@@ -255,6 +255,10 @@ export function TechPackEditor() {
       alert("Translations are read-only to preserve your original English specifications. Please switch back to English to make edits.");
       return true;
     }
+    if (displayData?.isLocked || data?.isLocked) {
+      alert("🔒 This Tech Pack is locked. Click the Lock button in the top bar to unlock and make edits.");
+      return true;
+    }
     return false;
   };
 
@@ -353,13 +357,30 @@ export function TechPackEditor() {
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
-  const canEdit = isCreator || (displayData?.isTeamEditable !== false);
+  const isTechPackLocked = !!(displayData?.isLocked || data?.isLocked);
+  const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
     if (!isCreator) return;
     const isLocking = displayData?.isTeamEditable ?? true;
     pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing');
     setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
+  };
+
+  const toggleLock = async () => {
+    const nextLocked = !isTechPackLocked;
+    setData((prev: any) => ({ ...prev, isLocked: nextLocked }));
+    pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack');
+
+    if (id && id !== 'draft') {
+      try {
+        await updateDoc(doc(db, 'techPacks', id), {
+          "techPack.isLocked": nextLocked
+        });
+      } catch (err) {
+        console.error("Failed to update lock status in database:", err);
+      }
+    }
   };
 
   const pushLog = (message: string) => {
@@ -1342,6 +1363,21 @@ export function TechPackEditor() {
               </div>
             </Button>
           )}
+          <Button 
+            onClick={toggleLock} 
+            variant="secondary" 
+            className={`px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm transition-all border ${
+              isTechPackLocked 
+                ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 font-bold shadow-sm' 
+                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+            }`}
+            title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
+          >
+            <div className="flex items-center gap-1.5 font-semibold">
+              {isTechPackLocked ? <Lock size={15} /> : <Unlock size={15} />}
+              <span>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
+            </div>
+          </Button>
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
@@ -1358,6 +1394,22 @@ export function TechPackEditor() {
           </Button>
         </div>
       </div>
+
+      {isTechPackLocked && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 print:hidden">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+            <Lock size={16} className="text-amber-600 shrink-0" />
+            <span>Tech Pack is Locked — All specifications, measurements, and images are protected from updates</span>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={toggleLock}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl py-1 px-3 shrink-0"
+          >
+            <Unlock size={14} className="mr-1 inline" /> Unlock Tech Pack
+          </Button>
+        </div>
+      )}
 
       <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm relative">
         {/* Export Container */}
@@ -1528,6 +1580,7 @@ export function TechPackEditor() {
                           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                           onDrop={async (e) => {
                             e.preventDefault();
+                            if (checkReadonly()) return;
                             const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
                             if (isNaN(fromIdx) || fromIdx === idx) return;
                             const newGallery = [...galleryImages];
@@ -1564,6 +1617,7 @@ export function TechPackEditor() {
                               <button 
                                 onClick={async (e) => {
                                   e.stopPropagation();
+                                  if (checkReadonly()) return;
                                   const newGallery = [...galleryImages];
                                   const [moved] = newGallery.splice(idx, 1);
                                   newGallery.unshift(moved);
@@ -1602,6 +1656,7 @@ export function TechPackEditor() {
                            <button
                              onClick={(e) => {
                                e.stopPropagation();
+                               if (checkReadonly()) return;
                                if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
                                   const newGallery = [...galleryImages];
                                   newGallery.splice(idx, 1);
@@ -1622,6 +1677,7 @@ export function TechPackEditor() {
                       <button
                         type="button"
                         onClick={() => {
+                          if (checkReadonly()) return;
                           const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
                           setGalleryScanSessionId(session);
                           setShowAddPhotoModal(true);
@@ -1638,6 +1694,7 @@ export function TechPackEditor() {
                   <button 
                     type="button"
                     onClick={() => {
+                      if (checkReadonly()) return;
                       const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
                       setGalleryScanSessionId(session);
                       setShowAddPhotoModal(true);
