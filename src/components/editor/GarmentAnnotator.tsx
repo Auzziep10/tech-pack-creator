@@ -443,7 +443,7 @@ export function GarmentAnnotator({
             isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
           }`}
         >
-          <div className="absolute inset-2 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center p-2 pointer-events-none">
             <div 
               ref={containerRef}
               onPointerDown={handlePointerDown}
@@ -451,13 +451,13 @@ export function GarmentAnnotator({
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerUp}
               style={{ touchAction: 'none' }}
-              className={`relative flex max-w-full max-h-full pointer-events-auto ${isDrawingMode ? 'cursor-crosshair' : ''}`}
+              className={`relative flex items-center justify-center w-full h-full pointer-events-auto ${isDrawingMode ? 'cursor-crosshair' : ''}`}
             >
               <img 
                 src={erasedResultImage || imageUrl} 
                 alt="Garment Artboard" 
                 draggable={false}
-                className={`max-w-full max-h-full object-contain pointer-events-none transition-all duration-700 ${
+                className={`w-full h-full object-contain pointer-events-none transition-all duration-700 ${
                   isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
                 }`}
               />
