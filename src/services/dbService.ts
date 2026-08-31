@@ -1,6 +1,14 @@
-import { collection, addDoc, updateDoc, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
+
+export interface FolderData {
+  id?: string;
+  name: string;
+  companyId: string;
+  userId: string;
+  createdAt?: any;
+}
 
 export interface TechPackData {
   id?: string;
@@ -14,6 +22,7 @@ export interface TechPackData {
   techPack: any;
   activityLog?: any[];
   isTeamEditable?: boolean;
+  folderId?: string | null;
 }
 
 export const saveTechPack = async (
@@ -156,4 +165,66 @@ export const completeScanSession = async (sessionId: string, backImageUrl: strin
     backImageUrl,
     updatedAt: serverTimestamp()
   });
+};
+
+// --- Dashboard Folder Features ---
+
+export const getCompanyFolders = async (companyId: string): Promise<FolderData[]> => {
+  const q = query(collection(db, 'folders'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
+  const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as FolderData[];
+  return results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+};
+
+export const createFolder = async (userId: string, companyId: string, name: string): Promise<string> => {
+  const docRef = await addDoc(collection(db, 'folders'), {
+    name: name.trim(),
+    companyId,
+    userId,
+    createdAt: serverTimestamp()
+  });
+  return docRef.id;
+};
+
+export const updateFolder = async (folderId: string, name: string): Promise<void> => {
+  const folderRef = doc(db, 'folders', folderId);
+  await updateDoc(folderRef, {
+    name: name.trim()
+  });
+};
+
+export const deleteFolder = async (folderId: string): Promise<void> => {
+  await deleteDoc(doc(db, 'folders', folderId));
+  
+  // Unassign tech packs belonging to this folder
+  const q = query(collection(db, 'techPacks'), where('folderId', '==', folderId));
+  const snap = await getDocs(q);
+  if (!snap.empty) {
+    const batch = writeBatch(db);
+    snap.docs.forEach(d => {
+      batch.update(d.ref, { folderId: null });
+    });
+    await batch.commit();
+  }
+};
+
+export const updateTechPackFolder = async (packId: string, folderId: string | null): Promise<void> => {
+  const packRef = doc(db, 'techPacks', packId);
+  await updateDoc(packRef, {
+    folderId: folderId || null,
+    updatedAt: serverTimestamp()
+  });
+};
+
+export const moveTechPacksToFolder = async (packIds: string[], folderId: string | null): Promise<void> => {
+  if (packIds.length === 0) return;
+  const batch = writeBatch(db);
+  packIds.forEach(id => {
+    const ref = doc(db, 'techPacks', id);
+    batch.update(ref, {
+      folderId: folderId || null,
+      updatedAt: serverTimestamp()
+    });
+  });
+  await batch.commit();
 };

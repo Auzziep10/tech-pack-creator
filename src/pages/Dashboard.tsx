@@ -1,14 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
-import { PlusCircle, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { 
+  PlusCircle, 
+  Image as ImageIcon, 
+  Trash2, 
+  Folder, 
+  FolderPlus, 
+  FolderInput, 
+  MoreVertical, 
+  Edit2, 
+  Check 
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserAndCompanyTechPacks, TechPackData } from '../services/dbService';
+import { 
+  getUserAndCompanyTechPacks, 
+  TechPackData, 
+  FolderData, 
+  getCompanyFolders, 
+  createFolder, 
+  updateFolder, 
+  deleteFolder, 
+  updateTechPackFolder, 
+  moveTechPacksToFolder 
+} from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { getCompanyGarmentQueue, deleteQueueItem } from '../services/wovnService';
 import { WovnImportModal } from '../components/ui/WovnImportModal';
+import { FolderModal } from '../components/ui/FolderModal';
 
 const formatName = (email?: string | null) => {
   if (!email) return 'Teammate';
@@ -24,6 +45,25 @@ export function Dashboard() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   
+  // Folders State
+  const [folders, setFolders] = useState<FolderData[]>([]);
+  const [activeFolderId, setActiveFolderId] = useState<string>('ALL'); // 'ALL' | 'UNASSIGNED' | folderId
+  const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+
+  // Folder Modal State
+  const [folderModalState, setFolderModalState] = useState<{
+    isOpen: boolean;
+    mode: 'create' | 'rename' | 'move';
+    initialName?: string;
+    targetPackIds?: string[];
+    targetFolderId?: string | null;
+    targetFolderObj?: FolderData;
+  }>({
+    isOpen: false,
+    mode: 'create'
+  });
+
   // Wovn Queue State
   const [wovnCustomerIds, setWovnCustomerIds] = useState<string[]>([]);
   const [queueItems, setQueueItems] = useState<any[]>([]);
@@ -38,8 +78,18 @@ export function Dashboard() {
     }
   };
 
+  const loadFolders = async (companyId: string) => {
+    try {
+      const data = await getCompanyFolders(companyId);
+      setFolders(data);
+    } catch (err) {
+      console.error("Error loading folders:", err);
+    }
+  };
+
   useEffect(() => {
     if (user && profile?.companyId) {
+      loadFolders(profile.companyId);
       getUserAndCompanyTechPacks(user.uid, profile.companyId)
         .then(async data => {
           setTechPacks(data);
@@ -127,12 +177,89 @@ export function Dashboard() {
       try {
         await deleteDoc(doc(db, 'techPacks', packId));
         setTechPacks(prev => prev.filter(p => p.id !== packId));
+        setSelectedPacks(prev => prev.filter(id => id !== packId));
       } catch (err) {
         console.error("Error deleting tech pack:", err);
         alert("Failed to delete. You might not be authorized.");
       }
     }
   };
+
+  // Folder Operations
+  const handleCreateFolderSubmit = async (data: { name?: string; folderId?: string | null }) => {
+    if (!profile?.companyId || !user?.uid) return;
+    if (folderModalState.mode === 'create') {
+      if (!data.name) return;
+      const newId = await createFolder(user.uid, profile.companyId, data.name);
+      await loadFolders(profile.companyId);
+      setActiveFolderId(newId);
+    } else if (folderModalState.mode === 'rename') {
+      if (!data.name || !folderModalState.targetFolderObj?.id) return;
+      await updateFolder(folderModalState.targetFolderObj.id, data.name);
+      await loadFolders(profile.companyId);
+    } else if (folderModalState.mode === 'move') {
+      let destFolderId = data.folderId;
+      if (data.name) {
+        // Created a brand new folder during move dialog
+        destFolderId = await createFolder(user.uid, profile.companyId, data.name);
+        await loadFolders(profile.companyId);
+      }
+      if (folderModalState.targetPackIds && folderModalState.targetPackIds.length > 0) {
+        await moveTechPacksToFolder(folderModalState.targetPackIds, destFolderId || null);
+        setTechPacks(prev =>
+          prev.map(p => (p.id && folderModalState.targetPackIds?.includes(p.id) ? { ...p, folderId: destFolderId } : p))
+        );
+      }
+    }
+  };
+
+  const handleDeleteFolder = async (folder: FolderData) => {
+    if (!folder.id || !profile?.companyId) return;
+    if (window.confirm(`Delete folder "${folder.name}"? Garments in this folder will become unassigned.`)) {
+      try {
+        await deleteFolder(folder.id);
+        await loadFolders(profile.companyId);
+        setTechPacks(prev => prev.map(p => (p.folderId === folder.id ? { ...p, folderId: null } : p)));
+        if (activeFolderId === folder.id) {
+          setActiveFolderId('ALL');
+        }
+      } catch (err) {
+        console.error("Error deleting folder:", err);
+        alert("Failed to delete folder.");
+      }
+    }
+  };
+
+  // Drag and Drop into Folder Tab
+  const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string) => {
+    e.preventDefault();
+    setDragOverFolderId(null);
+    const packId = e.dataTransfer.getData('text/plain');
+    if (!packId) return;
+    const destId = targetFolderId === 'ALL' || targetFolderId === 'UNASSIGNED' ? null : targetFolderId;
+    try {
+      await updateTechPackFolder(packId, destId);
+      setTechPacks(prev => prev.map(p => (p.id === packId ? { ...p, folderId: destId } : p)));
+    } catch (err) {
+      console.error("Error dropping pack into folder:", err);
+    }
+  };
+
+  // Filter tech packs based on active folder selection
+  const filteredTechPacks = techPacks.filter(pack => {
+    if (activeFolderId === 'ALL') return true;
+    if (activeFolderId === 'UNASSIGNED') return !pack.folderId;
+    return pack.folderId === activeFolderId;
+  });
+
+  const getFolderMap = () => {
+    const map: Record<string, string> = {};
+    folders.forEach(f => {
+      if (f.id) map[f.id] = f.name;
+    });
+    return map;
+  };
+  const folderMap = getFolderMap();
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -146,6 +273,21 @@ export function Dashboard() {
             <>
               <Button onClick={() => { setIsSelectMode(false); setSelectedPacks([]); }} variant="secondary" className="rounded-full px-6 h-10">
                 Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setFolderModalState({
+                    isOpen: true,
+                    mode: 'move',
+                    targetPackIds: selectedPacks
+                  });
+                }}
+                disabled={selectedPacks.length === 0}
+                variant="secondary"
+                className="shrink-0 rounded-full px-5 h-10 font-bold flex items-center gap-2 border-gray-300 hover:bg-gray-100"
+              >
+                <FolderInput size={18} />
+                <span>Move Selected ({selectedPacks.length})</span>
               </Button>
               <Button 
                 onClick={() => {
@@ -227,6 +369,138 @@ export function Dashboard() {
          </div>
       )}
 
+      {/* --- Folder Navigation & Filter Bar --- */}
+      <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2 border-b border-gray-200 no-scrollbar">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setActiveFolderId('ALL')}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnter={() => setDragOverFolderId('ALL')}
+            onDragLeave={() => setDragOverFolderId(null)}
+            onDrop={(e) => handleDropOnFolder(e, 'ALL')}
+            className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
+              activeFolderId === 'ALL'
+                ? 'bg-black text-white shadow-sm'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            } ${dragOverFolderId === 'ALL' ? 'ring-2 ring-blue-500 scale-105' : ''}`}
+          >
+            <span>All Garments</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeFolderId === 'ALL' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
+              {techPacks.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveFolderId('UNASSIGNED')}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnter={() => setDragOverFolderId('UNASSIGNED')}
+            onDragLeave={() => setDragOverFolderId(null)}
+            onDrop={(e) => handleDropOnFolder(e, 'UNASSIGNED')}
+            className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
+              activeFolderId === 'UNASSIGNED'
+                ? 'bg-black text-white shadow-sm'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+            } ${dragOverFolderId === 'UNASSIGNED' ? 'ring-2 ring-blue-500 scale-105' : ''}`}
+          >
+            <span>Unassigned</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeFolderId === 'UNASSIGNED' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
+              {techPacks.filter(p => !p.folderId).length}
+            </span>
+          </button>
+
+          {folders.map(folder => {
+            if (!folder.id) return null;
+            const isSelected = activeFolderId === folder.id;
+            const count = techPacks.filter(p => p.folderId === folder.id).length;
+            const isMenuOpen = activeFolderMenuId === folder.id;
+            const isDragTarget = dragOverFolderId === folder.id;
+
+            return (
+              <div
+                key={folder.id}
+                className="relative group shrink-0"
+                onDragOver={(e) => e.preventDefault()}
+                onDragEnter={() => setDragOverFolderId(folder.id || null)}
+                onDragLeave={() => setDragOverFolderId(null)}
+                onDrop={(e) => handleDropOnFolder(e, folder.id!)}
+              >
+                <div
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                    isSelected
+                      ? 'bg-black text-white shadow-sm'
+                      : 'bg-amber-50/80 hover:bg-amber-100/80 text-amber-900 border border-amber-200/60'
+                  } ${isDragTarget ? 'ring-2 ring-blue-500 scale-105' : ''}`}
+                  onClick={() => setActiveFolderId(folder.id!)}
+                >
+                  <Folder size={14} className={isSelected ? 'text-amber-300' : 'text-amber-600'} />
+                  <span>{folder.name}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-200/60 text-amber-900'}`}>
+                    {count}
+                  </span>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveFolderMenuId(isMenuOpen ? null : folder.id!);
+                    }}
+                    className={`p-1 rounded-full hover:bg-black/10 transition-colors ${isSelected ? 'text-white/80 hover:text-white' : 'text-amber-800'}`}
+                  >
+                    <MoreVertical size={13} />
+                  </button>
+                </div>
+
+                {/* Folder Action Popover */}
+                {isMenuOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-2 w-44 bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 animate-in fade-in slide-in-from-top-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => {
+                        setActiveFolderMenuId(null);
+                        setFolderModalState({
+                          isOpen: true,
+                          mode: 'rename',
+                          initialName: folder.name,
+                          targetFolderObj: folder
+                        });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg text-left"
+                    >
+                      <Edit2 size={13} className="text-gray-400" />
+                      <span>Rename Folder</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveFolderMenuId(null);
+                        handleDeleteFolder(folder);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg text-left"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete Folder</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => {
+            setFolderModalState({
+              isOpen: true,
+              mode: 'create'
+            });
+          }}
+          className="shrink-0 px-4 py-2 rounded-full border border-dashed border-gray-300 hover:border-black text-xs font-bold text-gray-700 hover:text-black hover:bg-gray-50 transition-all flex items-center gap-1.5"
+        >
+          <FolderPlus size={15} />
+          <span>+ New Folder</span>
+        </button>
+      </div>
+
       <WovnImportModal 
         isOpen={isWovnModalOpen} 
         onClose={() => setIsWovnModalOpen(false)} 
@@ -236,24 +510,53 @@ export function Dashboard() {
         }}
       />
 
+      <FolderModal
+        isOpen={folderModalState.isOpen}
+        onClose={() => setFolderModalState(prev => ({ ...prev, isOpen: false }))}
+        mode={folderModalState.mode}
+        initialFolderName={folderModalState.initialName}
+        folders={folders}
+        currentFolderId={folderModalState.targetFolderId}
+        targetCount={folderModalState.targetPackIds?.length || 1}
+        onSubmit={handleCreateFolderSubmit}
+      />
+
       {loading ? (
         <div className="py-20 flex justify-center text-gray-400">Loading...</div>
-      ) : techPacks.length === 0 ? (
+      ) : filteredTechPacks.length === 0 ? (
         <div className="py-20 flex flex-col items-center justify-center text-gray-500 text-center">
           <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4 border border-gray-200">
-            <PlusCircle size={24} className="text-gray-400" />
+            <Folder size={24} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No tech packs yet</h3>
-          <p className="max-w-sm mb-6">Create your first garment tech pack.</p>
-          <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">Get Started</Button>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {activeFolderId === 'ALL'
+              ? 'No tech packs yet'
+              : activeFolderId === 'UNASSIGNED'
+              ? 'No unassigned tech packs'
+              : 'Folder is empty'}
+          </h3>
+          <p className="max-w-sm mb-6">
+            {activeFolderId === 'ALL'
+              ? 'Create your first garment tech pack.'
+              : 'Move garments into this folder or drag & drop them here.'}
+          </p>
+          {activeFolderId === 'ALL' && (
+            <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">Get Started</Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
-          {techPacks.map(pack => {
+          {filteredTechPacks.map(pack => {
             const isSelected = pack.id ? selectedPacks.includes(pack.id) : false;
+            const folderName = pack.folderId ? folderMap[pack.folderId] : null;
+
             return (
               <GlassCard 
                 key={pack.id} 
+                draggable={!isSelectMode}
+                onDragStart={(e) => {
+                  if (pack.id) e.dataTransfer.setData('text/plain', pack.id);
+                }}
                 onClick={() => {
                   if (isSelectMode && pack.id) {
                     setSelectedPacks(prev => isSelected ? prev.filter(id => id !== pack.id) : [...prev, pack.id as string]);
@@ -269,6 +572,35 @@ export function Dashboard() {
                        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
                     </div>
                   )}
+
+                  {/* Folder Tag Badge & Move button */}
+                  {!isSelectMode && (
+                    <div className="absolute top-3 left-3 z-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (pack.id) {
+                            setFolderModalState({
+                              isOpen: true,
+                              mode: 'move',
+                              targetPackIds: [pack.id],
+                              targetFolderId: pack.folderId || null
+                            });
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-sm backdrop-blur-sm ${
+                          folderName
+                            ? 'bg-amber-100/90 text-amber-900 hover:bg-amber-200 border border-amber-300/50'
+                            : 'bg-white/80 text-gray-500 hover:bg-white hover:text-black border border-gray-200 opacity-80 group-hover:opacity-100'
+                        }`}
+                        title="Change folder"
+                      >
+                        <Folder size={11} className={folderName ? 'text-amber-700' : 'text-gray-400'} />
+                        <span className="max-w-[100px] truncate">{folderName || 'Assign Folder'}</span>
+                      </button>
+                    </div>
+                  )}
+
                   {(!isSelectMode && (profile?.role === 'admin' || pack.userId === user?.uid)) && (
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                      <button 
