@@ -32,7 +32,8 @@ export default async function handler(req: any, res: any) {
       Fitted: "FITTED SILHOUETTE: Form-fitting style hugging the mannequin body contours snugly with minimal excess fabric, defined waist/torso structure, and clean form-fitting lines.",
       Standard: "STANDARD SILHOUETTE: Classic regular fit with a natural, comfortable drape around the mannequin body without being tight or oversized.",
       Loose: "LOOSE SILHOUETTE: Relaxed, comfortable fit with soft fluid drape that naturally follows body contours. Slightly easy through chest and torso while maintaining a gentle tailored shape—NOT stiff, square, wide, or boxy.",
-      Boxy: "BOXY SILHOUETTE: Distinctly wide, square silhouette with structured straight-down drop from the shoulders to a broad flat hem, featuring an oversized square boxy cut."
+      Boxy: "BOXY SILHOUETTE: Distinctly wide, square silhouette with structured straight-down drop from the shoulders to a broad flat hem, featuring an oversized square boxy cut.",
+      Athleisure: "ATHLEISURE SILHOUETTE: Streamlined athletic lifestyle fit engineered to make the garment look less bulky and significantly lighter feeling. Eliminate heavy fabric volume, saggy wrinkles, and bulky stiffness. Feature sleek ergonomic contouring, smooth lightweight activewear drape, flexible athletic proportions through shoulders and torso, and a clean, effortless performance silhouette."
     };
 
     const activeFitInstruction = fitStyle && FIT_DESCRIPTIONS[fitStyle] ? FIT_DESCRIPTIONS[fitStyle] : FIT_DESCRIPTIONS['Standard'];

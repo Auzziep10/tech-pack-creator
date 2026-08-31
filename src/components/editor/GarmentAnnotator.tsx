@@ -779,6 +779,7 @@ export function GarmentAnnotator({
                         <option value="Standard">Standard</option>
                         <option value="Loose">Loose</option>
                         <option value="Boxy">Boxy</option>
+                        <option value="Athleisure">Athleisure</option>
                       </select>
                     </div>
                   </div>
