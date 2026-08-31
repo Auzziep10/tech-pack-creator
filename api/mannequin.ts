@@ -38,16 +38,29 @@ export default async function handler(req: any, res: any) {
     const activeFitInstruction = fitStyle && FIT_DESCRIPTIONS[fitStyle] ? FIT_DESCRIPTIONS[fitStyle] : FIT_DESCRIPTIONS['Standard'];
 
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
-    const prompt = `TASK: Ghost Mannequin / Invisible Person 3D Effect
-CRITICAL CONSTRAINTS:
-1. GHOST MANNEQUIN EFFECT (CRITICAL): Transform the garment into a 3D, filled-out shape as if worn by an invisible person. It MUST look like it has volume and depth (a "ghost mannequin" or "hollow" look), NOT flat-layed on a table. If it is currently flat, you MUST add 3D depth and shape to it!
-2. REMOVE HUMAN MODELS: If there is a person (man or woman) in the image, completely remove their body, head, arms, and legs. KEEP THE GARMENT ONLY, floating with 3D volume.
-3. The garment is a ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
-4. VIEWPOINT: ${viewPoint || 'Front View'}. Ensure the garment is rotated and fully displayed from this exact perspective.
-5. FIT & LAY ON MANNEQUIN: ${activeFitInstruction}
-6. BACKGROUND & LIGHTING (CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows casting on a wall behind it or on the floor. NO grey, off-white, or textured backdrops. Every single non-garment pixel MUST be exactly #FFFFFF.
-7. PRESERVE DETAILS: Keep the fabric textures, details, and colors authentic to the original garment. Use soft, clean studio lighting to emphasize the 3D volume and contours of the garment itself.
-8. ARMS AT SIDES: If the garment has sleeves (e.g. hoodies, t-shirts), ensure the sleeves/arms are resting naturally straight down at the sides. Do NOT cross, bend, or lift the arms.`;
+    const prompt = `TASK: Professional Invisible Mannequin / 3D Floating Garment Render (Ultra-High Precision)
+
+CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
+1. EXACT COLOR & FABRIC REPRODUCTION (ZERO COLOR SHIFT):
+   - You MUST match the EXACT hue, saturation, color temperature, and brightness of the input garment.
+   - HEATHER & MELANGE FABRICS (CRITICAL): If the source garment is heathered, slub-knit, marled, or multi-toned (e.g. slate heather, charcoal flecks, heather navy, triblend grey), you MUST explicitly reproduce that exact speckled heather texture and subtle color variations. DO NOT turn heathered, textured, or multi-tone fabrics into generic solid monochrome grey, black, or white.
+   - UNDERSIDE & INSIDE COLLAR: Retain the natural interior fabric tone visible inside the neck opening.
+
+2. EXACT TRIMS, LABELS & CONSTRUCTION FIDELITY:
+   - COLLAR & NECKBAND: Match the original collar rib width, neckline shape, topstitching style, and ribbing density.
+   - NECK LABELS & BRANDING: Preserve all woven collar tags, printed size labels, neck tapes, and inner brand markings in their exact original color, size, text alignment, and position.
+   - STITCHING & HEMS: Replicate the sleeve hem stitching, bottom hem coverstitching, and shoulder seam construction.
+
+3. 3D GHOST MANNEQUIN SILHOUETTE:
+   - Fill out the garment into a 3D anatomical volume as if worn by an invisible body.
+   - The garment is a ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
+   - VIEWPOINT: ${viewPoint || 'Front View'}. Rotate and render the garment from this exact perspective.
+   - FIT & SILHOUETTE: ${activeFitInstruction}
+   - ARMS & SLEEVES: Sleeves rest naturally straight down at the sides. Do NOT cross, bend, or lift the arms.
+
+4. ISOLATION & NEUTRAL LIGHTING:
+   - BACKGROUND: Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF). Zero background cast or shadows on surrounding white pixels.
+   - LIGHTING: Soft, color-neutral studio lighting (5000K neutral daylight) that highlights 3D depth without washing out fabric colors or shifting subtle hues.`;
 
     const result = await model.generateContent([
       prompt,
