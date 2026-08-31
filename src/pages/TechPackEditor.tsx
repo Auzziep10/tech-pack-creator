@@ -498,6 +498,15 @@ export function TechPackEditor() {
     try {
       const generatedBase64 = await handleRecolorGarment(recolorBaseImage, recolorHex);
       
+      let uploadedImage = generatedBase64;
+      if (user?.uid && generatedBase64 && generatedBase64.startsWith('data:')) {
+        try {
+          uploadedImage = await uploadBase64Image(generatedBase64, user.uid);
+        } catch (err) {
+          console.error("Error pre-uploading recolored image:", err);
+        }
+      }
+
       const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -510,7 +519,7 @@ export function TechPackEditor() {
         id: `recolor_${Date.now()}`,
         name: recolorName || 'Recolored',
         hex: recolorHex,
-        image: generatedBase64,
+        image: uploadedImage,
         lab: [50.0, 0.0, 0.0]
       };
 

@@ -26,6 +26,32 @@ export interface TechPackData {
   folderId?: string | null;
 }
 
+export const uploadAllBase64InObject = async (obj: any, userId: string): Promise<any> => {
+  if (!obj) return obj;
+  if (typeof obj === 'string') {
+    if (obj.startsWith('data:image/') || (obj.startsWith('data:') && obj.length > 200)) {
+      try {
+        return await uploadBase64Image(obj, userId);
+      } catch (e) {
+        console.error("Failed auto-uploading base64 image string:", e);
+        return obj;
+      }
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return await Promise.all(obj.map(item => uploadAllBase64InObject(item, userId)));
+  }
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = await uploadAllBase64InObject(obj[key], userId);
+    }
+    return result;
+  }
+  return obj;
+};
+
 export const saveTechPack = async (
   userId: string, 
   companyId: string, 
@@ -47,6 +73,19 @@ export const saveTechPack = async (
     });
   }
 
+  // Ensure main imageUrl is uploaded to storage if base64
+  let finalImageUrl = imageUrl || '';
+  if (finalImageUrl.startsWith('data:')) {
+    try {
+      finalImageUrl = await uploadBase64Image(finalImageUrl, userId);
+    } catch (e) {
+      console.error("Failed uploading main base64 imageUrl:", e);
+    }
+  }
+
+  // Recursively convert any remaining base64 images inside techPack to Storage URLs
+  const sanitizedTechPack = await uploadAllBase64InObject(techPack, userId);
+
   const stripUndefined = (obj: any): any => {
     if (obj === undefined) return null;
     if (Array.isArray(obj)) return obj.map(stripUndefined);
@@ -65,8 +104,8 @@ export const saveTechPack = async (
   const payload = stripUndefined({
     companyId: companyId || userId,
     name: name || 'Untitled',
-    imageUrl: imageUrl || '',
-    techPack: techPack || {},
+    imageUrl: finalImageUrl || '',
+    techPack: sanitizedTechPack || {},
     activityLog: updatedLog,
     isTeamEditable
   });
