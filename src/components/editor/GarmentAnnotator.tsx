@@ -203,20 +203,20 @@ export function GarmentAnnotator({
       }>
         {/* Artboard Toolbar */}
         {isFullscreen && (
-          <div className="flex flex-wrap items-center gap-3 bg-white border border-gray-200 p-3 rounded-xl shadow-sm shrink-0 mx-auto w-full max-w-5xl">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 bg-white border border-gray-200 p-2.5 sm:p-3 rounded-xl shadow-sm shrink-0 mx-auto w-full max-w-5xl max-h-36 overflow-y-auto">
            <button 
              onClick={() => setIsBlueprintMode(!isBlueprintMode)}
-             className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${isBlueprintMode ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+             className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shrink-0 ${isBlueprintMode ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
            >
-             Blueprint Filter
+             Blueprint
            </button>
            
-           <div className="w-px h-6 bg-gray-200 mx-1" />
+           <div className="w-px h-6 bg-gray-200 hidden sm:block" />
            
            <select
              value={selectedMeasurement}
              onChange={(e) => setSelectedMeasurement(e.target.value)}
-             className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none w-48 font-medium"
+             className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs sm:text-sm outline-none w-36 sm:w-48 font-medium shrink-0"
            >
              <option value="">Select Measurement...</option>
              {measurements.map((m: any, i: number) => {
@@ -233,28 +233,26 @@ export function GarmentAnnotator({
                setIsEraserMode(false);
              }}
              disabled={!selectedMeasurement}
-             className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+             className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all shrink-0 ${
                !selectedMeasurement ? 'opacity-50 cursor-not-allowed bg-gray-100 text-gray-400' :
                isDrawingMode ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-gray-900 text-white hover:bg-black'
              }`}
            >
              <Pencil size={14} />
-             {isDrawingMode ? 'Draw Now...' : 'Add Callout Line'}
+             {isDrawingMode ? 'Drawing...' : 'Add Callout'}
            </button>
-           
-           <div className="flex-1" />
 
             {onVectorize && (
-              <div className="relative flex items-center">
+              <div className="relative flex items-center shrink-0">
                 <Button 
                   variant="secondary" 
                   size="sm" 
                   onClick={onVectorize} 
                   isLoading={isVectorizing}
-                  className="gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm mx-2 transition-all"
+                  className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs"
                 >
                   <Wand2 size={14} />
-                  Generate Vector Blueprint
+                  Vector Blueprint
                 </Button>
                 {isVectorizing && (
                   <div className="absolute top-full mt-2 lg:mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-purple-100 text-purple-800 text-[11px] lg:text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg border border-purple-200 animate-pulse z-50 pointer-events-none">
@@ -270,10 +268,10 @@ export function GarmentAnnotator({
                 variant="secondary" 
                 size="sm" 
                 onClick={() => setShowMannequinModal(true)} 
-                className="gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm mx-2 transition-all"
+                className="gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm transition-all text-xs shrink-0"
               >
                 <Sparkles size={14} />
-                Invisible Mannequin
+                Mannequin
               </Button>
             )}
 

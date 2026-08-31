@@ -14,7 +14,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-lg" 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -28,19 +28,19 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-lg" 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className={`relative w-full ${maxWidth} bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col`}
+            className={`relative w-[95vw] sm:w-full ${maxWidth} bg-white border border-gray-200 rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col`}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 shrink-0">
-              <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 shrink-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate pr-2">{title}</h2>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-xl hover:bg-gray-200"
+                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-900 transition-colors rounded-xl hover:bg-gray-200 shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
               {children}
             </div>
           </motion.div>

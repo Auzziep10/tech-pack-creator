@@ -352,16 +352,16 @@ export function Dashboard() {
   const folderMap = getFolderMap();
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-serif text-gray-900">Tech Pack Pipeline</h1>
-          <p className="text-gray-500 mt-2">Manage Garment Technical Specifications.</p>
+          <h1 className="text-2xl sm:text-4xl font-serif text-gray-900">Tech Pack Pipeline</h1>
+          <p className="text-gray-500 text-xs sm:text-sm mt-1">Manage Garment Technical Specifications.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {isSelectMode ? (
             <>
-              <Button onClick={() => { setIsSelectMode(false); setSelectedPacks([]); }} variant="secondary" className="rounded-full px-6 h-10">
+              <Button onClick={() => { setIsSelectMode(false); setSelectedPacks([]); }} variant="secondary" className="rounded-full px-4 sm:px-6 h-9 sm:h-10 text-xs sm:text-sm font-bold">
                 Cancel
               </Button>
               <Button
@@ -374,10 +374,10 @@ export function Dashboard() {
                 }}
                 disabled={selectedPacks.length === 0}
                 variant="secondary"
-                className="shrink-0 rounded-full px-5 h-10 font-bold flex items-center gap-2 border-gray-300 hover:bg-gray-100"
+                className="shrink-0 rounded-full px-4 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-gray-300 hover:bg-gray-100"
               >
-                <FolderInput size={18} />
-                <span>Move Selected ({selectedPacks.length})</span>
+                <FolderInput size={16} />
+                <span>Move ({selectedPacks.length})</span>
               </Button>
               <Button 
                 onClick={() => {
@@ -385,19 +385,19 @@ export function Dashboard() {
                   navigate('/combo-linesheet', { state: { packs: selectedData } });
                 }} 
                 disabled={selectedPacks.length === 0}
-                className="shrink-0 rounded-full px-6 bg-black text-white h-10 font-bold"
+                className="shrink-0 rounded-full px-4 sm:px-6 bg-black text-white h-9 sm:h-10 text-xs sm:text-sm font-bold"
               >
-                Generate Combo Line Sheet ({selectedPacks.length})
+                Line Sheet ({selectedPacks.length})
               </Button>
             </>
           ) : (
             <>
-              <Button onClick={() => setIsSelectMode(true)} variant="secondary" className="rounded-full px-6 hidden sm:block h-10 font-bold">
+              <Button onClick={() => setIsSelectMode(true)} variant="secondary" className="rounded-full px-4 sm:px-6 h-9 sm:h-10 text-xs sm:text-sm font-bold">
                 Select Multiple
               </Button>
-              <Button onClick={() => navigate('/create')} className="shrink-0 rounded-full px-6 h-10 font-bold">
-                <div className="flex items-center gap-2">
-                  <PlusCircle size={18} />
+              <Button onClick={() => navigate('/create')} className="shrink-0 rounded-full px-4 sm:px-6 h-9 sm:h-10 text-xs sm:text-sm font-bold">
+                <div className="flex items-center gap-1.5">
+                  <PlusCircle size={16} />
                   <span>New Tech Pack</span>
                 </div>
               </Button>
@@ -460,8 +460,8 @@ export function Dashboard() {
       )}
 
       {/* --- Breadcrumb Trail for Nested Folders --- */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50/90 border border-gray-200/80 rounded-xl px-4 py-2 w-fit">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-full">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50/90 border border-gray-200/80 rounded-xl px-3 sm:px-4 py-2 w-fit max-w-full overflow-x-auto scrollbar-hide">
           <button
             onClick={() => setActiveFolderId('ALL')}
             onDragOver={(e) => e.preventDefault()}

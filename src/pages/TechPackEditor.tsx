@@ -1254,16 +1254,16 @@ export function TechPackEditor() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-y-4">
-        <div className="flex items-center gap-4 flex-1 min-w-[200px] mr-4">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-hidden">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0" title="Back to Garment Location">
             <ArrowLeft size={20} />
           </button>
           <input 
             value={packName} 
             onChange={(e) => setPackName(e.target.value)} 
-            className="text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 w-full truncate" 
+            className="text-2xl sm:text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 w-full truncate" 
             placeholder="Garment Name"
           />
         </div>
@@ -1271,25 +1271,25 @@ export function TechPackEditor() {
           {pendingScans.length > 0 && (
             <Button 
                onClick={() => setShowScansInbox(true)} 
-               className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0"
+               className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0 text-xs sm:text-sm"
                title="New 3D Scans Available"
             >
-               <Smartphone size={16} className="mr-2" />
-               <span className="font-bold text-sm hidden sm:inline">Mobile Scans</span>
+               <Smartphone size={16} className="mr-1.5" />
+               <span className="font-bold">Scans</span>
                <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
                  {pendingScans.length}
                </div>
             </Button>
           )}
           
-          <div className="flex bg-gray-100 p-1 rounded-xl mr-2 print:hidden hidden sm:flex shrink-0">
-             <button onClick={() => setViewMode('techpack')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
-             <button onClick={() => setViewMode('linesheet')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
+          <div className="flex bg-gray-100 p-1 rounded-xl print:hidden flex shrink-0">
+             <button onClick={() => setViewMode('techpack')} className={`px-2.5 sm:px-4 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
+             <button onClick={() => setViewMode('linesheet')} className={`px-2.5 sm:px-4 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
           </div>
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm mr-2 print:hidden">
-            <span className="text-[10px] uppercase font-bold text-gray-400">Language:</span>
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm print:hidden">
+            <span className="text-[10px] uppercase font-bold text-gray-400">Lang:</span>
             <select 
-              className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-24"
+              className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-20"
               value={activeLanguage}
               onChange={(e) => handleLanguageChange(e.target.value)}
               disabled={isTranslating}
@@ -1310,30 +1310,30 @@ export function TechPackEditor() {
             </Button>
           )}
           {!canEdit && (
-            <div className="bg-orange-50 border border-orange-200 text-orange-600 px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-2 hidden sm:flex shrink-0">
+            <div className="bg-orange-50 border border-orange-200 text-orange-600 px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-2 shrink-0">
                <Lock size={14} /> View Only
             </div>
           )}
           {canEdit && (
-            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="px-3 md:px-4 h-9 shrink-0">
-              <div className="flex items-center gap-2 text-sm">
-                <Save size={16} />
-                <span className="hidden sm:inline font-semibold">Save</span>
+            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Save size={15} />
+                <span>Save</span>
               </div>
             </Button>
           )}
           <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
              <History size={16} />
           </Button>
-          <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
-            <div className="flex items-center gap-2 text-sm">
-              <Download size={16} />
-              <span className="hidden sm:inline font-semibold">Export</span>
+          <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3 sm:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <Download size={15} />
+              <span>Export</span>
             </div>
           </Button>
-          <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="hidden sm:inline font-semibold">Sync to WOVN</span>
+          <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3 sm:px-4 h-9 shadow-md shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <span>Sync</span>
             </div>
           </Button>
         </div>
@@ -1341,11 +1341,11 @@ export function TechPackEditor() {
 
       <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm relative">
         {/* Export Container */}
-        <div ref={exportRef} className="p-10 w-full bg-white text-gray-900 print-container">
+        <div ref={exportRef} className="p-4 sm:p-8 md:p-10 w-full bg-white text-gray-900 print-container max-w-full overflow-x-hidden">
           
           <header className="border-b border-gray-200 pb-2 mb-2 flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none uppercase">
+              <h1 className="text-2xl sm:text-3xl font-serif font-extrabold tracking-tight leading-none uppercase">
                  {packName ? `${packName} - ` : ''}{viewMode === 'linesheet' ? 'LINE SHEET' : 'TECH PACK'}
               </h1>
               <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">{viewMode === 'linesheet' ? 'WHOLESALE SUMMARY' : 'GARMENT SPECIFICATION'}</div>
@@ -1357,11 +1357,11 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-3 sm:gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.style || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('style', e.target.value)}
@@ -1370,7 +1370,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.season || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('season', e.target.value)}
@@ -1379,7 +1379,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.category || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('category', e.target.value)}
@@ -1388,7 +1388,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
                <select 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
                  value={displayData?.properties?.occasion || ''}
                  onChange={(e) => updateProperty('occasion', e.target.value)}
                >
@@ -1418,7 +1418,7 @@ export function TechPackEditor() {
                  )}
                </div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.colorsText || ''}
                  placeholder="Navy, Black"
                  onChange={(e) => {
@@ -1432,7 +1432,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.designer || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('designer', e.target.value)}
@@ -1441,7 +1441,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.gender || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('gender', e.target.value)}
@@ -1450,7 +1450,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
                <select 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
                  value={displayData?.properties?.baseSize || 'M'}
                  onChange={(e) => updateProperty('baseSize', e.target.value)}
                >
@@ -1676,27 +1676,27 @@ export function TechPackEditor() {
                 <div className="col-span-12 lg:col-span-7 print:w-full space-y-4">
                   {/* Measurements Table */}
               <div className="print-force-new-page">
-                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
+                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 leading-tight">
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
-                  <div className="flex items-center gap-2 print:hidden">
+                  <div className="flex flex-wrap items-center gap-1.5 print:hidden">
                     {!checkReadonly() && (
                       <>
                         <button 
                           onClick={handleGenerateCoreSpecs} 
                           disabled={isGeneratingCoreSpecs}
-                          className="text-[10px] font-sans font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-[10px] font-sans font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all px-2.5 py-1.5 h-auto flex items-center gap-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isGeneratingCoreSpecs ? (
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
                           ) : (
                             <Sparkles size={11} />
                           )}
-                          {isGeneratingCoreSpecs ? 'Generating...' : 'Generate Core Specs'}
+                          {isGeneratingCoreSpecs ? 'Generating...' : 'Core Specs'}
                         </button>
                         <button 
                           onClick={handleExpandMeasurements} 
                           disabled={isExpandingPOMs}
-                          className="text-[10px] font-sans font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all px-3 py-1.5 h-auto flex items-center gap-1.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-[10px] font-sans font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all px-2.5 py-1.5 h-auto flex items-center gap-1 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isExpandingPOMs ? (
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
@@ -1708,44 +1708,44 @@ export function TechPackEditor() {
                         <button 
                           onClick={handleClarifyInstructions} 
                           disabled={isClarifying}
-                          className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isClarifying ? (
                             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
                           ) : (
                             <Sparkles size={11} className="text-indigo-600" />
                           )}
-                          {isClarifying ? 'Clarifying...' : 'Clarify Instructions'}
+                          {isClarifying ? 'Clarifying...' : 'Clarify'}
                         </button>
                       </>
                     )}
-                    <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
-                      Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
+                    <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
+                      To {globalUnit === 'in' ? 'CM' : 'Inches'}
                     </button>
                   </div>
                 </h3>
 
-                <div className="flex items-center justify-between mb-4 print:hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 print:hidden">
                   <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 overflow-x-auto max-w-full">
                     {SIZES.map(size => (
                       <button 
                         key={size}
                         onClick={() => setActiveSizeTab(size)}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                       >
                         {size} {displayData?.properties?.baseSize === size || (!displayData?.properties?.baseSize && size === 'M') ? '(Base)' : ''}
                       </button>
                     ))}
                   </div>
                   {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (
-                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 ml-4 shrink-0">
+                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 shrink-0 text-xs">
                       <Calculator size={14} className="mr-1 inline-block"/> Compute Size {activeSizeTab}
                     </Button>
                   )}
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-xs print:text-[10px] text-left">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
+                  <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-2 py-1 font-medium w-24">DIM (ID)</th>
@@ -1784,8 +1784,8 @@ export function TechPackEditor() {
               {/* Style BOM (Bill of Materials) Table */}
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 leading-tight">Style BOM (Bill of Materials)</h3>
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-xs print:text-[10px] text-left">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
+                  <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-2 py-1 font-medium w-28">Category</th>
