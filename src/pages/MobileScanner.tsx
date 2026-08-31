@@ -184,10 +184,24 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
     startTouchRef.current = null;
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (imgRef.current) {
+        emitPixelCrop(cropBox);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [cropBox, emitPixelCrop]);
+
   return (
     <div className="flex flex-col h-full w-full select-none bg-black">
       {/* Aspect Ratio Selector Pills */}
-      <div className="bg-black/90 px-4 py-2 flex items-center justify-center gap-2 z-30 overflow-x-auto scrollbar-hide border-b border-white/10">
+      <div className="bg-black/90 px-4 py-2 landscape:py-1 flex items-center justify-center gap-2 z-30 overflow-x-auto scrollbar-hide border-b border-white/10">
         <span className="text-white/60 text-[10px] sm:text-xs font-bold shrink-0 uppercase tracking-wider mr-1">Crop Ratio:</span>
         {[
           { key: 'free', label: 'Free Crop' },
@@ -199,7 +213,7 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
           <button
             key={btn.key}
             onClick={() => handleAspectChange(btn.key as any)}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition-all shrink-0 ${
+            className={`px-3 py-1 landscape:py-0.5 rounded-full text-xs font-bold transition-all shrink-0 ${
               aspectMode === btn.key
                 ? 'bg-white text-black shadow-md scale-105'
                 : 'bg-white/10 text-white/80 hover:bg-white/20'
@@ -213,7 +227,7 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
       {/* Main Image Cropping Canvas Area */}
       <div
         ref={containerRef}
-        className="flex-1 relative flex items-center justify-center p-4 overflow-hidden touch-none"
+        className="flex-1 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden touch-none min-h-0"
         onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
         onMouseUp={handlePointerEnd}
         onTouchMove={(e) => {
@@ -229,7 +243,7 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
             src={imageSrc}
             alt="Captured Garment"
             onLoad={handleImageLoad}
-            className="max-w-full max-h-[55vh] sm:max-h-[60vh] object-contain block mx-auto pointer-events-none rounded-lg"
+            className="max-w-full max-h-[55vh] sm:max-h-[60vh] landscape:max-h-[72vh] object-contain block mx-auto pointer-events-none rounded-lg"
           />
 
           {/* Dark Overlay around crop box */}
@@ -621,37 +635,37 @@ export function MobileScanner() {
            />
            
            <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
-              <div className="bg-black/50 backdrop-blur-sm h-32 flex items-center justify-center pt-8 px-6">
+              <div className="bg-black/50 backdrop-blur-sm h-24 sm:h-28 landscape:h-12 flex items-center justify-center pt-6 sm:pt-8 landscape:pt-1 px-6">
                  <div className="text-center">
-                   <h2 className="text-white font-serif text-xl font-bold tracking-wide uppercase">Scan {scanSide} of Garment</h2>
-                   <p className="text-white/80 text-sm mt-1">Lay flat and align within the frame</p>
+                   <h2 className="text-white font-serif text-lg sm:text-xl landscape:text-sm font-bold tracking-wide uppercase">Scan {scanSide} of Garment</h2>
+                   <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Lay flat and align within the frame</p>
                  </div>
               </div>
               
-              <div className="flex-1 flex items-center justify-center p-8">
-                 <div className="w-full h-3/4 max-h-[500px] max-w-md relative">
+              <div className="flex-1 flex items-center justify-center p-4 sm:p-8 min-h-0">
+                 <div className="w-full h-3/4 max-h-[500px] max-w-md landscape:max-h-[220px] landscape:max-w-lg relative">
                    <div className="absolute top-0 left-0 w-full h-1 bg-green-400 shadow-[0_0_15px_#4ade80] animate-scan-laser z-20" />
-                   <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-xl" />
-                   <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-xl" />
-                   <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-xl" />
-                   <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/80 rounded-br-xl" />
+                   <div className="absolute top-0 left-0 w-8 sm:w-12 h-8 sm:h-12 border-t-4 border-l-4 border-white/80 rounded-tl-xl" />
+                   <div className="absolute top-0 right-0 w-8 sm:w-12 h-8 sm:h-12 border-t-4 border-r-4 border-white/80 rounded-tr-xl" />
+                   <div className="absolute bottom-0 left-0 w-8 sm:w-12 h-8 sm:h-12 border-b-4 border-l-4 border-white/80 rounded-bl-xl" />
+                   <div className="absolute bottom-0 right-0 w-8 sm:w-12 h-8 sm:h-12 border-b-4 border-r-4 border-white/80 rounded-br-xl" />
                  </div>
               </div>
               
-              <div className="bg-black/50 backdrop-blur-sm h-40 flex flex-col items-center justify-center pb-8 border-t border-white/10 relative">
-                 <div className="absolute top-[-70px] left-1/2 -translate-x-1/2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10">
+              <div className="bg-black/50 backdrop-blur-sm h-32 sm:h-40 landscape:h-16 flex flex-col items-center justify-center pb-4 sm:pb-8 landscape:pb-1 border-t border-white/10 relative">
+                 <div className="absolute top-[-55px] sm:top-[-70px] landscape:top-[-38px] left-1/2 -translate-x-1/2 bg-black/60 px-3 sm:px-4 py-1 sm:py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10 scale-90 sm:scale-100">
                     <span className="text-white text-xs font-bold">Zoom</span>
                     <input 
                       type="range" 
                       min="1" max="3" step="0.1" 
                       value={preZoom} 
                       onChange={(e) => setPreZoom(parseFloat(e.target.value))} 
-                      className="w-32 accent-white"
+                      className="w-24 sm:w-32 accent-white cursor-pointer"
                     />
                  </div>
 
                  {videoDevices.length > 1 && (
-                   <div className="absolute top-[-30px] left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-auto bg-black/70 p-1.5 rounded-full backdrop-blur-md border border-white/20 shadow-2xl">
+                   <div className="absolute top-[-22px] sm:top-[-30px] landscape:top-[-18px] left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-auto bg-black/70 p-1 rounded-full backdrop-blur-md border border-white/20 shadow-2xl scale-90 sm:scale-100">
                       {(() => {
                         const uniqueBadges = new Map();
                         videoDevices.forEach((device) => {
@@ -679,10 +693,10 @@ export function MobileScanner() {
                            <button 
                              key={d.deviceId}
                              onClick={() => startCamera(d.deviceId, d.badge)}
-                             className={`w-12 h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
-                               activeDeviceId === d.deviceId 
-                                 ? "bg-white text-black shadow-md scale-110" 
-                                 : "bg-transparent text-white hover:bg-white/20"
+                             className={`w-10 sm:w-12 h-8 sm:h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
+                                activeDeviceId === d.deviceId 
+                                  ? "bg-white text-black shadow-md scale-110" 
+                                  : "bg-transparent text-white hover:bg-white/20"
                              }`}
                            >
                               {d.badge}
@@ -692,13 +706,13 @@ export function MobileScanner() {
                    </div>
                  )}
 
-                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto mt-6">
+                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto mt-2 sm:mt-6 landscape:mt-1">
                    {hasCameraError ? (
-                     <button onClick={() => startCamera()} className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg">Retry Camera</button>
+                     <button onClick={() => startCamera()} className="bg-white text-black px-6 py-2.5 rounded-full font-bold shadow-lg text-xs sm:text-sm">Retry Camera</button>
                    ) : (
                      <button 
                        onClick={capturePhoto} 
-                       className="w-20 h-20 rounded-full border-4 border-white/80 flex items-center justify-center p-1 active:scale-95 transition-transform"
+                       className="w-14 h-14 sm:w-20 sm:h-20 landscape:w-11 landscape:h-11 rounded-full border-4 border-white/80 flex items-center justify-center p-1 active:scale-95 transition-transform"
                      >
                         <div className="w-full h-full bg-white rounded-full shadow-lg" />
                      </button>
@@ -711,10 +725,10 @@ export function MobileScanner() {
          /* Review & Crop UI */
          <div className="flex-1 flex flex-col bg-black absolute inset-0 z-20">
            {/* Header Mask */}
-           <div className="bg-black/90 backdrop-blur-sm h-20 sm:h-24 flex items-center justify-center pt-4 px-6 z-30 pointer-events-none shrink-0 border-b border-white/10">
+           <div className="bg-black/90 backdrop-blur-sm h-16 sm:h-24 landscape:h-10 flex items-center justify-center pt-2 sm:pt-4 landscape:pt-1 px-4 z-30 pointer-events-none shrink-0 border-b border-white/10">
               <div className="text-center">
-                <h2 className="text-white font-serif text-lg sm:text-xl font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
-                <p className="text-white/80 text-xs sm:text-sm mt-0.5">Drag corners or sides freely to frame your garment</p>
+                <h2 className="text-white font-serif text-base sm:text-xl landscape:text-xs font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
+                <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Drag corners or sides freely to frame your garment</p>
               </div>
            </div>
 
@@ -725,29 +739,29 @@ export function MobileScanner() {
              />
            </div>
 
-           <div className="h-32 sm:h-36 bg-white flex flex-col items-center px-6 rounded-t-3xl border-t border-gray-200 z-30 pt-4 shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+           <div className="h-28 sm:h-36 landscape:h-14 bg-white flex flex-col items-center px-4 sm:px-6 rounded-t-2xl sm:rounded-t-3xl border-t border-gray-200 z-30 pt-2 sm:pt-4 landscape:pt-1.5 shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
              <div className="flex items-center justify-around w-full max-w-md">
                <button 
                  onClick={retakePhoto}
                  disabled={isUploading}
-                 className="flex flex-col items-center justify-center text-gray-500 font-medium py-2 px-4 disabled:opacity-50"
+                 className="flex flex-col items-center justify-center text-gray-500 font-medium py-1 px-3 disabled:opacity-50"
                >
-                 <RefreshCw size={22} className="mb-1" />
-                 <span className="text-xs">Retake</span>
+                 <RefreshCw size={18} className="mb-0.5 sm:mb-1" />
+                 <span className="text-[10px] sm:text-xs">Retake</span>
                </button>
                <button 
                  onClick={submitPhoto}
                  disabled={isUploading}
-                 className="bg-black text-white px-8 sm:px-10 py-3.5 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50 text-sm sm:text-base"
+                 className="bg-black text-white px-6 sm:px-10 py-2.5 sm:py-3.5 landscape:py-2 landscape:px-6 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50 text-xs sm:text-base"
                >
                  {isUploading ? (
                    <>
-                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                      {scanSide === 'front' ? 'Processing...' : 'Sending...'}
                    </>
                  ) : (
                    <>
-                     <Camera size={18} />
+                     <Camera size={16} />
                      {scanSide === 'front' ? 'Proceed to Back' : 'Finish & Upload'}
                    </>
                  )}
