@@ -88,7 +88,8 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
 
 export async function recolorGarmentImage(imageUrl: string, colorHex: string): Promise<string> {
   try {
-    const { base64Data, mimeType } = await resizeImage(imageUrl);
+    // Resize down to 1024px max dimension for faster AI recoloring turnaround
+    const { base64Data, mimeType } = await resizeImage(imageUrl, 1024);
 
     const res = await fetch('/api/recolor', {
       method: 'POST',
