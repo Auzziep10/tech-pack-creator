@@ -428,13 +428,13 @@ export function Dashboard() {
                   className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
                     isSelected
                       ? 'bg-black text-white shadow-sm'
-                      : 'bg-amber-50/80 hover:bg-amber-100/80 text-amber-900 border border-amber-200/60'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                   } ${isDragTarget ? 'ring-2 ring-blue-500 scale-105' : ''}`}
                   onClick={() => setActiveFolderId(folder.id!)}
                 >
-                  <Folder size={14} className={isSelected ? 'text-amber-300' : 'text-amber-600'} />
+                  <Folder size={14} className={isSelected ? 'text-white' : 'text-gray-500'} />
                   <span>{folder.name}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-amber-200/60 text-amber-900'}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
                     {count}
                   </span>
 
@@ -443,7 +443,7 @@ export function Dashboard() {
                       e.stopPropagation();
                       setActiveFolderMenuId(isMenuOpen ? null : folder.id!);
                     }}
-                    className={`p-1 rounded-full hover:bg-black/10 transition-colors ${isSelected ? 'text-white/80 hover:text-white' : 'text-amber-800'}`}
+                    className={`p-1 rounded-full hover:bg-black/10 transition-colors ${isSelected ? 'text-white/80 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}
                   >
                     <MoreVertical size={13} />
                   </button>
@@ -590,12 +590,12 @@ export function Dashboard() {
                         }}
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-sm backdrop-blur-sm ${
                           folderName
-                            ? 'bg-amber-100/90 text-amber-900 hover:bg-amber-200 border border-amber-300/50'
+                            ? 'bg-gray-100/90 text-gray-800 hover:bg-gray-200 border border-gray-200'
                             : 'bg-white/80 text-gray-500 hover:bg-white hover:text-black border border-gray-200 opacity-80 group-hover:opacity-100'
                         }`}
                         title="Change folder"
                       >
-                        <Folder size={11} className={folderName ? 'text-amber-700' : 'text-gray-400'} />
+                        <Folder size={11} className={folderName ? 'text-gray-600' : 'text-gray-400'} />
                         <span className="max-w-[100px] truncate">{folderName || 'Assign Folder'}</span>
                       </button>
                     </div>

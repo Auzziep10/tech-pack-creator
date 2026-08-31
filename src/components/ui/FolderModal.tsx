@@ -128,7 +128,7 @@ export function FolderModal({
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
                         <Folder size={16} />
                       </div>
                       <span>{folder.name}</span>
