@@ -110,6 +110,104 @@ async function resizeImage(imageUrl: string, maxSize = 2048): Promise<{ base64Da
   });
 }
 
+// Helper to crop out excess solid white/transparent padding from any image data URL or HTTP URL
+export async function autoTrimWhitePadding(imageUrl: string): Promise<string> {
+  let targetSrc = imageUrl;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    try {
+      const resp = await fetch(imageUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        targetSrc = await new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result as string);
+          reader.onerror = rej;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {
+      // Fallback to direct src if fetch blocked
+    }
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (!targetSrc.startsWith('data:') && !targetSrc.startsWith('blob:')) {
+      img.crossOrigin = 'Anonymous';
+    }
+    img.onload = () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+      if (!tempCtx) return resolve(imageUrl);
+
+      tempCtx.drawImage(img, 0, 0);
+      let data: Uint8ClampedArray | null = null;
+      try {
+        data = tempCtx.getImageData(0, 0, img.width, img.height).data;
+      } catch (e) {
+        return resolve(imageUrl);
+      }
+
+      if (!data) return resolve(imageUrl);
+
+      let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+      let foundSubject = false;
+
+      // Sample pixels every 2px to locate non-background bounds
+      for (let y = 0; y < img.height; y += 2) {
+        for (let x = 0; x < img.width; x += 2) {
+          const idx = (y * img.width + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const a = data[idx + 3];
+
+          // Check if pixel is NOT background (RGB > 245 or alpha < 20)
+          const isBackground = (r > 245 && g > 245 && b > 245) || a < 20;
+          if (!isBackground) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            foundSubject = true;
+          }
+        }
+      }
+
+      if (!foundSubject || maxX <= minX || maxY <= minY) {
+        return resolve(imageUrl);
+      }
+
+      // Add tight 2.5% breathing margin around subject
+      const subjectW = maxX - minX;
+      const subjectH = maxY - minY;
+      const marginX = Math.round(subjectW * 0.025);
+      const marginY = Math.round(subjectH * 0.025);
+
+      const cropX = Math.max(0, minX - marginX);
+      const cropY = Math.max(0, minY - marginY);
+      const cropW = Math.min(img.width - cropX, subjectW + marginX * 2);
+      const cropH = Math.min(img.height - cropY, subjectH + marginY * 2);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(imageUrl);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, cropW, cropH);
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
+    };
+    img.onerror = () => resolve(imageUrl);
+    img.src = targetSrc;
+  });
+}
+
 export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
   try {
     const { base64Data, mimeType } = await resizeImage(imageUrl);
@@ -128,7 +226,7 @@ export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
     }
 
     const data = await res.json();
-    return data.data;
+    return await autoTrimWhitePadding(data.data);
 
   } catch (err) {
     console.error("Vectorization Error:", err);
@@ -154,7 +252,8 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
     }
 
     const data = await res.json();
-    return data.data;
+    // Automatically trim excess white margins so mannequin is always full size
+    return await autoTrimWhitePadding(data.data);
 
   } catch (err) {
     console.error("Invisible Mannequin Error:", err);
@@ -181,7 +280,7 @@ export async function recolorGarmentImage(imageUrl: string, colorHex: string): P
     }
 
     const data = await res.json();
-    return data.data;
+    return await autoTrimWhitePadding(data.data);
 
   } catch (err) {
     console.error("Recoloring Error:", err);
@@ -297,7 +396,7 @@ export async function eraseBrandingRegion(imageUrl: string, maskBase64: string):
     }
 
     const data = await res.json();
-    return data.data;
+    return await autoTrimWhitePadding(data.data);
 
   } catch (err) {
     console.error("Erase Branding Error:", err);

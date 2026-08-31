@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
-import { eraseBrandingRegion } from '../../services/nanobananaService';
+import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 
 interface Point {
   x: number;
@@ -54,6 +54,7 @@ export function GarmentAnnotator({
   const [isSavingMannequin, setIsSavingMannequin] = useState(false);
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
   const [mannequinError, setMannequinError] = useState('');
+  const [isTrimming, setIsTrimming] = useState(false);
 
   // Branding Eraser States
   const [isEraserMode, setIsEraserMode] = useState(false);
@@ -69,6 +70,21 @@ export function GarmentAnnotator({
   useEffect(() => {
     setErasedResultImage(null);
   }, [imageUrl]);
+
+  const handleAutoTrimCurrent = async () => {
+    setIsTrimming(true);
+    try {
+      const trimmed = await autoTrimWhitePadding(erasedResultImage || imageUrl);
+      setErasedResultImage(trimmed);
+      if (onSaveErasedImage) {
+        await onSaveErasedImage(trimmed);
+      }
+    } catch (err) {
+      console.error("Auto trim failed:", err);
+    } finally {
+      setIsTrimming(false);
+    }
+  };
 
   const handleGenerateMannequin = async () => {
     if (!onGenerateMannequin) return;
@@ -274,6 +290,18 @@ export function GarmentAnnotator({
                 Mannequin
               </Button>
             )}
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleAutoTrimCurrent}
+              isLoading={isTrimming}
+              className="gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-sm transition-all text-xs shrink-0"
+              title="Crop out excess white background to fill full height"
+            >
+              <Crop size={14} />
+              Auto-Crop Full Size
+            </Button>
 
             {/* Branding Eraser / Save / Reset Controls in Toolbar */}
             {!erasedResultImage && (
@@ -526,13 +554,25 @@ export function GarmentAnnotator({
 
       {!isFullscreen && (
           <div 
-            className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer" 
+            className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center gap-2.5 opacity-0 hover:opacity-100 cursor-pointer" 
             onClick={() => setIsFullscreen(true)}
           >
              <Button variant="secondary" onClick={() => setIsFullscreen(true)} className="shadow-xl gap-2 pointer-events-none">
                 <Maximize size={16} />
                 Edit & Annotate Image
              </Button>
+             <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAutoTrimCurrent();
+                }}
+                disabled={isTrimming}
+                className="px-3.5 py-2 bg-white text-black font-bold rounded-xl shadow-xl hover:bg-gray-100 transition-all text-xs flex items-center gap-1.5 border border-gray-200"
+                title="Auto-crop excess white background to fill full size"
+             >
+                <Crop size={14} className={isTrimming ? 'animate-spin' : ''} />
+                {isTrimming ? 'Cropping...' : 'Auto-Crop Full Size'}
+             </button>
           </div>
         )}
 
