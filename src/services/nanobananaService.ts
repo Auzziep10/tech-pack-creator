@@ -261,6 +261,32 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
   }
 }
 
+export async function generateFlatlayMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/flatlay', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return await autoTrimWhitePadding(data.data);
+
+  } catch (err) {
+    console.error("Flat-Lay Generation Error:", err);
+    throw err;
+  }
+}
+
 export async function recolorGarmentImage(imageUrl: string, colorHex: string): Promise<string> {
   try {
     // Resize down to 1024px max dimension for faster AI recoloring turnaround

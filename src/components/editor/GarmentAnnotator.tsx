@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
@@ -70,6 +70,7 @@ interface GarmentAnnotatorProps {
   onVectorize?: () => void;
   isVectorizing?: boolean;
   onGenerateMannequin?: (gender: string, garmentType: string, viewPoint: string, fitStyle: string) => Promise<string>;
+  onGenerateFlatlay?: (gender: string, garmentType: string, viewPoint: string) => Promise<string>;
   onSaveMannequinImage?: (imgUrl: string) => Promise<void>;
   onSaveErasedImage?: (imgUrl: string) => Promise<void>;
 }
@@ -80,6 +81,7 @@ export function GarmentAnnotator({
   onVectorize, 
   isVectorizing,
   onGenerateMannequin,
+  onGenerateFlatlay,
   onSaveMannequinImage,
   onSaveErasedImage
 }: GarmentAnnotatorProps) {
@@ -101,6 +103,17 @@ export function GarmentAnnotator({
   const [isSavingMannequin, setIsSavingMannequin] = useState(false);
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
   const [mannequinError, setMannequinError] = useState('');
+
+  // Flatlay States
+  const [showFlatlayModal, setShowFlatlayModal] = useState(false);
+  const [flatlayGender, setFlatlayGender] = useState('Unisex');
+  const [flatlayGarmentType, setFlatlayGarmentType] = useState('T-Shirt');
+  const [flatlayViewPoint, setFlatlayViewPoint] = useState('Front View');
+  const [isGeneratingFlatlay, setIsGeneratingFlatlay] = useState(false);
+  const [isSavingFlatlay, setIsSavingFlatlay] = useState(false);
+  const [flatlayResultImage, setFlatlayResultImage] = useState<string | null>(null);
+  const [flatlayError, setFlatlayError] = useState('');
+
   const [isTrimming, setIsTrimming] = useState(false);
 
   // Manual Crop States
@@ -152,6 +165,23 @@ export function GarmentAnnotator({
       setMannequinError(err.message || 'Failed to generate floating garment. Please try again.');
     } finally {
       setIsGeneratingMannequin(false);
+    }
+  };
+
+  const handleGenerateFlatlay = async () => {
+    if (!onGenerateFlatlay) return;
+    setIsGeneratingFlatlay(true);
+    setFlatlayError('');
+    try {
+      const generated = await onGenerateFlatlay(flatlayGender, flatlayGarmentType, flatlayViewPoint);
+      if (generated) {
+        setFlatlayResultImage(generated);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setFlatlayError(err.message || 'Failed to generate flat-lay mockup. Please try again.');
+    } finally {
+      setIsGeneratingFlatlay(false);
     }
   };
 
@@ -340,6 +370,19 @@ export function GarmentAnnotator({
               >
                 <Sparkles size={14} />
                 Mannequin
+              </Button>
+            )}
+
+            {(onGenerateFlatlay || onGenerateMannequin) && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => setShowFlatlayModal(true)} 
+                className="gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+                title="Create Studio Flat-Lay Mockup"
+              >
+                <Layers size={14} />
+                Flatlay
               </Button>
             )}
 
@@ -814,6 +857,122 @@ export function GarmentAnnotator({
                         }}
                         disabled={isSavingMannequin}
                         isLoading={isSavingMannequin}
+                        className="w-full bg-emerald-600 border border-emerald-600 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        Add to Garment Images
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showFlatlayModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowFlatlayModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-1">Mockup Generator</p>
+                <h3 className="font-serif text-2xl text-gray-900">Create Studio Flat-Lay</h3>
+              </div>
+              <button onClick={() => setShowFlatlayModal(false)} className="p-2 hover:bg-gray-50 rounded-full text-gray-500 hover:text-black transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="aspect-[3/4] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative">
+                    <img src={flatlayResultImage || imageUrl} className="w-full h-full object-contain p-2" />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Gender</label>
+                      <select
+                        value={flatlayGender}
+                        onChange={e => setFlatlayGender(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="Man">Man</option>
+                        <option value="Woman">Woman</option>
+                        <option value="Unisex">Unisex</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Garment Type</label>
+                      <select
+                        value={flatlayGarmentType}
+                        onChange={e => setFlatlayGarmentType(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="T-Shirt">T-Shirt</option>
+                        <option value="Hoodie">Hoodie</option>
+                        <option value="Polo">Polo</option>
+                        <option value="Pants">Pants</option>
+                        <option value="Shorts">Shorts</option>
+                        <option value="Swimwear">Swimwear</option>
+                        <option value="Hats">Hats</option>
+                        <option value="Outerwear">Outerwear</option>
+                        <option value="Quarter Zip">Quarter Zip</option>
+                        <option value="Long Sleeve">Long Sleeve</option>
+                        <option value="Tank Top">Tank Top</option>
+                        <option value="Skirt">Skirt</option>
+                        <option value="Romper">Romper</option>
+                        <option value="Dress">Dress</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Viewpoint</label>
+                      <select
+                        value={flatlayViewPoint}
+                        onChange={e => setFlatlayViewPoint(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="Front View">Front View</option>
+                        <option value="Back View">Back View</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {flatlayError && (
+                    <p className="text-red-500 text-xs font-medium">{flatlayError}</p>
+                  )}
+
+                  <div className="space-y-3 pt-4 border-t border-gray-100">
+                    <Button
+                      onClick={handleGenerateFlatlay}
+                      disabled={isGeneratingFlatlay}
+                      isLoading={isGeneratingFlatlay}
+                      className="w-full bg-indigo-600 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Layers size={14} /> {isGeneratingFlatlay ? 'Generating Flat-Lay...' : (flatlayResultImage ? 'Regenerate Flat-Lay' : 'Create Tabletop Flat-Lay')}
+                    </Button>
+
+                    {flatlayResultImage && onSaveMannequinImage && (
+                      <Button
+                        onClick={async () => {
+                          try {
+                            setIsSavingFlatlay(true);
+                            await onSaveMannequinImage(flatlayResultImage);
+                            setShowFlatlayModal(false);
+                            setFlatlayResultImage(null);
+                          } catch (err: any) {
+                            setFlatlayError(err.message || 'Failed to save image.');
+                          } finally {
+                            setIsSavingFlatlay(false);
+                          }
+                        }}
+                        disabled={isSavingFlatlay}
+                        isLoading={isSavingFlatlay}
                         className="w-full bg-emerald-600 border border-emerald-600 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
                       >
                         Add to Garment Images

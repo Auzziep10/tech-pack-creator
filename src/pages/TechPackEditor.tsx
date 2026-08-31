@@ -397,6 +397,11 @@ export function TechPackEditor() {
     return await generateInvisibleMockup(imageUrl, garmentType, gender, viewPoint, fitStyle);
   };
 
+  const handleGenerateFlatlay = async (gender: string, garmentType: string, viewPoint: string): Promise<string> => {
+    const { generateFlatlayMockup } = await import('../services/nanobananaService');
+    return await generateFlatlayMockup(imageUrl, garmentType, gender, viewPoint);
+  };
+
   const handleSaveMannequinImage = async (base64Image: string) => {
     if (!user) {
       throw new Error("You must be logged in to save images.");
@@ -1492,6 +1497,7 @@ export function TechPackEditor() {
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
                         onGenerateMannequin={handleGenerateMannequin}
+                        onGenerateFlatlay={handleGenerateFlatlay}
                         onSaveMannequinImage={handleSaveMannequinImage}
                         onSaveErasedImage={handleSaveErasedImage}
                       />
