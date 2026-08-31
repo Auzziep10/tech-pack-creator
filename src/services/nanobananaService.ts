@@ -1,7 +1,27 @@
 async function resizeImage(imageUrl: string, maxSize = 2048): Promise<{ base64Data: string, mimeType: string }> {
+  let targetSrc = imageUrl;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    try {
+      const resp = await fetch(imageUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        targetSrc = await new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onloadend = () => res(reader.result as string);
+          reader.onerror = rej;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch (e) {
+      // Fallback to direct src if pre-fetch is blocked
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'Anonymous';
+    if (!targetSrc.startsWith('data:') && !targetSrc.startsWith('blob:')) {
+      img.crossOrigin = 'Anonymous';
+    }
     img.onload = () => {
       // Create temporary canvas to measure bounding box of garment subject
       const tempCanvas = document.createElement('canvas');
@@ -86,7 +106,7 @@ async function resizeImage(imageUrl: string, maxSize = 2048): Promise<{ base64Da
       else reject(new Error("Failed to parse data URL"));
     };
     img.onerror = () => reject(new Error("Failed to load image for resizing"));
-    img.src = imageUrl;
+    img.src = targetSrc;
   });
 }
 
