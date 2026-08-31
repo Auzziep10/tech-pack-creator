@@ -2,12 +2,11 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
-import Cropper from 'react-easy-crop';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
 // Helper function to extract the visually cropped portion of the image into a neat JPEG
-const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> => {
+const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> => {
   const image = new Image();
   image.src = imageSrc;
   await new Promise(resolve => image.onload = resolve);
@@ -15,7 +14,7 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   
-  if (!ctx) return imageSrc;
+  if (!ctx || !pixelCrop || !pixelCrop.width || !pixelCrop.height) return imageSrc;
 
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
@@ -32,8 +31,335 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<string> 
     pixelCrop.height
   );
 
-  return canvas.toDataURL('image/jpeg', 1.0);
+  return canvas.toDataURL('image/jpeg', 0.95);
 };
+
+interface FreeCropperProps {
+  imageSrc: string;
+  onCropComplete: (pixelCrop: { x: number; y: number; width: number; height: number }) => void;
+}
+
+export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Aspect ratio state: 'free' | '4:5' | '1:1' | '3:4' | 'full'
+  const [aspectMode, setAspectMode] = useState<'free' | '4:5' | '1:1' | '3:4' | 'full'>('free');
+
+  // Crop box percentage values relative to displayed image: 0 to 100
+  const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number }>({
+    x: 5,
+    y: 5,
+    w: 90,
+    h: 90,
+  });
+
+  const [activeHandle, setActiveHandle] = useState<string | null>(null);
+  const startTouchRef = useRef<{ touchX: number; touchY: number; initialBox: { x: number; y: number; w: number; h: number } } | null>(null);
+  const naturalSizeRef = useRef<{ width: number; height: number }>({ width: 1, height: 1 });
+
+  const emitPixelCrop = useCallback((box: { x: number; y: number; w: number; h: number }) => {
+    const { width: nw, height: nh } = naturalSizeRef.current;
+    const pixelCrop = {
+      x: Math.max(0, Math.round((box.x / 100) * nw)),
+      y: Math.max(0, Math.round((box.y / 100) * nh)),
+      width: Math.min(nw, Math.round((box.w / 100) * nw)),
+      height: Math.min(nh, Math.round((box.h / 100) * nh)),
+    };
+    onCropComplete(pixelCrop);
+  }, [onCropComplete]);
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    naturalSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
+    emitPixelCrop(cropBox);
+  };
+
+  // Adjust crop box when aspect ratio preset button is clicked
+  const handleAspectChange = (mode: 'free' | '4:5' | '1:1' | '3:4' | 'full') => {
+    setAspectMode(mode);
+    let newBox = { ...cropBox };
+
+    if (mode === 'full') {
+      newBox = { x: 2, y: 2, w: 96, h: 96 };
+    } else if (mode !== 'free') {
+      const ratioMap: Record<string, number> = {
+        '4:5': 4 / 5,
+        '1:1': 1 / 1,
+        '3:4': 3 / 4,
+      };
+      const targetRatio = ratioMap[mode];
+      const { width: nw, height: nh } = naturalSizeRef.current;
+      const imgRatio = (nw * (newBox.w / 100)) / (nh * (newBox.h / 100));
+
+      if (imgRatio > targetRatio) {
+        const targetW = ((nh * (newBox.h / 100) * targetRatio) / nw) * 100;
+        newBox.x = Math.max(0, newBox.x + (newBox.w - targetW) / 2);
+        newBox.w = targetW;
+      } else {
+        const targetH = (((nw * (newBox.w / 100)) / targetRatio) / nh) * 100;
+        newBox.y = Math.max(0, newBox.y + (newBox.h - targetH) / 2);
+        newBox.h = targetH;
+      }
+    }
+
+    setCropBox(newBox);
+    emitPixelCrop(newBox);
+  };
+
+  const handlePointerStart = (handle: string, clientX: number, clientY: number) => {
+    setActiveHandle(handle);
+    startTouchRef.current = {
+      touchX: clientX,
+      touchY: clientY,
+      initialBox: { ...cropBox },
+    };
+  };
+
+  const handlePointerMove = useCallback((clientX: number, clientY: number) => {
+    if (!activeHandle || !startTouchRef.current || !imgRef.current) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const deltaXPercent = ((clientX - startTouchRef.current.touchX) / rect.width) * 100;
+    const deltaYPercent = ((clientY - startTouchRef.current.touchY) / rect.height) * 100;
+
+    const { initialBox } = startTouchRef.current;
+    let { x, y, w, h } = initialBox;
+
+    const minSize = 8; // minimum 8% width/height
+
+    if (activeHandle === 'move') {
+      x = Math.max(0, Math.min(100 - w, initialBox.x + deltaXPercent));
+      y = Math.max(0, Math.min(100 - h, initialBox.y + deltaYPercent));
+    } else {
+      if (activeHandle.includes('w')) {
+        const newX = Math.max(0, Math.min(initialBox.x + initialBox.w - minSize, initialBox.x + deltaXPercent));
+        w = initialBox.x + initialBox.w - newX;
+        x = newX;
+      }
+      if (activeHandle.includes('e')) {
+        w = Math.max(minSize, Math.min(100 - initialBox.x, initialBox.w + deltaXPercent));
+      }
+      if (activeHandle.includes('n')) {
+        const newY = Math.max(0, Math.min(initialBox.y + initialBox.h - minSize, initialBox.y + deltaYPercent));
+        h = initialBox.y + initialBox.h - newY;
+        y = newY;
+      }
+      if (activeHandle.includes('s')) {
+        h = Math.max(minSize, Math.min(100 - initialBox.y, initialBox.h + deltaYPercent));
+      }
+    }
+
+    const updatedBox = { x, y, w, h };
+    setCropBox(updatedBox);
+    emitPixelCrop(updatedBox);
+  }, [activeHandle, emitPixelCrop]);
+
+  const handlePointerEnd = useCallback(() => {
+    setActiveHandle(null);
+    startTouchRef.current = null;
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full w-full select-none bg-black">
+      {/* Aspect Ratio Selector Pills */}
+      <div className="bg-black/90 px-4 py-2 flex items-center justify-center gap-2 z-30 overflow-x-auto scrollbar-hide border-b border-white/10">
+        <span className="text-white/60 text-[10px] sm:text-xs font-bold shrink-0 uppercase tracking-wider mr-1">Crop Ratio:</span>
+        {[
+          { key: 'free', label: 'Free Crop' },
+          { key: '4:5', label: '4 : 5' },
+          { key: '1:1', label: '1 : 1' },
+          { key: '3:4', label: '3 : 4' },
+          { key: 'full', label: 'Full Image' },
+        ].map((btn) => (
+          <button
+            key={btn.key}
+            onClick={() => handleAspectChange(btn.key as any)}
+            className={`px-3 py-1 rounded-full text-xs font-bold transition-all shrink-0 ${
+              aspectMode === btn.key
+                ? 'bg-white text-black shadow-md scale-105'
+                : 'bg-white/10 text-white/80 hover:bg-white/20'
+            }`}
+          >
+            {btn.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Image Cropping Canvas Area */}
+      <div
+        ref={containerRef}
+        className="flex-1 relative flex items-center justify-center p-4 overflow-hidden touch-none"
+        onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
+        onMouseUp={handlePointerEnd}
+        onTouchMove={(e) => {
+          if (e.touches.length > 0) {
+            handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
+        onTouchEnd={handlePointerEnd}
+      >
+        <div className="relative inline-block max-w-full max-h-full">
+          <img
+            ref={imgRef}
+            src={imageSrc}
+            alt="Captured Garment"
+            onLoad={handleImageLoad}
+            className="max-w-full max-h-[55vh] sm:max-h-[60vh] object-contain block mx-auto pointer-events-none rounded-lg"
+          />
+
+          {/* Dark Overlay around crop box */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              clipPath: `polygon(
+                0% 0%, 0% 100%, 
+                ${cropBox.x}% 100%, 
+                ${cropBox.x}% ${cropBox.y}%, 
+                ${cropBox.x + cropBox.w}% ${cropBox.y}%, 
+                ${cropBox.x + cropBox.w}% ${cropBox.y + cropBox.h}%, 
+                ${cropBox.x}% ${cropBox.y + cropBox.h}%, 
+                ${cropBox.x}% 100%, 
+                100% 100%, 100% 0%
+              )`,
+              backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            }}
+          />
+
+          {/* Interactive Free Crop Box */}
+          <div
+            className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)] touch-none cursor-move"
+            style={{
+              left: `${cropBox.x}%`,
+              top: `${cropBox.y}%`,
+              width: `${cropBox.w}%`,
+              height: `${cropBox.h}%`,
+            }}
+            onMouseDown={(e) => handlePointerStart('move', e.clientX, e.clientY)}
+            onTouchStart={(e) => {
+              if (e.touches.length > 0) {
+                handlePointerStart('move', e.touches[0].clientX, e.touches[0].clientY);
+              }
+            }}
+          >
+            {/* Rule of Thirds Grid Lines */}
+            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
+              <div className="border-r border-b border-white/60" />
+              <div className="border-r border-b border-white/60" />
+              <div className="border-b border-white/60" />
+              <div className="border-r border-b border-white/60" />
+              <div className="border-r border-b border-white/60" />
+              <div className="border-b border-white/60" />
+              <div className="border-r border-white/60" />
+              <div className="border-r border-white/60" />
+              <div />
+            </div>
+
+            {/* 4 Corner Touch Handles */}
+            {['nw', 'ne', 'sw', 'se'].map((pos) => {
+              const isTop = pos.includes('n');
+              const isLeft = pos.includes('w');
+              return (
+                <div
+                  key={pos}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    handlePointerStart(pos, e.clientX, e.clientY);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    if (e.touches.length > 0) {
+                      handlePointerStart(pos, e.touches[0].clientX, e.touches[0].clientY);
+                    }
+                  }}
+                  style={{
+                    top: isTop ? '-14px' : 'auto',
+                    bottom: !isTop ? '-14px' : 'auto',
+                    left: isLeft ? '-14px' : 'auto',
+                    right: !isLeft ? '-14px' : 'auto',
+                  }}
+                  className="absolute w-7 h-7 bg-white border-2 border-black rounded-full shadow-lg flex items-center justify-center z-20 cursor-pointer active:scale-125 transition-transform"
+                >
+                  <div className="w-2 h-2 bg-black rounded-full" />
+                </div>
+              );
+            })}
+
+            {/* 4 Edge Touch Handles */}
+            {/* Top Handle */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                handlePointerStart('n', e.clientX, e.clientY);
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (e.touches.length > 0) {
+                  handlePointerStart('n', e.touches[0].clientX, e.touches[0].clientY);
+                }
+              }}
+              className="absolute -top-3 left-1/2 -translate-x-1/2 w-12 h-6 flex items-center justify-center cursor-pointer z-20"
+            >
+              <div className="w-8 h-2 bg-white border border-black rounded-full shadow-md" />
+            </div>
+
+            {/* Bottom Handle */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                handlePointerStart('s', e.clientX, e.clientY);
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (e.touches.length > 0) {
+                  handlePointerStart('s', e.touches[0].clientX, e.touches[0].clientY);
+                }
+              }}
+              className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-12 h-6 flex items-center justify-center cursor-pointer z-20"
+            >
+              <div className="w-8 h-2 bg-white border border-black rounded-full shadow-md" />
+            </div>
+
+            {/* Left Handle */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                handlePointerStart('w', e.clientX, e.clientY);
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (e.touches.length > 0) {
+                  handlePointerStart('w', e.touches[0].clientX, e.touches[0].clientY);
+                }
+              }}
+              className="absolute top-1/2 -translate-y-1/2 -left-3 h-12 w-6 flex items-center justify-center cursor-pointer z-20"
+            >
+              <div className="h-8 w-2 bg-white border border-black rounded-full shadow-md" />
+            </div>
+
+            {/* Right Handle */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                handlePointerStart('e', e.clientX, e.clientY);
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (e.touches.length > 0) {
+                  handlePointerStart('e', e.touches[0].clientX, e.touches[0].clientY);
+                }
+              }}
+              className="absolute top-1/2 -translate-y-1/2 -right-3 h-12 w-6 flex items-center justify-center cursor-pointer z-20"
+            >
+              <div className="h-8 w-2 bg-white border border-black rounded-full shadow-md" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function MobileScanner() {
   const { sessionId } = useParams();
@@ -55,10 +381,8 @@ export function MobileScanner() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // Post-Capture Cropper States
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [postZoom, setPostZoom] = useState(1);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  // Post-Capture Cropper Pixel State
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const startCamera = useCallback(async (deviceId?: string, targetBadge?: string) => {
     try {
@@ -199,9 +523,6 @@ export function MobileScanner() {
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
         const dataUrl = canvas.toDataURL('image/jpeg', 1.0); 
         setCapturedImage(dataUrl);
-        // Reset cropper config for new image
-        setCrop({ x: 0, y: 0 });
-        setPostZoom(1);
       }
     }
   };
@@ -367,49 +688,43 @@ export function MobileScanner() {
          /* Review & Crop UI */
          <div className="flex-1 flex flex-col bg-black absolute inset-0 z-20">
            {/* Header Mask */}
-           <div className="bg-black/90 backdrop-blur-sm h-28 flex items-center justify-center pt-8 px-6 z-30 pointer-events-none">
+           <div className="bg-black/90 backdrop-blur-sm h-20 sm:h-24 flex items-center justify-center pt-4 px-6 z-30 pointer-events-none shrink-0 border-b border-white/10">
               <div className="text-center">
-                <h2 className="text-white font-serif text-xl font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
-                <p className="text-white/80 text-sm mt-1">Pinch to zoom and drag to adjust perfectly</p>
+                <h2 className="text-white font-serif text-lg sm:text-xl font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
+                <p className="text-white/80 text-xs sm:text-sm mt-0.5">Drag corners or sides freely to frame your garment</p>
               </div>
            </div>
 
-           <div className="flex-1 relative bg-gray-900 w-full h-full">
-             <Cropper
-               image={capturedImage}
-               crop={crop}
-               zoom={postZoom}
-               aspect={4 / 5}
-               onCropChange={setCrop}
-               onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels as any)}
-               onZoomChange={setPostZoom}
-               classes={{ containerClassName: "!relative !w-full !h-full" }}
+           <div className="flex-1 relative bg-black w-full h-full min-h-0">
+             <FreeCropper
+               imageSrc={capturedImage}
+               onCropComplete={(pixels) => setCroppedAreaPixels(pixels)}
              />
            </div>
 
-           <div className="h-40 bg-white flex flex-col items-center px-6 rounded-t-3xl border-t border-gray-200 z-30 pt-6 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+           <div className="h-32 sm:h-36 bg-white flex flex-col items-center px-6 rounded-t-3xl border-t border-gray-200 z-30 pt-4 shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
              <div className="flex items-center justify-around w-full max-w-md">
                <button 
                  onClick={retakePhoto}
                  disabled={isUploading}
                  className="flex flex-col items-center justify-center text-gray-500 font-medium py-2 px-4 disabled:opacity-50"
                >
-                 <RefreshCw size={24} className="mb-1" />
-                 Retake
+                 <RefreshCw size={22} className="mb-1" />
+                 <span className="text-xs">Retake</span>
                </button>
                <button 
                  onClick={submitPhoto}
                  disabled={isUploading}
-                 className="bg-black text-white px-10 py-4 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50"
+                 className="bg-black text-white px-8 sm:px-10 py-3.5 rounded-full font-bold shadow-xl flex items-center gap-2 hover:bg-gray-900 active:scale-95 transition-all outline-none disabled:opacity-50 text-sm sm:text-base"
                >
                  {isUploading ? (
                    <>
                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                     {scanSide === 'front' ? 'Processing...' : 'Sending to Desktop...'}
+                     {scanSide === 'front' ? 'Processing...' : 'Sending...'}
                    </>
                  ) : (
                    <>
-                     <Camera size={20} />
+                     <Camera size={18} />
                      {scanSide === 'front' ? 'Proceed to Back' : 'Finish & Upload'}
                    </>
                  )}
