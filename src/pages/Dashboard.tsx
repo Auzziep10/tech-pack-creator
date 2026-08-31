@@ -11,7 +11,8 @@ import {
   MoreVertical, 
   Edit2, 
   ChevronRight,
-  Home
+  Home,
+  FolderOpen
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -233,9 +234,10 @@ export function Dashboard() {
     }
   };
 
-  // Drag and Drop into Folder Tab
+  // Drag and Drop into Folder
   const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverFolderId(null);
 
     const draggedFolderId = e.dataTransfer.getData('folder-id');
@@ -281,15 +283,16 @@ export function Dashboard() {
     return techPacks.filter(p => p.folderId && allIds.includes(p.folderId)).length;
   };
 
-  // Filter tech packs based on active folder selection (includes garments in active folder and its subfolders)
-  const filteredTechPacks = techPacks.filter(pack => {
-    if (activeFolderId === 'ALL') return true;
-    if (activeFolderId === 'UNASSIGNED') return !pack.folderId;
-    const allFolderIds = getAllDescendantFolderIds(activeFolderId);
-    return pack.folderId && allFolderIds.includes(pack.folderId);
-  });
+  const getFolderDirectGarmentCount = (folderId: string): number => {
+    return techPacks.filter(p => p.folderId === folderId).length;
+  };
 
-  // Calculate visible subfolders for the current folder view level
+  const getFolderSubfolderCount = (folderId: string): number => {
+    return folders.filter(f => f.parentId === folderId).length;
+  };
+
+  // Directory Level Items
+  // 1. Visible subfolders at current level
   const getVisibleFolders = (): FolderData[] => {
     if (activeFolderId === 'ALL') {
       return folders.filter(f => !f.parentId);
@@ -300,6 +303,18 @@ export function Dashboard() {
     return folders.filter(f => f.parentId === activeFolderId);
   };
   const visibleFolders = getVisibleFolders();
+
+  // 2. Visible garments directly inside current folder level
+  const getVisibleGarments = (): TechPackData[] => {
+    if (activeFolderId === 'ALL') {
+      return techPacks.filter(p => !p.folderId);
+    }
+    if (activeFolderId === 'UNASSIGNED') {
+      return techPacks.filter(p => !p.folderId);
+    }
+    return techPacks.filter(p => p.folderId === activeFolderId);
+  };
+  const visibleGarments = getVisibleGarments();
 
   // Breadcrumbs calculation
   const getBreadcrumbs = (): { id: string; name: string }[] => {
@@ -435,15 +450,27 @@ export function Dashboard() {
       )}
 
       {/* --- Breadcrumb Trail for Nested Folders --- */}
-      {breadcrumbs.length > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50/80 border border-gray-200/80 rounded-xl px-4 py-2 w-fit">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50/90 border border-gray-200/80 rounded-xl px-4 py-2 w-fit">
           <button
             onClick={() => setActiveFolderId('ALL')}
-            className="flex items-center gap-1 hover:text-black font-semibold transition-colors"
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnter={() => setDragOverFolderId('ALL')}
+            onDragLeave={() => setDragOverFolderId(null)}
+            onDrop={(e) => handleDropOnFolder(e, 'ALL')}
+            className={`flex items-center gap-1.5 hover:text-black font-semibold transition-colors ${activeFolderId === 'ALL' ? 'text-black font-bold' : ''}`}
           >
             <Home size={13} />
             <span>All Garments</span>
           </button>
+
+          {activeFolderId === 'UNASSIGNED' && (
+            <>
+              <ChevronRight size={13} className="text-gray-400 shrink-0" />
+              <span className="text-black font-bold">Unassigned</span>
+            </>
+          )}
+
           {breadcrumbs.map((crumb, idx) => {
             const isLast = idx === breadcrumbs.length - 1;
             return (
@@ -451,6 +478,10 @@ export function Dashboard() {
                 <ChevronRight size={13} className="text-gray-400 shrink-0" />
                 <button
                   onClick={() => setActiveFolderId(crumb.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnter={() => setDragOverFolderId(crumb.id)}
+                  onDragLeave={() => setDragOverFolderId(null)}
+                  onDrop={(e) => handleDropOnFolder(e, crumb.id)}
                   className={`font-semibold transition-colors ${
                     isLast ? 'text-black font-bold' : 'hover:text-black'
                   }`}
@@ -461,157 +492,24 @@ export function Dashboard() {
             );
           })}
         </div>
-      )}
 
-      {/* --- Folder Navigation & Filter Bar --- */}
-      <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2 border-b border-gray-200 no-scrollbar">
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setActiveFolderId('ALL')}
-            onDragOver={(e) => e.preventDefault()}
-            onDragEnter={() => setDragOverFolderId('ALL')}
-            onDragLeave={() => setDragOverFolderId(null)}
-            onDrop={(e) => handleDropOnFolder(e, 'ALL')}
-            className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-              activeFolderId === 'ALL'
-                ? 'bg-black text-white shadow-sm'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            } ${dragOverFolderId === 'ALL' ? 'ring-2 ring-blue-500 scale-105' : ''}`}
-          >
-            <span>All Garments</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeFolderId === 'ALL' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-              {techPacks.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveFolderId('UNASSIGNED')}
-            onDragOver={(e) => e.preventDefault()}
-            onDragEnter={() => setDragOverFolderId('UNASSIGNED')}
-            onDragLeave={() => setDragOverFolderId(null)}
-            onDrop={(e) => handleDropOnFolder(e, 'UNASSIGNED')}
-            className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${
-              activeFolderId === 'UNASSIGNED'
-                ? 'bg-black text-white shadow-sm'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            } ${dragOverFolderId === 'UNASSIGNED' ? 'ring-2 ring-blue-500 scale-105' : ''}`}
-          >
-            <span>Unassigned</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeFolderId === 'UNASSIGNED' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-              {techPacks.filter(p => !p.folderId).length}
-            </span>
-          </button>
-
-          {visibleFolders.map(folder => {
-            if (!folder.id) return null;
-            const isSelected = activeFolderId === folder.id;
-            const count = getFolderTotalCount(folder.id);
-            const isMenuOpen = activeFolderMenuId === folder.id;
-            const isDragTarget = dragOverFolderId === folder.id;
-
-            return (
-              <div
-                key={folder.id}
-                draggable
-                onDragStart={(e) => {
-                  if (folder.id) e.dataTransfer.setData('folder-id', folder.id);
-                }}
-                className="relative group shrink-0"
-                onDragOver={(e) => e.preventDefault()}
-                onDragEnter={() => setDragOverFolderId(folder.id || null)}
-                onDragLeave={() => setDragOverFolderId(null)}
-                onDrop={(e) => handleDropOnFolder(e, folder.id!)}
-              >
-                <div
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                    isSelected
-                      ? 'bg-black text-white shadow-sm'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                  } ${isDragTarget ? 'ring-2 ring-blue-500 scale-105' : ''}`}
-                  onClick={() => setActiveFolderId(folder.id!)}
-                >
-                  <Folder size={14} className={isSelected ? 'text-white' : 'text-gray-500'} />
-                  <span>{folder.name}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${isSelected ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                    {count}
-                  </span>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveFolderMenuId(isMenuOpen ? null : folder.id!);
-                    }}
-                    className={`p-1 rounded-full hover:bg-black/10 transition-colors ${isSelected ? 'text-white/80 hover:text-white' : 'text-gray-400 hover:text-gray-700'}`}
-                  >
-                    <MoreVertical size={13} />
-                  </button>
-                </div>
-
-                {/* Folder Action Popover */}
-                {isMenuOpen && (
-                  <div
-                    className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 animate-in fade-in slide-in-from-top-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => {
-                        setActiveFolderMenuId(null);
-                        setFolderModalState({
-                          isOpen: true,
-                          mode: 'create',
-                          parentFolderId: folder.id
-                        });
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg text-left"
-                    >
-                      <FolderPlus size={13} className="text-gray-400" />
-                      <span>+ Create Subfolder</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveFolderMenuId(null);
-                        setFolderModalState({
-                          isOpen: true,
-                          mode: 'rename',
-                          initialName: folder.name,
-                          targetFolderObj: folder
-                        });
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg text-left"
-                    >
-                      <Edit2 size={13} className="text-gray-400" />
-                      <span>Rename Folder</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveFolderMenuId(null);
-                        handleDeleteFolder(folder);
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg text-left border-t border-gray-50 mt-1 pt-2"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete Folder</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          {activeFolderId !== 'UNASSIGNED' && (
+            <button
+              onClick={() => {
+                setFolderModalState({
+                  isOpen: true,
+                  mode: 'create',
+                  parentFolderId: activeFolderId !== 'ALL' ? activeFolderId : null
+                });
+              }}
+              className="px-4 py-2 rounded-full border border-dashed border-gray-300 hover:border-black text-xs font-bold text-gray-700 hover:text-black hover:bg-gray-50 transition-all flex items-center gap-1.5"
+            >
+              <FolderPlus size={15} />
+              <span>{activeFolderId !== 'ALL' ? '+ New Subfolder' : '+ New Folder'}</span>
+            </button>
+          )}
         </div>
-
-        <button
-          onClick={() => {
-            setFolderModalState({
-              isOpen: true,
-              mode: 'create',
-              parentFolderId: activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null
-            });
-          }}
-          className="shrink-0 px-4 py-2 rounded-full border border-dashed border-gray-300 hover:border-black text-xs font-bold text-gray-700 hover:text-black hover:bg-gray-50 transition-all flex items-center gap-1.5"
-        >
-          <FolderPlus size={15} />
-          <span>{activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? '+ New Subfolder' : '+ New Folder'}</span>
-        </button>
       </div>
 
       <WovnImportModal 
@@ -637,36 +535,172 @@ export function Dashboard() {
 
       {loading ? (
         <div className="py-20 flex justify-center text-gray-400">Loading...</div>
-      ) : filteredTechPacks.length === 0 ? (
+      ) : visibleFolders.length === 0 && visibleGarments.length === 0 ? (
         <div className="py-20 flex flex-col items-center justify-center text-gray-500 text-center">
           <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4 border border-gray-200">
-            <Folder size={24} className="text-gray-400" />
+            <FolderOpen size={28} className="text-gray-400" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
             {activeFolderId === 'ALL'
-              ? 'No tech packs yet'
+              ? 'No garments or folders yet'
               : activeFolderId === 'UNASSIGNED'
               ? 'No unassigned tech packs'
-              : 'Folder is empty'}
+              : 'This folder is empty'}
           </h3>
           <p className="max-w-sm mb-6">
             {activeFolderId === 'ALL'
-              ? 'Create your first garment tech pack.'
-              : 'Move garments into this folder or drag & drop them here.'}
+              ? 'Create a new folder or your first garment tech pack.'
+              : 'Add subfolders or move garments into this folder.'}
           </p>
-          {activeFolderId === 'ALL' && (
-            <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">Get Started</Button>
-          )}
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => {
+                setFolderModalState({
+                  isOpen: true,
+                  mode: 'create',
+                  parentFolderId: activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null
+                });
+              }}
+              variant="secondary"
+              className="rounded-full px-5"
+            >
+              + Create Folder
+            </Button>
+            <Button onClick={() => navigate('/create')} variant="primary" className="rounded-full px-6">
+              New Tech Pack
+            </Button>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-8">
-          {filteredTechPacks.map(pack => {
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+          {/* --- 1. RENDER FOLDER CARDS FIRST IN THE MAIN GRID --- */}
+          {visibleFolders.map(folder => {
+            if (!folder.id) return null;
+            const subfolderCount = getFolderSubfolderCount(folder.id);
+            const garmentCount = getFolderDirectGarmentCount(folder.id);
+            const totalCount = getFolderTotalCount(folder.id);
+            const isMenuOpen = activeFolderMenuId === folder.id;
+            const isDragTarget = dragOverFolderId === folder.id;
+
+            return (
+              <GlassCard
+                key={`folder-${folder.id}`}
+                draggable
+                onDragStart={(e) => {
+                  if (folder.id) e.dataTransfer.setData('folder-id', folder.id);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDragEnter={() => setDragOverFolderId(folder.id || null)}
+                onDragLeave={() => setDragOverFolderId(null)}
+                onDrop={(e) => handleDropOnFolder(e, folder.id!)}
+                onClick={() => setActiveFolderId(folder.id!)}
+                className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md border-gray-200 ${
+                  isDragTarget ? 'border-2 border-blue-500 ring-4 ring-blue-500/20 scale-[1.02]' : 'hover:border-gray-400'
+                }`}
+              >
+                {/* Folder Top Thumbnail Box */}
+                <div className="aspect-[4/3] bg-gradient-to-br from-gray-50 to-gray-100/60 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
+                  <div className="w-20 h-20 rounded-2xl bg-white/90 shadow-sm border border-gray-200/60 flex items-center justify-center text-gray-700 group-hover:scale-105 group-hover:bg-white transition-all">
+                    <Folder size={44} className="text-gray-800" />
+                  </div>
+
+                  {/* Top Right 3-Dots Menu */}
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveFolderMenuId(isMenuOpen ? null : folder.id!);
+                      }}
+                      className="bg-white/90 backdrop-blur-sm shadow-sm hover:bg-gray-100 text-gray-500 hover:text-black p-2 rounded-xl transition-colors border border-gray-200/80"
+                      title="Folder Options"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
+
+                  {/* Folder Options Popover */}
+                  {isMenuOpen && (
+                    <div
+                      className="absolute top-12 right-3 w-48 bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 animate-in fade-in slide-in-from-top-1 text-left"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => {
+                          setActiveFolderMenuId(null);
+                          setFolderModalState({
+                            isOpen: true,
+                            mode: 'create',
+                            parentFolderId: folder.id
+                          });
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+                      >
+                        <FolderPlus size={14} className="text-gray-400" />
+                        <span>+ Create Subfolder</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveFolderMenuId(null);
+                          setFolderModalState({
+                            isOpen: true,
+                            mode: 'rename',
+                            initialName: folder.name,
+                            targetFolderObj: folder
+                          });
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg"
+                      >
+                        <Edit2 size={14} className="text-gray-400" />
+                        <span>Rename Folder</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActiveFolderMenuId(null);
+                          handleDeleteFolder(folder);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg border-t border-gray-50 mt-1 pt-2"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete Folder</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Folder Bottom Details */}
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h3 className="font-bold text-gray-900 group-hover:text-black transition-colors text-lg truncate flex items-center gap-2">
+                        <span>{folder.name}</span>
+                      </h3>
+                    </div>
+                    <p className="text-xs text-gray-500 font-medium mt-1">
+                      {subfolderCount > 0
+                        ? `${subfolderCount} subfolder${subfolderCount > 1 ? 's' : ''}, ${garmentCount} garment${garmentCount !== 1 ? 's' : ''}`
+                        : `${garmentCount} garment${garmentCount !== 1 ? 's' : ''}`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100/80">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Folder</span>
+                    <span className="text-xs font-bold text-gray-900 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                      {totalCount} Total
+                    </span>
+                  </div>
+                </div>
+              </GlassCard>
+            );
+          })}
+
+          {/* --- 2. RENDER GARMENT CARDS SECOND IN THE MAIN GRID --- */}
+          {visibleGarments.map(pack => {
             const isSelected = pack.id ? selectedPacks.includes(pack.id) : false;
             const folderName = pack.folderId ? folderMap[pack.folderId] : null;
 
             return (
               <GlassCard 
-                key={pack.id} 
+                key={`garment-${pack.id}`} 
                 draggable={!isSelectMode}
                 onDragStart={(e) => {
                   if (pack.id) e.dataTransfer.setData('text/plain', pack.id);
