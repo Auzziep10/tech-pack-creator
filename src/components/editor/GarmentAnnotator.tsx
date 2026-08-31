@@ -352,7 +352,7 @@ export function GarmentAnnotator({
             isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
           }`}
         >
-          <div className="absolute inset-6 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-2 flex items-center justify-center pointer-events-none">
             <div 
               ref={containerRef}
               onPointerDown={handlePointerDown}

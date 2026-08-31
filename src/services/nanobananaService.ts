@@ -1,30 +1,86 @@
-async function resizeImage(imageUrl: string, maxSize = 1440): Promise<{ base64Data: string, mimeType: string }> {
+async function resizeImage(imageUrl: string, maxSize = 2048): Promise<{ base64Data: string, mimeType: string }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'Anonymous';
     img.onload = () => {
-      let width = img.width;
-      let height = img.height;
-      if (width > maxSize || height > maxSize) {
-        if (width > height) {
-          height = Math.round((height * maxSize) / width);
-          width = maxSize;
-        } else {
-          width = Math.round((width * maxSize) / height);
-          height = maxSize;
+      // Create temporary canvas to measure bounding box of garment subject
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+      if (!tempCtx) return reject(new Error('Canvas null'));
+
+      tempCtx.drawImage(img, 0, 0);
+      let data: Uint8ClampedArray | null = null;
+      try {
+        data = tempCtx.getImageData(0, 0, img.width, img.height).data;
+      } catch (e) {
+        // Fallback if crossOrigin restriction prevents getImageData
+        data = null;
+      }
+
+      let cropX = 0, cropY = 0, cropW = img.width, cropH = img.height;
+
+      if (data) {
+        let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+        let foundSubject = false;
+
+        // Sample pixels every 2px to find non-background bounds
+        for (let y = 0; y < img.height; y += 2) {
+          for (let x = 0; x < img.width; x += 2) {
+            const idx = (y * img.width + x) * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
+
+            // Check if pixel is NOT solid pure white/light-grey background (> 248 in RGB or transparent)
+            const isBackground = (r > 248 && g > 248 && b > 248) || a < 20;
+            if (!isBackground) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+              foundSubject = true;
+            }
+          }
+        }
+
+        // If subject was detected with substantial background around it, crop tightly with 3% breathing margin
+        if (foundSubject && (maxX - minX > 50) && (maxY - minY > 50)) {
+          const marginX = Math.round((maxX - minX) * 0.03);
+          const marginY = Math.round((maxY - minY) * 0.03);
+          cropX = Math.max(0, minX - marginX);
+          cropY = Math.max(0, minY - marginY);
+          cropW = Math.min(img.width - cropX, (maxX - minX) + marginX * 2);
+          cropH = Math.min(img.height - cropY, (maxY - minY) + marginY * 2);
         }
       }
+
+      // Scale cropped bounds up to maxSize (2048px)
+      let targetW = cropW;
+      let targetH = cropH;
+      if (targetW > maxSize || targetH > maxSize) {
+        if (targetW > targetH) {
+          targetH = Math.round((targetH * maxSize) / targetW);
+          targetW = maxSize;
+        } else {
+          targetW = Math.round((targetW * maxSize) / targetH);
+          targetH = maxSize;
+        }
+      }
+
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = targetW;
+      canvas.height = targetH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject(new Error('Canvas null'));
-      // Keep it pristine white on transparent just in case
+
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, width, height);
-      
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, targetW, targetH);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
       const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (match) resolve({ mimeType: match[1], base64Data: match[2] });
       else reject(new Error("Failed to parse data URL"));
