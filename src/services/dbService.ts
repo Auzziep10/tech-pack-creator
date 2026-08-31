@@ -7,6 +7,7 @@ export interface FolderData {
   name: string;
   companyId: string;
   userId: string;
+  parentId?: string | null;
   createdAt?: any;
 }
 
@@ -176,11 +177,12 @@ export const getCompanyFolders = async (companyId: string): Promise<FolderData[]
   return results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
-export const createFolder = async (userId: string, companyId: string, name: string): Promise<string> => {
+export const createFolder = async (userId: string, companyId: string, name: string, parentId?: string | null): Promise<string> => {
   const docRef = await addDoc(collection(db, 'folders'), {
     name: name.trim(),
     companyId,
     userId,
+    parentId: parentId || null,
     createdAt: serverTimestamp()
   });
   return docRef.id;
@@ -193,16 +195,35 @@ export const updateFolder = async (folderId: string, name: string): Promise<void
   });
 };
 
+export const updateFolderParent = async (folderId: string, parentId: string | null): Promise<void> => {
+  const folderRef = doc(db, 'folders', folderId);
+  await updateDoc(folderRef, {
+    parentId: parentId || null
+  });
+};
+
 export const deleteFolder = async (folderId: string): Promise<void> => {
-  await deleteDoc(doc(db, 'folders', folderId));
+  const folderRef = doc(db, 'folders', folderId);
+  const folderSnap = await getDoc(folderRef);
+  const parentId = folderSnap.exists() ? (folderSnap.data().parentId || null) : null;
+
+  await deleteDoc(folderRef);
   
-  // Unassign tech packs belonging to this folder
-  const q = query(collection(db, 'techPacks'), where('folderId', '==', folderId));
-  const snap = await getDocs(q);
-  if (!snap.empty) {
+  // Re-parent child subfolders to parentId (so subfolders aren't orphaned)
+  const childFoldersQuery = query(collection(db, 'folders'), where('parentId', '==', folderId));
+  const childFoldersSnap = await getDocs(childFoldersQuery);
+
+  // Unassign tech packs belonging to this folder (move to parentId)
+  const techPacksQuery = query(collection(db, 'techPacks'), where('folderId', '==', folderId));
+  const techPacksSnap = await getDocs(techPacksQuery);
+
+  if (!childFoldersSnap.empty || !techPacksSnap.empty) {
     const batch = writeBatch(db);
-    snap.docs.forEach(d => {
-      batch.update(d.ref, { folderId: null });
+    childFoldersSnap.docs.forEach(d => {
+      batch.update(d.ref, { parentId });
+    });
+    techPacksSnap.docs.forEach(d => {
+      batch.update(d.ref, { folderId: parentId });
     });
     await batch.commit();
   }

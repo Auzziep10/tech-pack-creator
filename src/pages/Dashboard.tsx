@@ -10,7 +10,8 @@ import {
   FolderInput, 
   MoreVertical, 
   Edit2, 
-  Check 
+  ChevronRight,
+  Home
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +22,7 @@ import {
   getCompanyFolders, 
   createFolder, 
   updateFolder, 
+  updateFolderParent,
   deleteFolder, 
   updateTechPackFolder, 
   moveTechPacksToFolder 
@@ -58,6 +60,7 @@ export function Dashboard() {
     initialName?: string;
     targetPackIds?: string[];
     targetFolderId?: string | null;
+    parentFolderId?: string | null;
     targetFolderObj?: FolderData;
   }>({
     isOpen: false,
@@ -186,11 +189,12 @@ export function Dashboard() {
   };
 
   // Folder Operations
-  const handleCreateFolderSubmit = async (data: { name?: string; folderId?: string | null }) => {
+  const handleCreateFolderSubmit = async (data: { name?: string; folderId?: string | null; parentId?: string | null }) => {
     if (!profile?.companyId || !user?.uid) return;
     if (folderModalState.mode === 'create') {
       if (!data.name) return;
-      const newId = await createFolder(user.uid, profile.companyId, data.name);
+      const targetParentId = data.parentId !== undefined ? data.parentId : (activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null);
+      const newId = await createFolder(user.uid, profile.companyId, data.name, targetParentId);
       await loadFolders(profile.companyId);
       setActiveFolderId(newId);
     } else if (folderModalState.mode === 'rename') {
@@ -201,7 +205,7 @@ export function Dashboard() {
       let destFolderId = data.folderId;
       if (data.name) {
         // Created a brand new folder during move dialog
-        destFolderId = await createFolder(user.uid, profile.companyId, data.name);
+        destFolderId = await createFolder(user.uid, profile.companyId, data.name, data.parentId || null);
         await loadFolders(profile.companyId);
       }
       if (folderModalState.targetPackIds && folderModalState.targetPackIds.length > 0) {
@@ -215,13 +219,12 @@ export function Dashboard() {
 
   const handleDeleteFolder = async (folder: FolderData) => {
     if (!folder.id || !profile?.companyId) return;
-    if (window.confirm(`Delete folder "${folder.name}"? Garments in this folder will become unassigned.`)) {
+    if (window.confirm(`Delete folder "${folder.name}"? Subfolders and garments inside will be moved up.`)) {
       try {
         await deleteFolder(folder.id);
         await loadFolders(profile.companyId);
-        setTechPacks(prev => prev.map(p => (p.folderId === folder.id ? { ...p, folderId: null } : p)));
         if (activeFolderId === folder.id) {
-          setActiveFolderId('ALL');
+          setActiveFolderId(folder.parentId || 'ALL');
         }
       } catch (err) {
         console.error("Error deleting folder:", err);
@@ -234,23 +237,85 @@ export function Dashboard() {
   const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
     setDragOverFolderId(null);
+
+    const draggedFolderId = e.dataTransfer.getData('folder-id');
     const packId = e.dataTransfer.getData('text/plain');
-    if (!packId) return;
+
     const destId = targetFolderId === 'ALL' || targetFolderId === 'UNASSIGNED' ? null : targetFolderId;
-    try {
-      await updateTechPackFolder(packId, destId);
-      setTechPacks(prev => prev.map(p => (p.id === packId ? { ...p, folderId: destId } : p)));
-    } catch (err) {
-      console.error("Error dropping pack into folder:", err);
+
+    if (draggedFolderId) {
+      if (draggedFolderId === destId) return;
+      try {
+        await updateFolderParent(draggedFolderId, destId);
+        if (profile?.companyId) await loadFolders(profile.companyId);
+      } catch (err) {
+        console.error("Error moving folder:", err);
+      }
+      return;
+    }
+
+    if (packId) {
+      try {
+        await updateTechPackFolder(packId, destId);
+        setTechPacks(prev => prev.map(p => (p.id === packId ? { ...p, folderId: destId } : p)));
+      } catch (err) {
+        console.error("Error dropping pack into folder:", err);
+      }
     }
   };
 
-  // Filter tech packs based on active folder selection
+  // Helper functions for nested folders
+  const getAllDescendantFolderIds = (folderId: string): string[] => {
+    let ids: string[] = [folderId];
+    const children = folders.filter(f => f.parentId === folderId && f.id);
+    children.forEach(child => {
+      if (child.id) {
+        ids = ids.concat(getAllDescendantFolderIds(child.id));
+      }
+    });
+    return ids;
+  };
+
+  const getFolderTotalCount = (folderId: string): number => {
+    const allIds = getAllDescendantFolderIds(folderId);
+    return techPacks.filter(p => p.folderId && allIds.includes(p.folderId)).length;
+  };
+
+  // Filter tech packs based on active folder selection (includes garments in active folder and its subfolders)
   const filteredTechPacks = techPacks.filter(pack => {
     if (activeFolderId === 'ALL') return true;
     if (activeFolderId === 'UNASSIGNED') return !pack.folderId;
-    return pack.folderId === activeFolderId;
+    const allFolderIds = getAllDescendantFolderIds(activeFolderId);
+    return pack.folderId && allFolderIds.includes(pack.folderId);
   });
+
+  // Calculate visible subfolders for the current folder view level
+  const getVisibleFolders = (): FolderData[] => {
+    if (activeFolderId === 'ALL') {
+      return folders.filter(f => !f.parentId);
+    }
+    if (activeFolderId === 'UNASSIGNED') {
+      return [];
+    }
+    return folders.filter(f => f.parentId === activeFolderId);
+  };
+  const visibleFolders = getVisibleFolders();
+
+  // Breadcrumbs calculation
+  const getBreadcrumbs = (): { id: string; name: string }[] => {
+    if (activeFolderId === 'ALL' || activeFolderId === 'UNASSIGNED') return [];
+    const crumbs: { id: string; name: string }[] = [];
+    let currentId: string | null = activeFolderId;
+
+    while (currentId) {
+      const folder = folders.find(f => f.id === currentId);
+      if (!folder) break;
+      crumbs.unshift({ id: folder.id!, name: folder.name });
+      currentId = folder.parentId || null;
+    }
+    return crumbs;
+  };
+  const breadcrumbs = getBreadcrumbs();
 
   const getFolderMap = () => {
     const map: Record<string, string> = {};
@@ -369,6 +434,35 @@ export function Dashboard() {
          </div>
       )}
 
+      {/* --- Breadcrumb Trail for Nested Folders --- */}
+      {breadcrumbs.length > 0 && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50/80 border border-gray-200/80 rounded-xl px-4 py-2 w-fit">
+          <button
+            onClick={() => setActiveFolderId('ALL')}
+            className="flex items-center gap-1 hover:text-black font-semibold transition-colors"
+          >
+            <Home size={13} />
+            <span>All Garments</span>
+          </button>
+          {breadcrumbs.map((crumb, idx) => {
+            const isLast = idx === breadcrumbs.length - 1;
+            return (
+              <React.Fragment key={crumb.id}>
+                <ChevronRight size={13} className="text-gray-400 shrink-0" />
+                <button
+                  onClick={() => setActiveFolderId(crumb.id)}
+                  className={`font-semibold transition-colors ${
+                    isLast ? 'text-black font-bold' : 'hover:text-black'
+                  }`}
+                >
+                  {crumb.name}
+                </button>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
+
       {/* --- Folder Navigation & Filter Bar --- */}
       <div className="flex items-center justify-between gap-3 overflow-x-auto pb-2 border-b border-gray-200 no-scrollbar">
         <div className="flex items-center gap-2 shrink-0">
@@ -408,16 +502,20 @@ export function Dashboard() {
             </span>
           </button>
 
-          {folders.map(folder => {
+          {visibleFolders.map(folder => {
             if (!folder.id) return null;
             const isSelected = activeFolderId === folder.id;
-            const count = techPacks.filter(p => p.folderId === folder.id).length;
+            const count = getFolderTotalCount(folder.id);
             const isMenuOpen = activeFolderMenuId === folder.id;
             const isDragTarget = dragOverFolderId === folder.id;
 
             return (
               <div
                 key={folder.id}
+                draggable
+                onDragStart={(e) => {
+                  if (folder.id) e.dataTransfer.setData('folder-id', folder.id);
+                }}
                 className="relative group shrink-0"
                 onDragOver={(e) => e.preventDefault()}
                 onDragEnter={() => setDragOverFolderId(folder.id || null)}
@@ -452,9 +550,23 @@ export function Dashboard() {
                 {/* Folder Action Popover */}
                 {isMenuOpen && (
                   <div
-                    className="absolute top-full left-0 mt-2 w-44 bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 animate-in fade-in slide-in-from-top-1"
+                    className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-100 rounded-xl shadow-xl p-1 z-50 animate-in fade-in slide-in-from-top-1"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <button
+                      onClick={() => {
+                        setActiveFolderMenuId(null);
+                        setFolderModalState({
+                          isOpen: true,
+                          mode: 'create',
+                          parentFolderId: folder.id
+                        });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-lg text-left"
+                    >
+                      <FolderPlus size={13} className="text-gray-400" />
+                      <span>+ Create Subfolder</span>
+                    </button>
                     <button
                       onClick={() => {
                         setActiveFolderMenuId(null);
@@ -475,7 +587,7 @@ export function Dashboard() {
                         setActiveFolderMenuId(null);
                         handleDeleteFolder(folder);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg text-left"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg text-left border-t border-gray-50 mt-1 pt-2"
                     >
                       <Trash2 size={13} />
                       <span>Delete Folder</span>
@@ -491,13 +603,14 @@ export function Dashboard() {
           onClick={() => {
             setFolderModalState({
               isOpen: true,
-              mode: 'create'
+              mode: 'create',
+              parentFolderId: activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null
             });
           }}
           className="shrink-0 px-4 py-2 rounded-full border border-dashed border-gray-300 hover:border-black text-xs font-bold text-gray-700 hover:text-black hover:bg-gray-50 transition-all flex items-center gap-1.5"
         >
           <FolderPlus size={15} />
-          <span>+ New Folder</span>
+          <span>{activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? '+ New Subfolder' : '+ New Folder'}</span>
         </button>
       </div>
 
@@ -517,6 +630,7 @@ export function Dashboard() {
         initialFolderName={folderModalState.initialName}
         folders={folders}
         currentFolderId={folderModalState.targetFolderId}
+        parentFolderId={folderModalState.parentFolderId}
         targetCount={folderModalState.targetPackIds?.length || 1}
         onSubmit={handleCreateFolderSubmit}
       />
