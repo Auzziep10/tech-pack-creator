@@ -60,7 +60,7 @@ export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
   }
 }
 
-export async function generateInvisibleMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string): Promise<string> {
+export async function generateInvisibleMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string, fitStyle: string = 'Standard'): Promise<string> {
   try {
     const { base64Data, mimeType } = await resizeImage(imageUrl);
 
@@ -69,7 +69,7 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint })
+      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint, fitStyle })
     });
 
     if (!res.ok) {

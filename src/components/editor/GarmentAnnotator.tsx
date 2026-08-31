@@ -22,7 +22,7 @@ interface GarmentAnnotatorProps {
   measurements: any[];
   onVectorize?: () => void;
   isVectorizing?: boolean;
-  onGenerateMannequin?: (gender: string, garmentType: string, viewPoint: string) => Promise<string>;
+  onGenerateMannequin?: (gender: string, garmentType: string, viewPoint: string, fitStyle: string) => Promise<string>;
   onSaveMannequinImage?: (imgUrl: string) => Promise<void>;
   onSaveErasedImage?: (imgUrl: string) => Promise<void>;
 }
@@ -49,6 +49,7 @@ export function GarmentAnnotator({
   const [mannequinGender, setMannequinGender] = useState('Unisex');
   const [mannequinGarmentType, setMannequinGarmentType] = useState('Hoodie');
   const [mannequinViewPoint, setMannequinViewPoint] = useState('Front View');
+  const [mannequinFitStyle, setMannequinFitStyle] = useState('Standard');
   const [isGeneratingMannequin, setIsGeneratingMannequin] = useState(false);
   const [isSavingMannequin, setIsSavingMannequin] = useState(false);
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function GarmentAnnotator({
     setIsGeneratingMannequin(true);
     setMannequinError('');
     try {
-      const generated = await onGenerateMannequin(mannequinGender, mannequinGarmentType, mannequinViewPoint);
+      const generated = await onGenerateMannequin(mannequinGender, mannequinGarmentType, mannequinViewPoint, mannequinFitStyle);
       if (generated) {
         setMannequinResultImage(generated);
       }
@@ -608,6 +609,20 @@ export function GarmentAnnotator({
                         <option value="Back View">Back View</option>
                         <option value="Right Side View">Right Side View</option>
                         <option value="Left Side View">Left Side View</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Fit / Silhouette</label>
+                      <select
+                        value={mannequinFitStyle}
+                        onChange={e => setMannequinFitStyle(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="Fitted">Fitted</option>
+                        <option value="Standard">Standard</option>
+                        <option value="Loose">Loose</option>
+                        <option value="Boxy">Boxy</option>
                       </select>
                     </div>
                   </div>

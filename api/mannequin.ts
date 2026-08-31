@@ -22,11 +22,20 @@ export default async function handler(req: any, res: any) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { base64Data, mimeType, garmentType, gender, viewPoint } = req.body;
+    const { base64Data, mimeType, garmentType, gender, viewPoint, fitStyle } = req.body;
 
     if (!base64Data || !mimeType) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
     }
+
+    const FIT_DESCRIPTIONS: Record<string, string> = {
+      Fitted: "FITTED SILHOUETTE: Form-fitting style hugging the mannequin body contours snugly with minimal excess fabric, defined waist/torso structure, and clean form-fitting lines.",
+      Standard: "STANDARD SILHOUETTE: Classic regular fit with a natural, comfortable drape around the mannequin body without being tight or oversized.",
+      Loose: "LOOSE SILHOUETTE: Relaxed, roomy fit with extra fabric volume, soft comfortable drape, wider body space, and casual ease around the mannequin torso.",
+      Boxy: "BOXY SILHOUETTE: Structured, square silhouette with a straight drop from the shoulders down to a wide, flat hem, featuring a broader chest and distinct oversized boxy cut."
+    };
+
+    const activeFitInstruction = fitStyle && FIT_DESCRIPTIONS[fitStyle] ? FIT_DESCRIPTIONS[fitStyle] : FIT_DESCRIPTIONS['Standard'];
 
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
     const prompt = `TASK: Ghost Mannequin / Invisible Person 3D Effect
@@ -35,9 +44,10 @@ CRITICAL CONSTRAINTS:
 2. REMOVE HUMAN MODELS: If there is a person (man or woman) in the image, completely remove their body, head, arms, and legs. KEEP THE GARMENT ONLY, floating with 3D volume.
 3. The garment is a ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
 4. VIEWPOINT: ${viewPoint || 'Front View'}. Ensure the garment is rotated and fully displayed from this exact perspective.
-5. BACKGROUND & LIGHTING (CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows casting on a wall behind it or on the floor. NO grey, off-white, or textured backdrops. Every single non-garment pixel MUST be exactly #FFFFFF.
-6. PRESERVE DETAILS: Keep the fabric textures, details, and colors authentic to the original garment. Use soft, clean studio lighting to emphasize the 3D volume and contours of the garment itself.
-7. ARMS AT SIDES: If the garment has sleeves (e.g. hoodies, t-shirts), ensure the sleeves/arms are resting naturally straight down at the sides. Do NOT cross, bend, or lift the arms.`;
+5. FIT & LAY ON MANNEQUIN: ${activeFitInstruction}
+6. BACKGROUND & LIGHTING (CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows casting on a wall behind it or on the floor. NO grey, off-white, or textured backdrops. Every single non-garment pixel MUST be exactly #FFFFFF.
+7. PRESERVE DETAILS: Keep the fabric textures, details, and colors authentic to the original garment. Use soft, clean studio lighting to emphasize the 3D volume and contours of the garment itself.
+8. ARMS AT SIDES: If the garment has sleeves (e.g. hoodies, t-shirts), ensure the sleeves/arms are resting naturally straight down at the sides. Do NOT cross, bend, or lift the arms.`;
 
     const result = await model.generateContent([
       prompt,
