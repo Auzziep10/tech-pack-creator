@@ -1483,7 +1483,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5 relative group">
                <div className="flex items-center gap-2">
                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
-                 {!checkReadonly() && (
+                 {!isTechPackLocked && !isTranslated && (
                    <button 
                      onClick={() => {
                         setExtractedColorways(displayData?.properties?.dominantColorways || []);
@@ -1761,7 +1761,7 @@ export function TechPackEditor() {
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 leading-tight">
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
                   <div className="flex flex-wrap items-center gap-1.5 print:hidden">
-                    {!checkReadonly() && (
+                    {!isTechPackLocked && !isTranslated && (
                       <>
                         <button 
                           onClick={handleGenerateCoreSpecs} 
