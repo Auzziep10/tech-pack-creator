@@ -725,7 +725,7 @@ export function Dashboard() {
                 }}
                 className={`p-0 group cursor-pointer transition-all flex flex-col hover:shadow-md ${isSelectMode ? 'hover:border-blue-400' : 'hover:border-gray-400'} ${isSelected ? 'border-2 border-black ring-4 ring-black/10' : ''}`}
               >
-                <div className="aspect-[4/3] bg-gray-50 relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
+                <div className="aspect-[4/3] bg-white relative overflow-hidden flex flex-col items-center justify-center border-b border-gray-100 p-4">
                   {isSelectMode && (
                     <div className={`absolute top-3 left-3 w-6 h-6 rounded-full border-2 flex items-center justify-center z-20 transition-colors ${isSelected ? 'bg-black border-black text-white' : 'bg-white border-gray-300 shadow-sm'}`}>
                        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
