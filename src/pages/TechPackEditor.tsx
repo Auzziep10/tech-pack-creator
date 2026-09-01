@@ -206,6 +206,7 @@ export function TechPackEditor() {
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
   const [galleryScanSessionId, setGalleryScanSessionId] = useState<string | null>(null);
   const annotatorRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true);
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
@@ -437,36 +438,36 @@ export function TechPackEditor() {
       ...data,
       gallery: newGallery,
       images: {
-        ...(data.images || {}),
+        ...(data?.images || {}),
         original: uploadedUrl
       }
     };
     setData(updatedData);
 
-    if (id && id !== 'draft') {
-      try {
-        const sanitizedData = JSON.parse(JSON.stringify(updatedData));
-        delete sanitizedData.userId;
-        delete sanitizedData.isTeamEditable;
-        delete sanitizedData.activityLog;
+    try {
+      const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+      delete sanitizedData.userId;
+      delete sanitizedData.isTeamEditable;
+      delete sanitizedData.activityLog;
 
-        await saveTechPack(
-          user.uid,
-          profile?.companyId || user.uid,
-          packName,
-          uploadedUrl,
-          sanitizedData,
-          user.email || 'Unknown',
-          id,
-          displayData.activityLog || [],
-          displayData.isTeamEditable ?? true
-        );
-        pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`);
-      } catch (err) {
-        console.error("Auto-save after mannequin failed:", err);
+      const existingId = (!id || id === 'draft') ? undefined : id;
+      const savedId = await saveTechPack(
+        user.uid,
+        profile?.companyId || user.uid,
+        packName,
+        uploadedUrl,
+        sanitizedData,
+        user.email || 'Unknown',
+        existingId,
+        displayData.activityLog || [],
+        displayData.isTeamEditable ?? true
+      );
+      pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`);
+      if (!id || id === 'draft') {
+        navigate(`/pack/${savedId}`, { replace: true });
       }
-    } else {
-      pushLog(`Created Invisible Mannequin mockup successfully`);
+    } catch (err) {
+      console.error("Auto-save after mannequin failed:", err);
     }
   };
 
@@ -483,36 +484,36 @@ export function TechPackEditor() {
       ...data,
       gallery: newGallery,
       images: {
-        ...(data.images || {}),
+        ...(data?.images || {}),
         original: uploadedUrl
       }
     };
     setData(updatedData);
 
-    if (id && id !== 'draft') {
-      try {
-        const sanitizedData = JSON.parse(JSON.stringify(updatedData));
-        delete sanitizedData.userId;
-        delete sanitizedData.isTeamEditable;
-        delete sanitizedData.activityLog;
+    try {
+      const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+      delete sanitizedData.userId;
+      delete sanitizedData.isTeamEditable;
+      delete sanitizedData.activityLog;
 
-        await saveTechPack(
-          user.uid,
-          profile?.companyId || user.uid,
-          packName,
-          uploadedUrl,
-          sanitizedData,
-          user.email || 'Unknown',
-          id,
-          displayData.activityLog || [],
-          displayData.isTeamEditable ?? true
-        );
-        pushLog(`Erased garment logo/branding & saved tech pack successfully`);
-      } catch (err) {
-        console.error("Auto-save after erasing failed:", err);
+      const existingId = (!id || id === 'draft') ? undefined : id;
+      const savedId = await saveTechPack(
+        user.uid,
+        profile?.companyId || user.uid,
+        packName,
+        uploadedUrl,
+        sanitizedData,
+        user.email || 'Unknown',
+        existingId,
+        displayData.activityLog || [],
+        displayData.isTeamEditable ?? true
+      );
+      pushLog(`Erased garment logo/branding & saved tech pack successfully`);
+      if (!id || id === 'draft') {
+        navigate(`/pack/${savedId}`, { replace: true });
       }
-    } else {
-      pushLog(`Erased garment logo/branding successfully`);
+    } catch (err) {
+      console.error("Auto-save after erasing failed:", err);
     }
   };
 
@@ -801,7 +802,7 @@ export function TechPackEditor() {
 
   // Real-Time Tech Pack Subscription & Data Synchronization
   useEffect(() => {
-    if (location.state?.techPack) {
+    if (location.state?.techPack && isLoading) {
       const pack = location.state.techPack;
       let loadedUnit = pack?.unit;
       if (!loadedUnit) {
@@ -830,10 +831,12 @@ export function TechPackEditor() {
 
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
-    } else if (id && id !== 'draft') {
+    }
+
+    if (id && id !== 'draft') {
       const unsub = subscribeToTechPack(id, (packInfo) => {
         if (packInfo) {
-          const pack = packInfo.techPack;
+          const pack = packInfo.techPack || {};
           let loadedUnit = pack?.unit;
           if (!loadedUnit) {
             loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
@@ -851,15 +854,24 @@ export function TechPackEditor() {
             setGlobalUnit(loadedUnit);
             localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
           }
-          const initialImage = pack?.images?.original || packInfo.imageUrl;
-          setImageUrl(initialImage);
-
-          const initialGallery = pack?.gallery || [];
-          if (initialImage && !initialGallery.includes(initialImage)) {
-             initialGallery.unshift(initialImage);
+          const initialImage = pack?.images?.original || packInfo.imageUrl || '';
+          
+          const docGallery: string[] = pack?.gallery || [];
+          const combinedGallery = [...docGallery];
+          if (packInfo.imageUrl && !combinedGallery.includes(packInfo.imageUrl)) {
+            combinedGallery.unshift(packInfo.imageUrl);
           }
-          setGalleryImages(initialGallery);
-          setPackName(packInfo.name);
+          if (initialImage && !combinedGallery.includes(initialImage)) {
+            combinedGallery.unshift(initialImage);
+          }
+
+          setImageUrl((prev) => {
+            if (prev && combinedGallery.includes(prev)) return prev;
+            return initialImage || packInfo.imageUrl || combinedGallery[0] || '';
+          });
+
+          setGalleryImages(combinedGallery);
+          setPackName(packInfo.name || 'Untitled Garment');
         }
         setIsLoading(false);
       });
@@ -868,7 +880,62 @@ export function TechPackEditor() {
     } else {
       setIsLoading(false);
     }
-  }, [id, location.state]);
+  }, [id]);
+
+  useEffect(() => {
+    isFirstLoad.current = true;
+  }, [id]);
+
+  // Debounced Auto-Save to Firestore (1-second debounce)
+  useEffect(() => {
+    if (isLoading || !id || id === 'draft' || isTechPackLocked || isTranslated || !user) {
+      return;
+    }
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSaving(true);
+        const techPackDataToSave = JSON.parse(JSON.stringify(data));
+        delete techPackDataToSave.userId;
+        delete techPackDataToSave.isTeamEditable;
+        delete techPackDataToSave.activityLog;
+
+        let finalGalleryImages = [];
+        for (const gImg of galleryImages) {
+           let finalUrl = gImg;
+           if (gImg.startsWith('data:')) {
+              finalUrl = await uploadBase64Image(gImg, user.uid);
+           }
+           finalGalleryImages.push(finalUrl);
+        }
+        techPackDataToSave.gallery = finalGalleryImages;
+        if (!techPackDataToSave.images) techPackDataToSave.images = {};
+        techPackDataToSave.images.original = imageUrl;
+
+        await saveTechPack(
+          user.uid,
+          profile?.companyId || user.uid,
+          packName,
+          imageUrl || finalGalleryImages[0] || '',
+          techPackDataToSave,
+          user.email || 'Unknown',
+          id,
+          displayData.activityLog || [],
+          displayData.isTeamEditable ?? true
+        );
+      } catch (err) {
+        console.error("Debounced auto-save error:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [data, packName, imageUrl, galleryImages]);
 
   const handleSyncToWovn = async () => {
     setIsSyncing(true);
@@ -1402,6 +1469,26 @@ export function TechPackEditor() {
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 {activeCollaborators.length} live
               </span>
+            </div>
+          )}
+
+          {/* Live Cloud Sync Status Badge */}
+          {id && id !== 'draft' && (
+            <div 
+              className="flex items-center gap-1.5 px-3 h-9 rounded-xl border bg-white border-gray-200 text-xs font-semibold shrink-0 print:hidden shadow-sm"
+              title={isSaving ? "Saving changes to cloud..." : "All changes automatically saved to cloud"}
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-blue-600 font-bold hidden sm:inline">Saving...</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-gray-600 font-medium hidden sm:inline">Saved</span>
+                </>
+              )}
             </div>
           )}
 
