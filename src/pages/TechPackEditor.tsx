@@ -415,12 +415,12 @@ export function TechPackEditor() {
 
   const handleGenerateMannequin = async (gender: string, garmentType: string, viewPoint: string, fitStyle: string): Promise<string> => {
     const { generateInvisibleMockup } = await import('../services/nanobananaService');
-    return await generateInvisibleMockup(imageUrl, garmentType, gender, viewPoint, fitStyle);
+    return await generateInvisibleMockup(imageUrl, gender, garmentType, viewPoint, fitStyle);
   };
 
   const handleGenerateFlatlay = async (gender: string, garmentType: string, viewPoint: string): Promise<string> => {
     const { generateFlatlayMockup } = await import('../services/nanobananaService');
-    return await generateFlatlayMockup(imageUrl, garmentType, gender, viewPoint);
+    return await generateFlatlayMockup(imageUrl, gender, garmentType, viewPoint);
   };
 
   const handleSaveMannequinImage = async (base64Image: string) => {

@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.NANOBANANA_API_KEY || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY configuration.' });
     }
@@ -83,14 +83,23 @@ CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
       }
     }
     
-    let text = result.response.text();
-    text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').replace(/\s+/g, '').trim();
+    let text = '';
+    try {
+      text = result.response.text() || '';
+      text = text.replace(/```png\n?/gi, '').replace(/```base64\n?/gi, '').replace(/```\n?/g, '').replace(/\s+/g, '').trim();
+    } catch (e) {
+      text = '';
+    }
     
     if (text.startsWith("data:image/")) {
       return res.status(200).json({ data: text });
     }
 
-    return res.status(200).json({ data: `data:image/png;base64,${text}` });
+    if (text.length > 1000 && !text.includes(" ") && !text.includes("<") && !text.includes("\n")) {
+      return res.status(200).json({ data: `data:image/png;base64,${text}` });
+    }
+
+    return res.status(500).json({ error: "AI model did not return image data. Please click Regenerate again." });
 
   } catch (err: any) {
     console.error("Invisible Mannequin Generation Error:", err);

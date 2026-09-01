@@ -234,7 +234,7 @@ export async function vectorizeGarmentImage(imageUrl: string): Promise<string> {
   }
 }
 
-export async function generateInvisibleMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string, fitStyle: string = 'Standard'): Promise<string> {
+export async function generateInvisibleMockup(imageUrl: string, gender: string, garmentType: string, viewPoint: string, fitStyle: string = 'Standard'): Promise<string> {
   try {
     const { base64Data, mimeType } = await resizeImage(imageUrl);
 
@@ -243,7 +243,7 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint, fitStyle })
+      body: JSON.stringify({ base64Data, mimeType, gender, garmentType, viewPoint, fitStyle })
     });
 
     if (!res.ok) {
@@ -252,6 +252,9 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
     }
 
     const data = await res.json();
+    if (!data.data || typeof data.data !== 'string' || !data.data.startsWith('data:image/')) {
+      throw new Error("Server did not return valid image data. Please try again.");
+    }
     // Automatically trim excess white margins so mannequin is always full size
     return await autoTrimWhitePadding(data.data);
 
@@ -261,7 +264,7 @@ export async function generateInvisibleMockup(imageUrl: string, garmentType: str
   }
 }
 
-export async function generateFlatlayMockup(imageUrl: string, garmentType: string, gender: string, viewPoint: string): Promise<string> {
+export async function generateFlatlayMockup(imageUrl: string, gender: string, garmentType: string, viewPoint: string): Promise<string> {
   try {
     const { base64Data, mimeType } = await resizeImage(imageUrl);
 
@@ -270,7 +273,7 @@ export async function generateFlatlayMockup(imageUrl: string, garmentType: strin
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ base64Data, mimeType, garmentType, gender, viewPoint })
+      body: JSON.stringify({ base64Data, mimeType, gender, garmentType, viewPoint })
     });
 
     if (!res.ok) {
@@ -279,6 +282,9 @@ export async function generateFlatlayMockup(imageUrl: string, garmentType: strin
     }
 
     const data = await res.json();
+    if (!data.data || typeof data.data !== 'string' || !data.data.startsWith('data:image/')) {
+      throw new Error("Server did not return valid image data. Please try again.");
+    }
     return await autoTrimWhitePadding(data.data);
 
   } catch (err) {
