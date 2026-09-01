@@ -1416,152 +1416,172 @@ export function TechPackEditor() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-hidden">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0" title="Back to Garment Location">
-            <ArrowLeft size={20} />
-          </button>
-          <input 
-            value={packName} 
-            onChange={(e) => setPackName(e.target.value)} 
-            className="text-2xl sm:text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 w-full truncate" 
-            placeholder="Garment Name"
-          />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {pendingScans.length > 0 && (
-            <Button 
-               onClick={() => setShowScansInbox(true)} 
-               className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0 text-xs sm:text-sm"
-               title="New 3D Scans Available"
-            >
-               <Smartphone size={16} className="mr-1.5" />
-               <span className="font-bold">Scans</span>
-               <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
-                 {pendingScans.length}
-               </div>
-            </Button>
-          )}
-          
-          <div className="flex bg-gray-100 p-1 rounded-xl print:hidden flex shrink-0">
-             <button onClick={() => setViewMode('techpack')} className={`px-2.5 sm:px-4 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
-             <button onClick={() => setViewMode('linesheet')} className={`px-2.5 sm:px-4 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm print:hidden">
-            <span className="text-[10px] uppercase font-bold text-gray-400">Lang:</span>
-            <select 
-              className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-20"
-              value={activeLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              disabled={isTranslating}
-            >
-              {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            {isTranslating && <div className="w-3 h-3 border-2 border-gray-200 border-t-black rounded-full animate-spin" />}
-          </div>
+      {/* Top Header Navigation & Controls */}
+      <div className="space-y-3 print:hidden">
+        {/* Tier 1: Document Title & Primary Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-sm p-3 rounded-2xl border border-gray-100 shadow-sm">
+          {/* Title & Status */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-colors shrink-0" title="Back to Garment Location">
+              <ArrowLeft size={20} />
+            </button>
+            
+            <input 
+              value={packName} 
+              onChange={(e) => setPackName(e.target.value)} 
+              className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 flex-1 min-w-0 truncate" 
+              placeholder="Garment Name"
+            />
 
-          {isCreator && (
-            <Button 
-               onClick={toggleTeamEditable} 
-               variant="secondary" 
-               className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
-               title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
-            >
-               {displayData?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
-            </Button>
-          )}
-
-          {/* Active Collaborators Badges */}
-          {activeCollaborators.length > 0 && (
-            <div className="flex items-center gap-1.5 print:hidden mr-1" title="Active Collaborators on this Tech Pack">
-              <div className="flex -space-x-2 overflow-hidden">
-                {activeCollaborators.map((c) => {
-                  const isMe = c.uid === user?.uid;
-                  const initial = (c.name || c.email || 'U').charAt(0).toUpperCase();
-                  return (
-                    <div
-                      key={c.uid}
-                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-extrabold text-white border-2 border-white shadow-sm transition-transform hover:scale-110 cursor-pointer ${
-                        isMe ? 'bg-blue-600' : 'bg-emerald-600'
-                      }`}
-                      title={`${c.name || c.email}${isMe ? ' (You)' : ' (Teammate online)'}`}
-                    >
-                      {initial}
-                    </div>
-                  );
-                })}
+            {/* Live Cloud Sync Status Badge */}
+            {id && id !== 'draft' && (
+              <div 
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border bg-gray-50 border-gray-200 text-xs font-semibold shrink-0"
+                title={isSaving ? "Saving changes to cloud..." : "All changes automatically saved to cloud"}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-blue-600 font-bold text-[11px]">Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-gray-600 font-medium text-[11px]">Saved</span>
+                  </>
+                )}
               </div>
-              <span className="text-[11px] font-bold text-emerald-600 hidden sm:inline flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                {activeCollaborators.length} live
-              </span>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Live Cloud Sync Status Badge */}
-          {id && id !== 'draft' && (
-            <div 
-              className="flex items-center gap-1.5 px-3 h-9 rounded-xl border bg-white border-gray-200 text-xs font-semibold shrink-0 print:hidden shadow-sm"
-              title={isSaving ? "Saving changes to cloud..." : "All changes automatically saved to cloud"}
+          {/* Primary Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0 justify-end">
+            {/* Active Collaborators Badges */}
+            {activeCollaborators.length > 0 && (
+              <div className="flex items-center gap-1.5 print:hidden mr-1" title="Active Collaborators on this Tech Pack">
+                <div className="flex -space-x-2 overflow-hidden">
+                  {activeCollaborators.map((c) => {
+                    const isMe = c.uid === user?.uid;
+                    const initial = (c.name || c.email || 'U').charAt(0).toUpperCase();
+                    return (
+                      <div
+                        key={c.uid}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-extrabold text-white border-2 border-white shadow-sm transition-transform hover:scale-110 cursor-pointer ${
+                          isMe ? 'bg-blue-600' : 'bg-emerald-600'
+                        }`}
+                        title={`${c.name || c.email}${isMe ? ' (You)' : ' (Teammate online)'}`}
+                      >
+                        {initial}
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] font-bold text-emerald-600 hidden md:inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  {activeCollaborators.length} live
+                </span>
+              </div>
+            )}
+
+            <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3.5 h-9 shadow-sm shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs font-bold rounded-xl">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Download size={14} />
+                <span>Export</span>
+              </div>
+            </Button>
+
+            <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3.5 h-9 shadow-sm shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-bold rounded-xl">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <span>Sync</span>
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Tier 2: Secondary Toolbar (Scrollable on Mobile) */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-hide py-1 px-1">
+          {/* Left Controls: View Mode & Language */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
+               <button onClick={() => setViewMode('techpack')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
+               <button onClick={() => setViewMode('linesheet')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm shrink-0">
+              <span className="text-[10px] uppercase font-bold text-gray-400">LANG:</span>
+              <select 
+                className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-20"
+                value={activeLanguage}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                disabled={isTranslating}
+              >
+                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              {isTranslating && <div className="w-3 h-3 border-2 border-gray-200 border-t-black rounded-full animate-spin" />}
+            </div>
+          </div>
+
+          {/* Right Controls: Scans, Locks, Save & History */}
+          <div className="flex items-center gap-2 shrink-0">
+            {pendingScans.length > 0 && (
+              <Button 
+                 onClick={() => setShowScansInbox(true)} 
+                 className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0 text-xs rounded-xl"
+                 title="New 3D Scans Available"
+              >
+                 <Smartphone size={15} className="mr-1.5" />
+                 <span className="font-bold">Scans</span>
+                 <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
+                   {pendingScans.length}
+                 </div>
+              </Button>
+            )}
+
+            {isCreator && (
+              <Button 
+                 onClick={toggleTeamEditable} 
+                 variant="secondary" 
+                 className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
+                 title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
+              >
+                 {displayData?.isTeamEditable === false ? <Lock size={15} /> : <Unlock size={15} />}
+              </Button>
+            )}
+
+            <Button 
+              onClick={handleSave} 
+              disabled={isTechPackLocked || isSaving} 
+              isLoading={isSaving} 
+              variant="secondary" 
+              className={`px-3 h-9 shrink-0 text-xs font-semibold rounded-xl ${
+                isTechPackLocked 
+                  ? 'opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border border-gray-200' 
+                  : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
+              }`}
             >
-              {isSaving ? (
-                <>
-                  <div className="w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-blue-600 font-bold hidden sm:inline">Saving...</span>
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-gray-600 font-medium hidden sm:inline">Saved</span>
-                </>
-              )}
-            </div>
-          )}
+              <div className="flex items-center gap-1.5">
+                <Save size={14} />
+                <span>Save</span>
+              </div>
+            </Button>
 
-          {/* Save Button */}
-          <Button 
-            onClick={handleSave} 
-            disabled={isTechPackLocked || isSaving} 
-            isLoading={isSaving} 
-            variant="secondary" 
-            className={`px-3 sm:px-4 h-9 shrink-0 text-xs sm:text-sm ${
-              isTechPackLocked 
-                ? 'opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border border-gray-200' 
-                : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
-            }`}
-          >
-            <div className="flex items-center gap-1.5 font-semibold">
-              <Save size={15} />
-              <span>Save</span>
-            </div>
-          </Button>          {/* Lock / Unlock Toggle Button */}
-          <button 
-            onClick={toggleLock} 
-            className={`px-3.5 sm:px-4 h-9 shrink-0 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
-              isTechPackLocked 
-                ? 'bg-black text-white hover:bg-gray-800 border-black shadow-sm' 
-                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
-            }`}
-            title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
-          >
-            {isTechPackLocked ? <Lock size={15} className="text-white" /> : <Unlock size={15} className="text-gray-500" />}
-            <span className={isTechPackLocked ? "text-white font-bold" : "text-gray-700 font-semibold"}>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
-          </button>
+            <button 
+              onClick={toggleLock} 
+              className={`px-3 h-9 shrink-0 text-xs font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
+                isTechPackLocked 
+                  ? 'bg-black text-white hover:bg-gray-800 border-black shadow-sm' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+              }`}
+              title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
+            >
+              {isTechPackLocked ? <Lock size={14} className="text-white" /> : <Unlock size={14} className="text-gray-500" />}
+              <span className={isTechPackLocked ? "text-white font-bold" : "text-gray-700 font-semibold"}>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
+            </button>
 
-          <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
-             <History size={16} />
-          </Button>
-          <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3 sm:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs sm:text-sm">
-            <div className="flex items-center gap-1.5 font-semibold">
-              <Download size={15} />
-              <span>Export</span>
-            </div>
-          </Button>
-          <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3 sm:px-4 h-9 shadow-md shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs sm:text-sm">
-            <div className="flex items-center gap-1.5 font-semibold">
-              <span>Sync</span>
-            </div>
-          </Button>
+            <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl" title="Activity Log">
+               <History size={15} />
+            </Button>
+          </div>
         </div>
       </div>
 
