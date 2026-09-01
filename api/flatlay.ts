@@ -22,7 +22,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { base64Data, mimeType, garmentType, gender, viewPoint } = req.body;
+    const { base64Data, mimeType, gender, garmentType, viewPoint } = req.body;
 
     if (!base64Data || !mimeType) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
