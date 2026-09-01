@@ -6,7 +6,7 @@ import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -185,6 +185,7 @@ export function TechPackEditor() {
 
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [activeCollaborators, setActiveCollaborators] = useState<UserPresence[]>([]);
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -775,6 +776,30 @@ export function TechPackEditor() {
     return () => { unsub(); unsubScans(); };
   }, [user, id]);
 
+  // Live Presence Management
+  useEffect(() => {
+    if (!id || id === 'draft' || !user) return;
+
+    const userName = profile?.name || formatName(user.email);
+    updateTechPackPresence(id, { uid: user.uid, email: user.email || 'Teammate', name: userName });
+
+    // Send presence heartbeat every 30s
+    const heartbeat = setInterval(() => {
+      updateTechPackPresence(id, { uid: user.uid, email: user.email || 'Teammate', name: userName });
+    }, 30000);
+
+    const unsubPresence = subscribeToTechPackPresence(id, (users) => {
+      setActiveCollaborators(users);
+    });
+
+    return () => {
+      clearInterval(heartbeat);
+      unsubPresence();
+      removeTechPackPresence(id, user.uid);
+    };
+  }, [id, user, profile]);
+
+  // Real-Time Tech Pack Subscription & Data Synchronization
   useEffect(() => {
     if (location.state?.techPack) {
       const pack = location.state.techPack;
@@ -806,38 +831,40 @@ export function TechPackEditor() {
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
     } else if (id && id !== 'draft') {
-      getTechPack(id).then((packInfo) => {
+      const unsub = subscribeToTechPack(id, (packInfo) => {
         if (packInfo) {
           const pack = packInfo.techPack;
           let loadedUnit = pack?.unit;
           if (!loadedUnit) {
             loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
           }
-          setData({
+
+          setData((prev: any) => ({
             ...pack,
             unit: loadedUnit || pack?.unit || 'cm',
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
-            activityLog: packInfo.activityLog
-          });
+            activityLog: packInfo.activityLog || prev?.activityLog
+          }));
+
           if (loadedUnit) {
             setGlobalUnit(loadedUnit);
             localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
           }
           const initialImage = pack?.images?.original || packInfo.imageUrl;
           setImageUrl(initialImage);
-          
 
           const initialGallery = pack?.gallery || [];
           if (initialImage && !initialGallery.includes(initialImage)) {
              initialGallery.unshift(initialImage);
           }
           setGalleryImages(initialGallery);
-
           setPackName(packInfo.name);
         }
         setIsLoading(false);
       });
+
+      return () => unsub();
     } else {
       setIsLoading(false);
     }
@@ -1349,6 +1376,33 @@ export function TechPackEditor() {
             >
                {displayData?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
             </Button>
+          )}
+
+          {/* Active Collaborators Badges */}
+          {activeCollaborators.length > 0 && (
+            <div className="flex items-center gap-1.5 print:hidden mr-1" title="Active Collaborators on this Tech Pack">
+              <div className="flex -space-x-2 overflow-hidden">
+                {activeCollaborators.map((c) => {
+                  const isMe = c.uid === user?.uid;
+                  const initial = (c.name || c.email || 'U').charAt(0).toUpperCase();
+                  return (
+                    <div
+                      key={c.uid}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-extrabold text-white border-2 border-white shadow-sm transition-transform hover:scale-110 cursor-pointer ${
+                        isMe ? 'bg-blue-600' : 'bg-emerald-600'
+                      }`}
+                      title={`${c.name || c.email}${isMe ? ' (You)' : ' (Teammate online)'}`}
+                    >
+                      {initial}
+                    </div>
+                  );
+                })}
+              </div>
+              <span className="text-[11px] font-bold text-emerald-600 hidden sm:inline flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {activeCollaborators.length} live
+              </span>
+            </div>
           )}
 
           {/* Save Button */}

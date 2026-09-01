@@ -1,4 +1,4 @@
-import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
 
@@ -310,3 +310,105 @@ export const updateTechPackOrders = async (orders: { id: string; sortOrder: numb
   });
   await batch.commit();
 };
+
+// --- Real-Time Synchronization & Presence Features ---
+
+export const subscribeToTechPack = (
+  id: string, 
+  callback: (pack: TechPackData | null) => void
+) => {
+  const packRef = doc(db, 'techPacks', id);
+  return onSnapshot(packRef, (snap) => {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() } as TechPackData);
+    } else {
+      callback(null);
+    }
+  }, (err) => {
+    console.error("Error in subscribeToTechPack:", err);
+  });
+};
+
+export const subscribeToUserAndCompanyTechPacks = (
+  companyId: string,
+  callback: (packs: TechPackData[]) => void
+) => {
+  const q = query(collection(db, 'techPacks'));
+  return onSnapshot(q, (snap) => {
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as TechPackData[];
+    results.sort((a, b) => {
+      const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+      const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+      return timeB - timeA;
+    });
+    callback(results);
+  }, (err) => {
+    console.error("Error in subscribeToUserAndCompanyTechPacks:", err);
+  });
+};
+
+export const subscribeToCompanyFolders = (
+  companyId: string,
+  callback: (folders: FolderData[]) => void
+) => {
+  const q = query(collection(db, 'folders'), where('companyId', '==', companyId));
+  return onSnapshot(q, (snap) => {
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as FolderData[];
+    results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    callback(results);
+  }, (err) => {
+    console.error("Error in subscribeToCompanyFolders:", err);
+  });
+};
+
+export interface UserPresence {
+  uid: string;
+  email: string;
+  name?: string;
+  lastSeen: any;
+}
+
+export const updateTechPackPresence = async (
+  packId: string,
+  user: { uid: string; email: string; name?: string }
+) => {
+  if (!packId || !user.uid) return;
+  const presenceRef = doc(db, 'techPacks', packId, 'presence', user.uid);
+  await setDoc(presenceRef, {
+    uid: user.uid,
+    email: user.email,
+    name: user.name || user.email.split('@')[0],
+    lastSeen: serverTimestamp()
+  }, { merge: true });
+};
+
+export const removeTechPackPresence = async (packId: string, uid: string) => {
+  if (!packId || !uid) return;
+  try {
+    const presenceRef = doc(db, 'techPacks', packId, 'presence', uid);
+    await deleteDoc(presenceRef);
+  } catch (e) {
+    console.error("Error removing presence:", e);
+  }
+};
+
+export const subscribeToTechPackPresence = (
+  packId: string,
+  callback: (users: UserPresence[]) => void
+) => {
+  const presenceColl = collection(db, 'techPacks', packId, 'presence');
+  return onSnapshot(presenceColl, (snap) => {
+    const now = Date.now();
+    const users = snap.docs
+      .map(d => d.data() as UserPresence)
+      .filter(u => {
+        if (!u.lastSeen) return true;
+        const millis = u.lastSeen.toMillis ? u.lastSeen.toMillis() : 0;
+        return millis === 0 || (now - millis < 120000);
+      });
+    callback(users);
+  }, (err) => {
+    console.error("Error in subscribeToTechPackPresence:", err);
+  });
+};
+

@@ -28,7 +28,9 @@ import {
   updateTechPackFolder, 
   moveTechPacksToFolder,
   updateFolderOrders,
-  updateTechPackOrders
+  updateTechPackOrders,
+  subscribeToUserAndCompanyTechPacks,
+  subscribeToCompanyFolders
 } from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -110,64 +112,66 @@ export function Dashboard() {
 
   useEffect(() => {
     if (user && profile?.companyId) {
-      loadFolders(profile.companyId);
-      getUserAndCompanyTechPacks(user.uid, profile.companyId)
-        .then(async data => {
-          setTechPacks(data);
+      const unsubFolders = subscribeToCompanyFolders(profile.companyId, (foldersData) => {
+        setFolders(foldersData);
+      });
 
-          // Auto-migrate orphaned packs that user securely owns but aren't currently bound to the active team
-          const orphanedPacks = data.filter(p => p.userId === user.uid && p.companyId !== profile.companyId);
-          if (orphanedPacks.length > 0) {
-            try {
-              const batch = writeBatch(db);
-              let count = 0;
-              orphanedPacks.forEach(p => {
-                if (p.id) {
-                   batch.update(doc(db, 'techPacks', p.id), { companyId: profile.companyId });
-                   count++;
-                }
-              });
-              if (count > 0) await batch.commit();
-            } catch(e) {
-              console.error("Auto-migration failed:", e);
-            }
-          }
-          // Fetch and auto-hydrate missing author emails for legacy collaborative tech packs
-          const missingEmailUsers = Array.from(new Set(data.filter(p => !p.creatorEmail && p.userId).map(p => p.userId)));
-          if (missingEmailUsers.length > 0) {
-            try {
-              const userDocs = await Promise.all(missingEmailUsers.map(uid => getDoc(doc(db, 'users', uid))));
-              const emailMap: Record<string, string> = {};
-              userDocs.forEach(d => {
-                if (d.exists() && d.data().email) emailMap[d.id] = d.data().email;
-              });
+      const unsubPacks = subscribeToUserAndCompanyTechPacks(profile.companyId, async (data) => {
+        setTechPacks(data);
+        setLoading(false);
 
-              let hydrated = false;
-              const batch = writeBatch(db);
-              let batchCount = 0;
-
-              data.forEach(p => {
-                if (!p.creatorEmail && emailMap[p.userId]) {
-                  p.creatorEmail = emailMap[p.userId];
-                  hydrated = true;
-                  if (p.id) {
-                    batch.update(doc(db, 'techPacks', p.id), { creatorEmail: emailMap[p.userId] });
-                    batchCount++;
-                  }
-                }
-              });
-
-              if (hydrated) {
-                setTechPacks([...data]);
-                if (batchCount > 0) await batch.commit();
+        // Auto-migrate orphaned packs that user securely owns but aren't currently bound to the active team
+        const orphanedPacks = data.filter(p => p.userId === user.uid && p.companyId !== profile.companyId);
+        if (orphanedPacks.length > 0) {
+          try {
+            const batch = writeBatch(db);
+            let count = 0;
+            orphanedPacks.forEach(p => {
+              if (p.id) {
+                 batch.update(doc(db, 'techPacks', p.id), { companyId: profile.companyId });
+                 count++;
               }
-            } catch (e) {
-              console.error("Email hydration failed:", e);
-            }
+            });
+            if (count > 0) await batch.commit();
+          } catch(e) {
+            console.error("Auto-migration failed:", e);
           }
-        })
-        .catch(err => console.error("Error fetching tech packs:", err))
-        .finally(() => setLoading(false));
+        }
+
+        // Fetch and auto-hydrate missing author emails for legacy collaborative tech packs
+        const missingEmailUsers = Array.from(new Set(data.filter(p => !p.creatorEmail && p.userId).map(p => p.userId)));
+        if (missingEmailUsers.length > 0) {
+          try {
+            const userDocs = await Promise.all(missingEmailUsers.map(uid => getDoc(doc(db, 'users', uid))));
+            const emailMap: Record<string, string> = {};
+            userDocs.forEach(d => {
+              if (d.exists() && d.data().email) emailMap[d.id] = d.data().email;
+            });
+
+            let hydrated = false;
+            const batch = writeBatch(db);
+            let batchCount = 0;
+
+            data.forEach(p => {
+              if (!p.creatorEmail && emailMap[p.userId]) {
+                p.creatorEmail = emailMap[p.userId];
+                hydrated = true;
+                if (p.id) {
+                  batch.update(doc(db, 'techPacks', p.id), { creatorEmail: emailMap[p.userId] });
+                  batchCount++;
+                }
+              }
+            });
+
+            if (hydrated) {
+              setTechPacks([...data]);
+              if (batchCount > 0) await batch.commit();
+            }
+          } catch (e) {
+            console.error("Email hydration failed:", e);
+          }
+        }
+      });
 
       // Fetch company doc for wovn integration
       const unsubscribeCompany = onSnapshot(doc(db, 'companies', profile.companyId), snap => {
@@ -186,7 +190,11 @@ export function Dashboard() {
         }
       });
 
-      return () => unsubscribeCompany();
+      return () => {
+        unsubFolders();
+        unsubPacks();
+        unsubscribeCompany();
+      };
     }
   }, [user, profile]);
 
