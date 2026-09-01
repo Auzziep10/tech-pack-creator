@@ -207,6 +207,7 @@ export function TechPackEditor() {
   const [galleryScanSessionId, setGalleryScanSessionId] = useState<string | null>(null);
   const annotatorRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
+  const lastSavedJsonRef = useRef<string>('');
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
@@ -865,13 +866,24 @@ export function TechPackEditor() {
             combinedGallery.unshift(initialImage);
           }
 
+          const selImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : (initialImage || packInfo.imageUrl || combinedGallery[0] || '');
+
           setImageUrl((prev) => {
             if (prev && combinedGallery.includes(prev)) return prev;
-            return initialImage || packInfo.imageUrl || combinedGallery[0] || '';
+            return selImg;
           });
 
           setGalleryImages(combinedGallery);
-          setPackName(packInfo.name || 'Untitled Garment');
+          const pName = packInfo.name || 'Untitled Garment';
+          setPackName(pName);
+
+          // Record current state hash to prevent echoing incoming Firestore updates back into save loop
+          lastSavedJsonRef.current = JSON.stringify({
+            data: pack,
+            packName: pName,
+            imageUrl: selImg,
+            galleryImages: combinedGallery
+          });
         }
         setIsLoading(false);
       });
@@ -886,7 +898,7 @@ export function TechPackEditor() {
     isFirstLoad.current = true;
   }, [id]);
 
-  // Debounced Auto-Save to Firestore (1-second debounce)
+  // Debounced Auto-Save to Firestore (1.2-second debounce, only saves when actual changes occur)
   useEffect(() => {
     if (isLoading || !id || id === 'draft' || isTechPackLocked || isTranslated || !user) {
       return;
@@ -896,9 +908,23 @@ export function TechPackEditor() {
       return;
     }
 
+    const currentJson = JSON.stringify({
+      data,
+      packName,
+      imageUrl,
+      galleryImages
+    });
+
+    // DO NOT SAVE IF NO CHANGES WERE MADE!
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
     const timer = setTimeout(async () => {
       try {
         setIsSaving(true);
+        lastSavedJsonRef.current = currentJson;
+
         const techPackDataToSave = JSON.parse(JSON.stringify(data));
         delete techPackDataToSave.userId;
         delete techPackDataToSave.isTeamEditable;
@@ -932,10 +958,10 @@ export function TechPackEditor() {
       } finally {
         setIsSaving(false);
       }
-    }, 1000);
+    }, 1200);
 
     return () => clearTimeout(timer);
-  }, [data, packName, imageUrl, galleryImages]);
+  }, [data, packName, imageUrl, galleryImages, isLoading, id, isTechPackLocked, isTranslated, user]);
 
   const handleSyncToWovn = async () => {
     setIsSyncing(true);
