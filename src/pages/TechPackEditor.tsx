@@ -837,6 +837,19 @@ export function TechPackEditor() {
     if (id && id !== 'draft') {
       const unsub = subscribeToTechPack(id, (packInfo) => {
         if (packInfo) {
+          // If local user is actively typing in a text field or textarea, preserve local state to prevent cursor interruption
+          const isInputFocused = () => {
+            if (typeof document === 'undefined') return false;
+            const activeEl = document.activeElement;
+            if (!activeEl) return false;
+            const tag = activeEl.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
+          };
+
+          if (isInputFocused()) {
+            return;
+          }
+
           const pack = packInfo.techPack || {};
           let loadedUnit = pack?.unit;
           if (!loadedUnit) {
@@ -898,7 +911,7 @@ export function TechPackEditor() {
     isFirstLoad.current = true;
   }, [id]);
 
-  // Debounced Auto-Save to Firestore (1.2-second debounce, only saves when actual changes occur)
+  // Debounced Auto-Save to Firestore (2.5-second debounce, only saves when user stops typing or blurs)
   useEffect(() => {
     if (isLoading || !id || id === 'draft' || isTechPackLocked || isTranslated || !user) {
       return;
@@ -921,6 +934,19 @@ export function TechPackEditor() {
     }
 
     const timer = setTimeout(async () => {
+      // Do not auto-save mid-keystroke while the user is actively focused on an input element!
+      const isInputFocused = () => {
+        if (typeof document === 'undefined') return false;
+        const activeEl = document.activeElement;
+        if (!activeEl) return false;
+        const tag = activeEl.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
+      };
+
+      if (isInputFocused()) {
+        return;
+      }
+
       try {
         setIsSaving(true);
         lastSavedJsonRef.current = currentJson;
@@ -958,7 +984,7 @@ export function TechPackEditor() {
       } finally {
         setIsSaving(false);
       }
-    }, 1200);
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [data, packName, imageUrl, galleryImages, isLoading, id, isTechPackLocked, isTranslated, user]);
