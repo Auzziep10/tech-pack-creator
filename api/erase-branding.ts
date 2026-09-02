@@ -56,21 +56,40 @@ CRITICAL CONSTRAINTS:
 3. DO NOT change anything else on the garment. The rest of the garment, background, and lighting MUST remain identical to the first image.
 4. ISOLATE ON PURE WHITE (ULTRA-CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows on the floor. NO cream, off-white, light grey, or transparent backgrounds. NO gradients. Every non-garment pixel MUST be exactly #FFFFFF.`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: cleanBase64Data,
-          mimeType: actualMimeType
+    let result: any = null;
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: cleanBase64Data,
+              mimeType: actualMimeType
+            }
+          },
+          {
+            inlineData: {
+              data: maskData,
+              mimeType: actualMaskMimeType
+            }
+          }
+        ]);
+        break;
+      } catch (genErr: any) {
+        const isTransient = genErr?.message?.includes('503') ||
+                            genErr?.message?.includes('Service Unavailable') ||
+                            genErr?.message?.includes('Deadline expired') ||
+                            genErr?.message?.includes('504') ||
+                            genErr?.message?.includes('429');
+        if (isTransient && attempt < maxRetries) {
+          console.warn(`[Erase Branding API] Transient error (attempt ${attempt + 1}/${maxRetries + 1}):`, genErr.message);
+          await new Promise(r => setTimeout(r, (attempt + 1) * 1500));
+          continue;
         }
-      },
-      {
-        inlineData: {
-          data: maskData,
-          mimeType: actualMaskMimeType
-        }
+        throw genErr;
       }
-    ]);
+    }
 
     const candidates = result.response?.candidates;
     if (candidates && candidates.length > 0) {
@@ -93,6 +112,10 @@ CRITICAL CONSTRAINTS:
 
   } catch (err: any) {
     console.error("Erase Branding Error:", err);
-    return res.status(500).json({ error: err.message || 'Internal Server Error' });
+    let errMsg = err.message || 'Internal Server Error';
+    if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
+      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click Erase Branding again in a few moments to retry.';
+    }
+    return res.status(500).json({ error: errMsg });
   }
 }

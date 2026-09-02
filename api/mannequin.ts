@@ -65,15 +65,35 @@ CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
    - BACKGROUND: Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF). Zero background cast or shadows on surrounding white pixels.
    - LIGHTING: Soft, color-neutral 3D studio lighting (5000K neutral daylight) that highlights 3D body depth without washing out fabric colors.`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType
+    // Attempt generation with automatic retries for transient 503 / timeout errors
+    let result: any = null;
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType
+            }
+          }
+        ]);
+        break; // Success
+      } catch (genErr: any) {
+        const isTransient = genErr?.message?.includes('503') ||
+                            genErr?.message?.includes('Service Unavailable') ||
+                            genErr?.message?.includes('Deadline expired') ||
+                            genErr?.message?.includes('504') ||
+                            genErr?.message?.includes('429');
+        if (isTransient && attempt < maxRetries) {
+          console.warn(`[Mannequin API] Transient error (attempt ${attempt + 1}/${maxRetries + 1}):`, genErr.message);
+          await new Promise(r => setTimeout(r, (attempt + 1) * 1500));
+          continue;
         }
+        throw genErr;
       }
-    ]);
+    }
 
     const candidates = result.response?.candidates;
     if (candidates && candidates.length > 0) {
@@ -105,6 +125,10 @@ CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
 
   } catch (err: any) {
     console.error("Invisible Mannequin Generation Error:", err);
-    return res.status(500).json({ error: err.message || 'Internal Server Error' });
+    let errMsg = err.message || 'Internal Server Error';
+    if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
+      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click "Create 3D Floating Garment" again in a few moments to retry.';
+    }
+    return res.status(500).json({ error: errMsg });
   }
 }

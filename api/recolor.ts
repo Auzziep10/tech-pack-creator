@@ -49,15 +49,34 @@ CRITICAL CONSTRAINTS:
 3. ISOLATE ON PURE WHITE (ULTRA-CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows on the floor. NO cream, off-white, light grey, or transparent backgrounds. NO gradients. Every non-garment pixel MUST be exactly #FFFFFF.
 4. EXACT CROPPING & POSITION (CRITICAL): You MUST output an image with the EXACT same framing, dimensions, padding, zoom level, and centered placement as the FIRST image. The garment MUST perfectly overlap the first image pixel-for-pixel in scale and position.`;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType
+    let result: any = null;
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType
+            }
+          }
+        ]);
+        break;
+      } catch (genErr: any) {
+        const isTransient = genErr?.message?.includes('503') ||
+                            genErr?.message?.includes('Service Unavailable') ||
+                            genErr?.message?.includes('Deadline expired') ||
+                            genErr?.message?.includes('504') ||
+                            genErr?.message?.includes('429');
+        if (isTransient && attempt < maxRetries) {
+          console.warn(`[Recolor API] Transient error (attempt ${attempt + 1}/${maxRetries + 1}):`, genErr.message);
+          await new Promise(r => setTimeout(r, (attempt + 1) * 1500));
+          continue;
         }
+        throw genErr;
       }
-    ]);
+    }
 
     const candidates = result.response?.candidates;
     if (candidates && candidates.length > 0) {
@@ -80,6 +99,10 @@ CRITICAL CONSTRAINTS:
 
   } catch (err: any) {
     console.error("Recoloring Error:", err);
-    return res.status(500).json({ error: err.message || 'Internal Server Error' });
+    let errMsg = err.message || 'Internal Server Error';
+    if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
+      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click Recoloring again in a few moments to retry.';
+    }
+    return res.status(500).json({ error: errMsg });
   }
 }
