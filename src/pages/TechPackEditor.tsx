@@ -1435,9 +1435,14 @@ export function TechPackEditor() {
 
   const handleBack = () => {
     const returnFolderId = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
-    const targetFolder = returnFolderId || 'ALL';
-    sessionStorage.setItem('activeFolderId', targetFolder);
-    navigate('/', { state: { activeFolderId: targetFolder } });
+    const targetFolder = returnFolderId && returnFolderId !== 'ALL' ? returnFolderId : null;
+    if (targetFolder) {
+      sessionStorage.setItem('activeFolderId', targetFolder);
+      navigate(`/?folder=${targetFolder}`);
+    } else {
+      sessionStorage.setItem('activeFolderId', 'ALL');
+      navigate('/');
+    }
   };
 
   return (

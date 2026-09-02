@@ -14,7 +14,7 @@ import {
   Home,
   FolderOpen
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   getUserAndCompanyTechPacks, 
@@ -47,17 +47,36 @@ const formatName = (email?: string | null) => {
 export function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile } = useAuth();
   const [techPacks, setTechPacks] = useState<TechPackData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   
-  // Folders State - initialize from location.state or sessionStorage
+  // Folders State - synced with URL search query ?folder=
   const [folders, setFolders] = useState<FolderData[]>([]);
-  const [activeFolderId, setActiveFolderId] = useState<string>(() => {
-    return (location.state as any)?.activeFolderId || sessionStorage.getItem('activeFolderId') || 'ALL';
-  });
+  
+  const activeFolderId = searchParams.get('folder') || 'ALL';
+
+  const setActiveFolderId = (folderId: string) => {
+    sessionStorage.setItem('activeFolderId', folderId);
+    if (!folderId || folderId === 'ALL') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ folder: folderId });
+    }
+  };
+
+  useEffect(() => {
+    const stateFolder = (location.state as any)?.activeFolderId;
+    const storedFolder = sessionStorage.getItem('activeFolderId');
+    const initialFolder = stateFolder || storedFolder;
+    if (initialFolder && initialFolder !== 'ALL' && !searchParams.get('folder')) {
+      setSearchParams({ folder: initialFolder }, { replace: true });
+    }
+  }, []);
+
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [reorderTarget, setReorderTarget] = useState<{
