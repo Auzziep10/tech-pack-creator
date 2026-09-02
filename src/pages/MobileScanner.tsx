@@ -506,14 +506,22 @@ export function MobileScanner() {
   };
 
   useEffect(() => {
-    // Lock body scrolling on mobile so page cannot shift when rotating phone
-    const originalBodyStyle = document.body.style.cssText;
-    const originalHtmlStyle = document.documentElement.style.cssText;
+    // Force body and html background to pure black so browser scroll bounce never shows white space
+    const originalBodyBg = document.body.style.backgroundColor;
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.backgroundColor = '#000000';
+    document.documentElement.style.backgroundColor = '#000000';
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.height = '100%';
     document.documentElement.style.overflow = 'hidden';
+
+    const handleScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
 
     const handleOrientationOrResize = () => {
       window.scrollTo(0, 0);
@@ -521,6 +529,7 @@ export function MobileScanner() {
       setTimeout(() => window.scrollTo(0, 0), 300);
     };
 
+    window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('orientationchange', handleOrientationOrResize);
     window.addEventListener('resize', handleOrientationOrResize);
 
@@ -540,8 +549,11 @@ export function MobileScanner() {
     setIsInitializing(false);
     
     return () => {
-      document.body.style.cssText = originalBodyStyle;
-      document.documentElement.style.cssText = originalHtmlStyle;
+      document.body.style.backgroundColor = originalBodyBg;
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('orientationchange', handleOrientationOrResize);
       window.removeEventListener('resize', handleOrientationOrResize);
       unsubscribeAuth();
