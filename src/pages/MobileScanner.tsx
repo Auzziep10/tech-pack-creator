@@ -186,6 +186,7 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
 
   useEffect(() => {
     const handleResize = () => {
+      window.scrollTo(0, 0);
       if (imgRef.current) {
         emitPixelCrop(cropBox);
       }
@@ -505,6 +506,24 @@ export function MobileScanner() {
   };
 
   useEffect(() => {
+    // Lock body scrolling on mobile so page cannot shift when rotating phone
+    const originalBodyStyle = document.body.style.cssText;
+    const originalHtmlStyle = document.documentElement.style.cssText;
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+    document.documentElement.style.overflow = 'hidden';
+
+    const handleOrientationOrResize = () => {
+      window.scrollTo(0, 0);
+      setTimeout(() => window.scrollTo(0, 0), 100);
+      setTimeout(() => window.scrollTo(0, 0), 300);
+    };
+
+    window.addEventListener('orientationchange', handleOrientationOrResize);
+    window.addEventListener('resize', handleOrientationOrResize);
+
     // Authenticate anonymously if not already signed in
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -521,6 +540,10 @@ export function MobileScanner() {
     setIsInitializing(false);
     
     return () => {
+      document.body.style.cssText = originalBodyStyle;
+      document.documentElement.style.cssText = originalHtmlStyle;
+      window.removeEventListener('orientationchange', handleOrientationOrResize);
+      window.removeEventListener('resize', handleOrientationOrResize);
       unsubscribeAuth();
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
@@ -723,7 +746,7 @@ export function MobileScanner() {
          </>
        ) : (
          /* Review & Crop UI */
-         <div className="flex-1 flex flex-col bg-black h-full w-full overflow-hidden z-20 min-h-0">
+         <div className="fixed inset-0 z-50 flex flex-col bg-black h-full w-full h-[100dvh] overflow-hidden">
            {/* Header Mask */}
            <div className="bg-black/90 backdrop-blur-sm py-2 sm:py-3 px-4 z-30 shrink-0 border-b border-white/10 flex flex-col items-center justify-center">
               <div className="text-center">
@@ -732,14 +755,15 @@ export function MobileScanner() {
               </div>
            </div>
 
-           <div className="flex-1 relative bg-black w-full min-h-0">
+           <div className="flex-1 relative bg-black w-full min-h-0 overflow-hidden pb-20 sm:pb-24">
              <FreeCropper
                imageSrc={capturedImage}
                onCropComplete={(pixels) => setCroppedAreaPixels(pixels)}
              />
            </div>
 
-           <div className="bg-white flex flex-col items-center px-4 sm:px-6 rounded-t-2xl sm:rounded-t-3xl border-t border-gray-200 z-30 py-3 sm:py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+           {/* Fixed Bottom Action Bar: Always anchored to viewport bottom regardless of phone rotation */}
+           <div className="fixed bottom-0 inset-x-0 bg-white flex flex-col items-center px-4 sm:px-6 rounded-t-2xl sm:rounded-t-3xl border-t border-gray-200 z-[60] py-3 sm:py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
              <div className="flex items-center justify-around w-full max-w-md">
                <button 
                  onClick={retakePhoto}
