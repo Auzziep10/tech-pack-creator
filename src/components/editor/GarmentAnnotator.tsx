@@ -756,9 +756,9 @@ export function GarmentAnnotator({
 
       {/* Manual Crop Modal */}
       {showManualCropModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[250] flex flex-col p-4 sm:p-8" onClick={() => setShowManualCropModal(false)}>
-          <div className="bg-black border border-white/20 rounded-3xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col h-full max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-black/90">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[250] flex flex-col p-0 sm:p-4" onClick={() => setShowManualCropModal(false)}>
+          <div className="bg-black border-0 sm:border border-white/20 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col h-full sm:max-h-[88vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between bg-black/90 shrink-0">
               <div>
                 <p className="text-[10px] uppercase tracking-widest font-bold text-white/50 mb-0.5">Crop Tool</p>
                 <h3 className="font-serif text-xl sm:text-2xl text-white font-bold">Crop & Frame Garment</h3>
@@ -768,14 +768,14 @@ export function GarmentAnnotator({
               </button>
             </div>
 
-            <div className="flex-1 relative bg-black min-h-0 w-full">
+            <div className="flex-1 relative bg-black min-h-0 w-full overflow-hidden">
               <FreeCropper
                 imageSrc={erasedResultImage || imageUrl}
                 onCropComplete={(pixels) => setManualCropPixels(pixels)}
               />
             </div>
 
-            <div className="p-4 sm:p-6 border-t border-white/10 bg-black/90 flex items-center justify-end gap-3 shrink-0">
+            <div className="p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-black/90 flex items-center justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setShowManualCropModal(false)}
