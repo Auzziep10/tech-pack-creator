@@ -243,7 +243,7 @@ export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
             src={imageSrc}
             alt="Captured Garment"
             onLoad={handleImageLoad}
-            className="max-w-full max-h-[55vh] sm:max-h-[60vh] landscape:max-h-[72vh] object-contain block mx-auto pointer-events-none rounded-lg"
+            className="max-w-full max-h-[48vh] sm:max-h-[55vh] landscape:max-h-[65vh] object-contain block mx-auto pointer-events-none rounded-lg"
           />
 
           {/* Dark Overlay around crop box */}
@@ -621,7 +621,7 @@ export function MobileScanner() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col overflow-hidden relative font-sans">
+    <div className="h-screen h-[100dvh] bg-black flex flex-col overflow-hidden relative font-sans w-full">
        {!capturedImage ? (
          <>
            <video 
@@ -723,23 +723,23 @@ export function MobileScanner() {
          </>
        ) : (
          /* Review & Crop UI */
-         <div className="flex-1 flex flex-col bg-black absolute inset-0 z-20">
+         <div className="flex-1 flex flex-col bg-black h-full w-full overflow-hidden z-20 min-h-0">
            {/* Header Mask */}
-           <div className="bg-black/90 backdrop-blur-sm h-16 sm:h-24 landscape:h-10 flex items-center justify-center pt-2 sm:pt-4 landscape:pt-1 px-4 z-30 pointer-events-none shrink-0 border-b border-white/10">
+           <div className="bg-black/90 backdrop-blur-sm py-2 sm:py-3 px-4 z-30 shrink-0 border-b border-white/10 flex flex-col items-center justify-center">
               <div className="text-center">
                 <h2 className="text-white font-serif text-base sm:text-xl landscape:text-xs font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
                 <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Drag corners or sides freely to frame your garment</p>
               </div>
            </div>
 
-           <div className="flex-1 relative bg-black w-full h-full min-h-0">
+           <div className="flex-1 relative bg-black w-full min-h-0">
              <FreeCropper
                imageSrc={capturedImage}
                onCropComplete={(pixels) => setCroppedAreaPixels(pixels)}
              />
            </div>
 
-           <div className="h-28 sm:h-36 landscape:h-14 bg-white flex flex-col items-center px-4 sm:px-6 rounded-t-2xl sm:rounded-t-3xl border-t border-gray-200 z-30 pt-2 sm:pt-4 landscape:pt-1.5 shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+           <div className="bg-white flex flex-col items-center px-4 sm:px-6 rounded-t-2xl sm:rounded-t-3xl border-t border-gray-200 z-30 py-3 sm:py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0 relative shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
              <div className="flex items-center justify-around w-full max-w-md">
                <button 
                  onClick={retakePhoto}
