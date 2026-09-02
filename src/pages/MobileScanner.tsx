@@ -675,73 +675,73 @@ export function MobileScanner() {
                  </div>
               </div>
               
-              <div className="bg-black/50 backdrop-blur-sm h-32 sm:h-40 landscape:h-16 flex flex-col items-center justify-center pb-4 sm:pb-8 landscape:pb-1 border-t border-white/10 relative">
-                 <div className="absolute top-[-55px] sm:top-[-70px] landscape:top-[-38px] left-1/2 -translate-x-1/2 bg-black/60 px-3 sm:px-4 py-1 sm:py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10 scale-90 sm:scale-100">
-                    <span className="text-white text-xs font-bold">Zoom</span>
-                    <input 
-                      type="range" 
-                      min="1" max="3" step="0.1" 
-                      value={preZoom} 
-                      onChange={(e) => setPreZoom(parseFloat(e.target.value))} 
-                      className="w-24 sm:w-32 accent-white cursor-pointer"
-                    />
-                 </div>
+               <div className="bg-black/60 backdrop-blur-md pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-white/10 relative z-30 shrink-0 flex flex-col items-center justify-center">
+                  <div className="absolute top-[-52px] sm:top-[-65px] landscape:top-[-36px] left-1/2 -translate-x-1/2 bg-black/70 px-3 sm:px-4 py-1 sm:py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10 scale-90 sm:scale-100">
+                     <span className="text-white text-xs font-bold">Zoom</span>
+                     <input 
+                       type="range" 
+                       min="1" max="3" step="0.1" 
+                       value={preZoom} 
+                       onChange={(e) => setPreZoom(parseFloat(e.target.value))} 
+                       className="w-24 sm:w-32 accent-white cursor-pointer"
+                     />
+                  </div>
 
-                 {videoDevices.length > 1 && (
-                   <div className="absolute top-[-22px] sm:top-[-30px] landscape:top-[-18px] left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-auto bg-black/70 p-1 rounded-full backdrop-blur-md border border-white/20 shadow-2xl scale-90 sm:scale-100">
-                      {(() => {
-                        const uniqueBadges = new Map();
-                        videoDevices.forEach((device) => {
-                           const l = device.label.toLowerCase();
-                           let badge = '1x';
-                           if (l.includes('ultra wide') || l.includes('ultrawide') || l.includes('0.5')) badge = '0.5x';
-                           else if (l.includes('telephoto') || l.includes('2x')) badge = '2x';
-                           else if (l.includes('front')) badge = 'Front';
-                           else if (l.includes('back')) badge = '1x';
-                           else badge = 'Cam';
+                  {videoDevices.length > 1 && (
+                    <div className="absolute top-[-18px] sm:top-[-26px] landscape:top-[-16px] left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-auto bg-black/80 p-1 rounded-full backdrop-blur-md border border-white/20 shadow-2xl scale-90 sm:scale-100">
+                       {(() => {
+                         const uniqueBadges = new Map();
+                         videoDevices.forEach((device) => {
+                            const l = device.label.toLowerCase();
+                            let badge = '1x';
+                            if (l.includes('ultra wide') || l.includes('ultrawide') || l.includes('0.5')) badge = '0.5x';
+                            else if (l.includes('telephoto') || l.includes('2x')) badge = '2x';
+                            else if (l.includes('front')) badge = 'Front';
+                            else if (l.includes('back')) badge = '1x';
+                            else badge = 'Cam';
 
-                           if (!uniqueBadges.has(badge)) {
-                             uniqueBadges.set(badge, { ...device, badge });
-                           } else if (badge === '1x' && l === 'back camera') {
-                             uniqueBadges.set(badge, { ...device, badge });
-                           }
-                        });
+                            if (!uniqueBadges.has(badge)) {
+                              uniqueBadges.set(badge, { ...device, badge });
+                            } else if (badge === '1x' && l === 'back camera') {
+                              uniqueBadges.set(badge, { ...device, badge });
+                            }
+                         });
 
-                        const sortedDevices = Array.from(uniqueBadges.values()).sort((a, b) => {
-                           const order: Record<string, number> = { 'Front': 0, '0.5x': 1, '1x': 2, '2x': 3, 'Cam': 4 };
-                           return order[a.badge] - order[b.badge];
-                        });
+                         const sortedDevices = Array.from(uniqueBadges.values()).sort((a, b) => {
+                            const order: Record<string, number> = { 'Front': 0, '0.5x': 1, '1x': 2, '2x': 3, 'Cam': 4 };
+                            return order[a.badge] - order[b.badge];
+                         });
 
-                        return sortedDevices.map((d: any) => (
-                           <button 
-                             key={d.deviceId}
-                             onClick={() => startCamera(d.deviceId, d.badge)}
-                             className={`w-10 sm:w-12 h-8 sm:h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
-                                activeDeviceId === d.deviceId 
-                                  ? "bg-white text-black shadow-md scale-110" 
-                                  : "bg-transparent text-white hover:bg-white/20"
-                             }`}
-                           >
-                              {d.badge}
-                           </button>
-                        ));
-                      })()}
-                   </div>
-                 )}
+                         return sortedDevices.map((d: any) => (
+                            <button 
+                              key={d.deviceId}
+                              onClick={() => startCamera(d.deviceId, d.badge)}
+                              className={`w-10 sm:w-12 h-8 sm:h-10 rounded-full text-xs font-bold flex flex-col items-center justify-center transition-all ${
+                                 activeDeviceId === d.deviceId 
+                                   ? "bg-white text-black shadow-md scale-110" 
+                                   : "bg-transparent text-white hover:bg-white/20"
+                              }`}
+                            >
+                               {d.badge}
+                            </button>
+                         ));
+                       })()}
+                    </div>
+                  )}
 
-                 <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto mt-2 sm:mt-6 landscape:mt-1">
-                   {hasCameraError ? (
-                     <button onClick={() => startCamera()} className="bg-white text-black px-6 py-2.5 rounded-full font-bold shadow-lg text-xs sm:text-sm">Retry Camera</button>
-                   ) : (
-                     <button 
-                       onClick={capturePhoto} 
-                       className="w-14 h-14 sm:w-20 sm:h-20 landscape:w-11 landscape:h-11 rounded-full border-4 border-white/80 flex items-center justify-center p-1 active:scale-95 transition-transform"
-                     >
-                        <div className="w-full h-full bg-white rounded-full shadow-lg" />
-                     </button>
-                   )}
-                 </div>
-              </div>
+                  <div className="flex items-center justify-center w-full relative px-8 pointer-events-auto pt-3 sm:pt-5 landscape:pt-1">
+                    {hasCameraError ? (
+                      <button onClick={() => startCamera()} className="bg-white text-black px-6 py-2.5 rounded-full font-bold shadow-lg text-xs sm:text-sm">Retry Camera</button>
+                    ) : (
+                      <button 
+                        onClick={capturePhoto} 
+                        className="w-16 h-16 sm:w-20 sm:h-20 landscape:w-11 landscape:h-11 rounded-full border-4 border-white/90 flex items-center justify-center p-1 active:scale-95 transition-transform shadow-2xl"
+                      >
+                         <div className="w-full h-full bg-white rounded-full shadow-lg" />
+                      </button>
+                    )}
+                  </div>
+               </div>
            </div>
          </>
        ) : (
