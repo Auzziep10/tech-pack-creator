@@ -29,11 +29,11 @@ export default async function handler(req: any, res: any) {
     }
 
     const FIT_DESCRIPTIONS: Record<string, string> = {
-      Fitted: "FITTED SILHOUETTE: Form-fitting style hugging the mannequin body contours snugly with minimal excess fabric, defined waist/torso structure, and clean form-fitting lines.",
-      Standard: "STANDARD SILHOUETTE: Classic regular fit with a natural, comfortable drape around the mannequin body without being tight or oversized.",
-      Loose: "LOOSE SILHOUETTE: Relaxed, comfortable fit with soft fluid drape that naturally follows body contours. Slightly easy through chest and torso while maintaining a gentle tailored shape—NOT stiff, square, wide, or boxy.",
-      Boxy: "BOXY SILHOUETTE: Distinctly structured square 3D silhouette with a straight-down drop from the shoulders to a broad hem, featuring crisp 3D proportions while sleeves hang naturally downward along the torso.",
-      Athleisure: "ATHLEISURE SILHOUETTE: Streamlined athletic lifestyle fit engineered to make the garment look less bulky and significantly lighter feeling. Eliminate heavy fabric volume, saggy wrinkles, and bulky stiffness. Feature sleek ergonomic contouring, smooth lightweight activewear drape, flexible athletic proportions through shoulders and torso, and a clean, effortless performance silhouette."
+      Fitted: "FITTED SILHOUETTE: Form-fitting tailored style hugging body contours snugly with defined waist taper, tapered sleeves, and sleek athletic lines.",
+      Standard: "STANDARD SILHOUETTE: Classic regular fit with a natural, comfortable 3D drape around the body without being tight or oversized.",
+      Loose: "LOOSE SILHOUETTE: Relaxed, comfortable fit with soft fluid drape through chest and waist while maintaining natural body lines.",
+      Boxy: "BOXY / OVERSIZED STREETWEAR SILHOUETTE (CRITICAL STRICT REQUIREMENT): Distinct wide 90s streetwear boxy cut. Render wide dropped shoulders, extra-wide chest breadth, and STRAIGHT VERTICAL SIDE SEAMS dropping straight down from armpits to hem without ANY waist taper, body curvature, or waist pinching. The bottom hem and ribbing MUST be wide, straight, and uncinched, matching the broad chest width across a rectangular 3D torso stance.",
+      Athleisure: "ATHLEISURE SILHOUETTE: Streamlined athletic lifestyle fit engineered for lightweight performance drape, smooth ergonomic contouring, and activewear proportions."
     };
 
     const activeFitInstruction = fitStyle && FIT_DESCRIPTIONS[fitStyle] ? FIT_DESCRIPTIONS[fitStyle] : FIT_DESCRIPTIONS['Standard'];
@@ -52,13 +52,13 @@ CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
    - NECK LABELS & BRANDING: Preserve all woven collar tags, printed size labels, neck tapes, and inner brand markings in their exact original color, size, text alignment, and position.
    - STITCHING & HEMS: Replicate the sleeve hem stitching, bottom hem coverstitching, and shoulder seam construction.
 
-3. 3D GHOST MANNEQUIN EFFECT (CRITICAL - DO NOT RENDER A FLAT LAY):
+3. 3D GHOST MANNEQUIN EFFECT & FIT PROPORTIONS (CRITICAL):
    - Fill out the garment into a 3D anatomical volume as if worn by an invisible human body (3D Ghost Mannequin).
    - HOLLOW NECK OPENING: Show the 3D hollow interior dimension of the back neck collar visible inside the opening.
-   - 3D TORSO & CHEST VOLUME: The chest, shoulders, and waist MUST curve and bulge outward in 3D space with realistic fabric highlights, body depth, and shadows.
+   - SPECIFIC FIT & SILHOUETTE DIRECTIVE: ${activeFitInstruction}
+   - FOR BOXY FIT (STRICT): DO NOT taper, pinch, or curve the waist inward! The side seams MUST drop straight down vertically from the armpits to a wide, square bottom hem. The chest and shoulders MUST be visibly wide and boxy with a wide rectangular stance.
    - The garment is a ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
    - VIEWPOINT: ${viewPoint || 'Front View'}. Render the garment from this exact perspective.
-   - FIT & SILHOUETTE: ${activeFitInstruction}
    - SLEEVES & ARMS (STRICT REQUIREMENT): Sleeves MUST hang vertically DOWNWARD along the sides of the 3D body torso. DO NOT spread sleeves horizontally sideways or stretch them out like a flat lay or T-pose.
 
 4. ISOLATION & NEUTRAL LIGHTING:
