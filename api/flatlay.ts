@@ -28,29 +28,57 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
     }
 
+    // Garment-specific flat-lay styling directives (e-commerce catalog standard)
+    const GARMENT_FLATLAY_STYLES: Record<string, string> = {
+      'T-Shirt': "T-SHIRT FLAT-LAY: Spread short sleeves symmetrically outward to the sides at a natural 25-35 degree downward angle. The body is a flat 2D rectangular spread with a straight bottom hem, lying completely flat on the surface.",
+      'Long Sleeve': "LONG SLEEVE FLAT-LAY (STRICT REQUIREMENT): The long sleeves MUST NOT hang down vertically along the sides of the torso! Spread both long sleeves symmetrically OUTWARD away from the torso at an elegant 35-45 degree angle, lying completely flat against the tabletop surface (or neatly and symmetrically folded at the forearms in classic luxury e-commerce catalog flat-lay styling).",
+      'Hoodie': "HOODIE FLAT-LAY: Lay the torso and sleeves completely flat on the tabletop. Symmetrically spread the sleeves outward at a 35-45 degree angle. Smoothly flatten the hood above the collar flat against the surface, with drawstrings resting naturally and straight on the flat chest.",
+      'Polo': "POLO FLAT-LAY: The ribbed polo collar and button placket lie pressed completely flat against the chest. Short sleeves extend outward symmetrically flat to the sides.",
+      'Pants': "PANTS FLAT-LAY: Lay both pant legs straight, parallel, and completely flat on the surface. The waistband is pressed straight across horizontally.",
+      'Shorts': "SHORTS FLAT-LAY: Laid flat, legs parallel, straight bottom leg openings, waistband straight and smooth.",
+      'Quarter Zip': "QUARTER ZIP FLAT-LAY: Stand collar is pressed flat, zipper lies flat down the center chest, long sleeves spread outward at a 35-45 degree angle.",
+      'Tank Top': "TANK TOP FLAT-LAY: Sleeveless shoulder straps lie completely flat against the surface, armhole curves laid flat.",
+      'Outerwear': "OUTERWEAR FLAT-LAY: Jacket laid completely flat, front zipper/buttons flat down the center, sleeves spread outward at 35-45 degrees.",
+    };
+
+    const specificGarmentDirective = garmentType && GARMENT_FLATLAY_STYLES[garmentType] 
+      ? GARMENT_FLATLAY_STYLES[garmentType] 
+      : "SPREAD SLEEVES FLAT: Symmetrically spread the sleeves outward away from the torso at a natural flat-lay angle (30-45 degrees), lying completely flat on the surface.";
+
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
-    const prompt = `TASK: Professional Studio Apparel Flat-Lay / Tabletop Flat Spread Render (Ultra-High Precision)
+    const prompt = `PRIMARY TRANSFORMATION GOAL (ABSOLUTE HIGHEST PRIORITY):
+TRANSFORM THE APPAREL SHOWN IN THE INPUT IMAGE FROM ITS CURRENT 3D BODY / MANNEQUIN FORM INTO A 100% AUTHENTIC 2D TABLETOP FLAT-LAY APPAREL PHOTOGRAPH (E-COMMERCE CATALOG BIRD'S-EYE OVERHEAD TOP-DOWN SHOT).
 
-CRITICAL COLOR & FABRIC FIDELITY INSTRUCTIONS (HIGHEST PRIORITY):
-1. EXACT COLOR & FABRIC REPRODUCTION (ZERO COLOR SHIFT):
-   - You MUST match the EXACT hue, saturation, color temperature, and brightness of the input garment.
-   - HEATHER & MELANGE FABRICS (CRITICAL): If the source garment is heathered, slub-knit, marled, or multi-toned (e.g. slate heather, charcoal flecks, heather navy, triblend grey), you MUST explicitly reproduce that exact speckled heather texture and subtle color variations. DO NOT turn heathered, textured, or multi-tone fabrics into generic solid monochrome grey, black, or white.
-   - UNDERSIDE & INSIDE COLLAR: Retain the natural interior fabric tone visible inside the neck opening.
+CRITICAL FLAT-LAY STYLING & POSE DIRECTIVES:
+1. 100% TRUE 2D FLAT-LAY ON HORIZONTAL SURFACE:
+   - The garment must be physically laid out completely flat on a smooth horizontal studio tabletop surface, neatly pressed and ironed flat.
+   - DIRECT 90-DEGREE TOP-DOWN OVERHEAD PERSPECTIVE: The camera angle is directly straight down from above (bird's-eye view, perpendicular to the tabletop), exactly like product catalog flat-lays on SSENSE, Uniqlo, Zara, and Mr Porter.
+   - ZERO 3D CHEST CURVATURE OR BODY VOLUME: The chest, stomach, and sides are pressed completely flat against the table. No athletic posture, no chest bulging, no 3D torso thickness, no tapered waist curves.
 
-2. EXACT TRIMS, LABELS & CONSTRUCTION FIDELITY:
-   - COLLAR & NECKBAND: Match the original collar rib width, neckline shape, topstitching style, and ribbing density.
-   - NECK LABELS & BRANDING: Preserve all woven collar tags, printed size labels, neck tapes, and inner brand markings in their exact original color, size, text alignment, and position.
-   - STITCHING & HEMS: Replicate the sleeve hem stitching, bottom hem coverstitching, and shoulder seam construction.
+2. SLEEVE SPREAD & POSITIONING (CRITICAL):
+   - ${specificGarmentDirective}
+   - DO NOT let sleeves hang straight down vertically along the sides of the torso like on a standing mannequin! The sleeves MUST be spread outward away from the torso or neatly folded flat.
 
-3. 2D FLAT-LAY TABLETOP PRESENTATION:
-   - Render the garment laid completely flat on a smooth horizontal tabletop surface, cleanly spread out without any 3D body volume, human model, or ghost mannequin curvature.
-   - The garment is a ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
-   - VIEWPOINT: ${viewPoint || 'Front View'}. Render the flat garment from this direct top-down overhead perspective.
-   - SLEEVES & HEMS: Sleeves are neatly extended symmetrically sideways at natural flat angles. The bottom hem is pressed straight and smooth.
+3. COLLAR & NECK (PRESSED FLAT):
+   - The collar is pressed flat against the tabletop. The back collar ribbing is flat directly behind/under the front collar.
+   - ABSOLUTELY NO 3D HOLLOW NECK CAVITY OR CYLINDRICAL HOLE: This is a 2D flat lay on a table, NOT a 3D hollow mannequin!
 
-4. ISOLATION & NEUTRAL LIGHTING:
-   - BACKGROUND: Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF). Zero background cast or shadows on surrounding white pixels.
-   - LIGHTING: Soft, balanced studio tabletop overhead lighting (5000K neutral daylight) that shows clean fabric detail without harsh shadows.`;
+4. STRICT PROHIBITIONS & NEGATIVE INSTRUCTIONS (ZERO TOLERANCE):
+   - ABSOLUTELY FORBIDDEN: DO NOT render an invisible ghost mannequin, 3D hollow mannequin, athletic torso stance, or floating 3D body form.
+   - ABSOLUTELY FORBIDDEN: DO NOT leave sleeves hanging straight down hugging an invisible body.
+   - ABSOLUTELY FORBIDDEN: DO NOT render a 3D hollow neck opening with internal cavity depth.
+   - The output MUST look like a real physical garment lying flat on a table, photographed from straight above.
+
+5. EXACT FABRIC, COLOR & DETAILS (MATCH INPUT SOURCE):
+   - Exact same color, hue, saturation, and brightness as the input garment.
+   - HEATHER / MELANGE: If the source garment is heathered, slub-knit, marled, or multi-toned, you MUST faithfully reproduce that exact heather/melange texture.
+   - Exact collar labels, printed brand tags, neck tape, topstitching, ribbing, and seam construction.
+   - Garment: ${gender || 'Unisex'}'s ${garmentType || 'Garment'}.
+   - Viewpoint: ${viewPoint || 'Front View'}. Render the flat garment from this direct overhead angle.
+
+6. ISOLATION & STUDIO LIGHTING:
+   - Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF).
+   - Soft, balanced, diffused studio overhead lighting showing authentic fabric texture and stitching without harsh shadows.`;
 
     let result: any = null;
     const maxRetries = 2;

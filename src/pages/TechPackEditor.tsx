@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
 import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence } from '../services/dbService';
+import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -208,6 +209,25 @@ export function TechPackEditor() {
   const annotatorRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
   const lastSavedJsonRef = useRef<string>('');
+
+  const [isDownloadingMain, setIsDownloadingMain] = useState(false);
+  const [downloadingGalleryIdx, setDownloadingGalleryIdx] = useState<number | null>(null);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDownloadMenu]);
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
@@ -1777,16 +1797,122 @@ export function TechPackEditor() {
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        forceDownload(imageUrl, `${packName || 'techpack'}_main.jpg`);
-                      }}
-                      className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md text-gray-500 hover:text-black hover:bg-gray-50 opacity-0 group-hover/mainimg:opacity-100 transition-opacity print:hidden border border-gray-200 z-10"
-                      title="Download Main Image"
-                    >
-                      <Download size={16} />
-                    </button>
+                    {/* Main Image Download Menu */}
+                    <div ref={downloadMenuRef} className="absolute top-3 right-3 z-20 print:hidden opacity-0 group-hover/mainimg:opacity-100 transition-opacity">
+                      <div className="flex items-center bg-white/95 backdrop-blur-sm rounded-full shadow-md border border-gray-200 p-0.5 hover:shadow-lg transition-all">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (isDownloadingMain) return;
+                            try {
+                              setIsDownloadingMain(true);
+                              await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'large' });
+                            } catch (err) {
+                              console.error('Download failed:', err);
+                              alert('Download failed. Please try again.');
+                            } finally {
+                              setIsDownloadingMain(false);
+                            }
+                          }}
+                          disabled={isDownloadingMain}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:text-black hover:bg-gray-100 transition-colors"
+                          title="Download Large Full-Size PNG (2.5K Studio Quality)"
+                        >
+                          {isDownloadingMain ? (
+                            <Loader2 size={14} className="animate-spin text-black" />
+                          ) : (
+                            <Download size={14} />
+                          )}
+                          <span className="text-[11px] font-bold">PNG</span>
+                        </button>
+                        <div className="w-[1px] h-4 bg-gray-200 my-auto" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDownloadMenu(!showDownloadMenu);
+                          }}
+                          className="p-1.5 hover:bg-gray-100 rounded-full text-gray-500 hover:text-black transition-colors"
+                          title="Select PNG Resolution (2.5K, 4K, Original)"
+                        >
+                          <ChevronDown size={13} className={`transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Dropdown Menu */}
+                      <AnimatePresence>
+                        {showDownloadMenu && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 4 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute right-0 top-full mt-1 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 p-2 z-30 flex flex-col gap-1 text-left"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 border-b border-gray-100 mb-1">
+                              Download PNG Options
+                            </div>
+                            
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'large' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>✨ Large PNG (2.5K Studio)</span>
+                                <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">2560px</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">High-definition studio print quality (Recommended)</span>
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: '4k' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>🌟 Ultra 4K PNG</span>
+                                <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">4096px</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">Maximum definition for tech pack spec sheets</span>
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'original' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>📷 Original Resolution PNG</span>
+                                <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-bold">1:1 Native</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">Exact unscaled native pixels converted to PNG</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
 
                   {/* Photo Gallery Strip */}
@@ -1867,14 +1993,28 @@ export function TechPackEditor() {
                               </button>
                            )}
                            <button
-                             onClick={(e) => {
+                             onClick={async (e) => {
                                e.stopPropagation();
-                               forceDownload(gImg, `${packName || 'techpack'}_image_${idx + 1}.jpg`);
+                               if (downloadingGalleryIdx !== null) return;
+                               try {
+                                 setDownloadingGalleryIdx(idx);
+                                 await downloadAsLargePng(gImg, `${packName || 'techpack'}_image_${idx + 1}`, { resolution: 'large' });
+                               } catch (err) {
+                                 console.error('Gallery image download failed:', err);
+                                 alert('Download failed. Please try again.');
+                               } finally {
+                                 setDownloadingGalleryIdx(null);
+                               }
                              }}
+                             disabled={downloadingGalleryIdx === idx}
                              className="absolute bottom-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                             title="Download Image"
+                             title="Download Large Full-Size PNG (2.5K Studio Quality)"
                            >
-                             <Download size={12} />
+                             {downloadingGalleryIdx === idx ? (
+                               <Loader2 size={10} className="animate-spin" />
+                             ) : (
+                               <Download size={12} />
+                             )}
                            </button>
                            {!isTechPackLocked && (
                              <button

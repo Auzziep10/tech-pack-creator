@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers, RotateCw } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers, RotateCw, Download, Loader2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { FreeCropper } from '../../pages/MobileScanner';
+import { downloadAsLargePng } from '../../utils/imageDownloader';
 
 // Helper function to rotate an image 90 degrees clockwise or counter-clockwise
 const rotateImage90Degrees = async (imageSrc: string, direction: 'cw' | 'ccw' = 'cw'): Promise<string> => {
@@ -143,6 +144,7 @@ export function GarmentAnnotator({
   const [isSavingFlatlay, setIsSavingFlatlay] = useState(false);
   const [flatlayResultImage, setFlatlayResultImage] = useState<string | null>(null);
   const [flatlayError, setFlatlayError] = useState('');
+  const [isDownloadingMockup, setIsDownloadingMockup] = useState(false);
 
   const [isTrimming, setIsTrimming] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -826,8 +828,31 @@ export function GarmentAnnotator({
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <div className="aspect-[3/4] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative">
+                  <div className="aspect-[3/4] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative group">
                     <img src={mannequinResultImage || imageUrl} className="w-full h-full object-contain p-2" />
+                    {mannequinResultImage && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (isDownloadingMockup) return;
+                          try {
+                            setIsDownloadingMockup(true);
+                            await downloadAsLargePng(mannequinResultImage, 'ghost_mannequin_render', { resolution: 'large' });
+                          } catch (err) {
+                            console.error('Download failed:', err);
+                            alert('Download failed. Please try again.');
+                          } finally {
+                            setIsDownloadingMockup(false);
+                          }
+                        }}
+                        disabled={isDownloadingMockup}
+                        className="absolute top-3 right-3 py-1.5 px-3 bg-white/95 hover:bg-black hover:text-white rounded-full shadow-md text-gray-700 transition-all border border-gray-200 z-10 flex items-center gap-1.5 text-xs font-bold"
+                        title="Download Large Full-Size PNG (2.5K Studio Quality)"
+                      >
+                        {isDownloadingMockup ? <Loader2 size={13} className="animate-spin text-black" /> : <Download size={13} />}
+                        <span>PNG</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -959,8 +984,31 @@ export function GarmentAnnotator({
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <div className="aspect-[3/4] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative">
+                  <div className="aspect-[3/4] bg-gray-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center relative group">
                     <img src={flatlayResultImage || imageUrl} className="w-full h-full object-contain p-2" />
+                    {flatlayResultImage && (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (isDownloadingMockup) return;
+                          try {
+                            setIsDownloadingMockup(true);
+                            await downloadAsLargePng(flatlayResultImage, 'tabletop_flatlay_render', { resolution: 'large' });
+                          } catch (err) {
+                            console.error('Download failed:', err);
+                            alert('Download failed. Please try again.');
+                          } finally {
+                            setIsDownloadingMockup(false);
+                          }
+                        }}
+                        disabled={isDownloadingMockup}
+                        className="absolute top-3 right-3 py-1.5 px-3 bg-white/95 hover:bg-black hover:text-white rounded-full shadow-md text-gray-700 transition-all border border-gray-200 z-10 flex items-center gap-1.5 text-xs font-bold"
+                        title="Download Large Full-Size PNG (2.5K Studio Quality)"
+                      >
+                        {isDownloadingMockup ? <Loader2 size={13} className="animate-spin text-black" /> : <Download size={13} />}
+                        <span>PNG</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
