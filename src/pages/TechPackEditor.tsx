@@ -181,7 +181,16 @@ export function TechPackEditor() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<any>({ properties: {}, measurements: [], callouts: [], bom: [] });
+  const [data, setData] = useState<any>(() => {
+    const initialLocked = (location.state as any)?.isLocked ?? (location.state as any)?.techPack?.isLocked;
+    return { 
+      properties: {}, 
+      measurements: [], 
+      callouts: [], 
+      bom: [],
+      ...(initialLocked !== undefined ? { isLocked: Boolean(initialLocked) } : {})
+    };
+  });
   const [imageUrl, setImageUrl] = useState('');
 
   const [packName, setPackName] = useState('Untitled Garment');
@@ -278,7 +287,7 @@ export function TechPackEditor() {
       alert("Translations are read-only to preserve your original English specifications. Please switch back to English to make edits.");
       return true;
     }
-    if (isTechPackLocked || displayData?.isLocked || data?.isLocked) {
+    if (isTechPackLocked) {
       alert("🔒 This Tech Pack is locked. Click the Lock button in the top bar to unlock and make edits.");
       return true;
     }
@@ -380,13 +389,7 @@ export function TechPackEditor() {
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
-  const isTechPackLocked = !!(
-    displayData?.isLocked || 
-    data?.isLocked || 
-    data?.techPack?.isLocked || 
-    (location.state as any)?.isLocked || 
-    (location.state as any)?.techPack?.isLocked
-  );
+  const isTechPackLocked = Boolean(data?.isLocked);
   const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
@@ -398,8 +401,29 @@ export function TechPackEditor() {
 
   const toggleLock = async () => {
     const nextLocked = !isTechPackLocked;
-    setData((prev: any) => ({ ...prev, isLocked: nextLocked }));
+    setData((prev: any) => {
+      const updated = { ...prev, isLocked: nextLocked };
+      if (updated.techPack && typeof updated.techPack === 'object') {
+        updated.techPack = { ...updated.techPack, isLocked: nextLocked };
+      }
+      return updated;
+    });
     pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack');
+
+    // Update location.state in history so refreshes or back/forward keep updated lock status
+    if (location.state) {
+      navigate(location.pathname + location.search, {
+        replace: true,
+        state: {
+          ...(location.state as any),
+          isLocked: nextLocked,
+          techPack: {
+            ...((location.state as any)?.techPack || {}),
+            isLocked: nextLocked
+          }
+        }
+      });
+    }
 
     if (id && id !== 'draft') {
       try {
@@ -407,7 +431,7 @@ export function TechPackEditor() {
           "isLocked": nextLocked,
           "techPack.isLocked": nextLocked
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to update lock status in database:", err);
       }
     }
