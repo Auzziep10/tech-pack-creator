@@ -1808,6 +1808,7 @@ export function TechPackEditor() {
                         onGenerateFlatlay={handleGenerateFlatlay}
                         onSaveMannequinImage={handleSaveMannequinImage}
                         onSaveErasedImage={handleSaveErasedImage}
+                        defaultGarmentType={displayData?.properties?.category || displayData?.properties?.garmentType}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>

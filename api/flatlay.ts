@@ -28,25 +28,77 @@ export default async function handler(req: any, res: any) {
        return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
     }
 
-    // Garment-specific flat-lay styling directives (e-commerce catalog standard)
-    const GARMENT_FLATLAY_STYLES: Record<string, string> = {
-      'T-Shirt': "T-SHIRT FLAT-LAY: Spread short sleeves symmetrically outward to the sides at a natural 25-35 degree downward angle. The body is a flat 2D rectangular spread with a straight bottom hem, lying completely flat on the surface.",
-      'Long Sleeve': "LONG SLEEVE FLAT-LAY (STRICT REQUIREMENT): The long sleeves MUST NOT hang down vertically along the sides of the torso! Spread both long sleeves symmetrically OUTWARD away from the torso at an elegant 35-45 degree angle, lying completely flat against the tabletop surface (or neatly and symmetrically folded at the forearms in classic luxury e-commerce catalog flat-lay styling).",
-      'Hoodie': "HOODIE FLAT-LAY: Lay the torso and sleeves completely flat on the tabletop. Symmetrically spread the sleeves outward at a 35-45 degree angle. Smoothly flatten the hood above the collar flat against the surface, with drawstrings resting naturally and straight on the flat chest.",
-      'Polo': "POLO FLAT-LAY: The ribbed polo collar and button placket lie pressed completely flat against the chest. Short sleeves extend outward symmetrically flat to the sides.",
-      'Pants': "PANTS FLAT-LAY: Lay both pant legs straight, parallel, and completely flat on the surface. The waistband is pressed straight across horizontally.",
-      'Shorts': "SHORTS FLAT-LAY: Laid flat, legs parallel, straight bottom leg openings, waistband straight and smooth.",
-      'Quarter Zip': "QUARTER ZIP FLAT-LAY: Stand collar is pressed flat, zipper lies flat down the center chest, long sleeves spread outward at a 35-45 degree angle.",
-      'Tank Top': "TANK TOP FLAT-LAY: Sleeveless shoulder straps lie completely flat against the surface, armhole curves laid flat.",
-      'Outerwear': "OUTERWEAR FLAT-LAY: Jacket laid completely flat, front zipper/buttons flat down the center, sleeves spread outward at 35-45 degrees.",
-    };
+    const normalizedGarment = (garmentType || '').toLowerCase();
+    const isHeadwear = ['hats', 'hat', 'cap', 'headwear', 'beanie', 'snapback', 'trucker', 'bucket hat', 'visor'].some(h => 
+      normalizedGarment.includes(h)
+    );
+    const isBottoms = ['pants', 'shorts', 'skirt', 'trousers', 'jeans', 'sweatpants', 'leggings', 'jogger'].some(b =>
+      normalizedGarment.includes(b)
+    );
 
-    const specificGarmentDirective = garmentType && GARMENT_FLATLAY_STYLES[garmentType] 
-      ? GARMENT_FLATLAY_STYLES[garmentType] 
-      : "SPREAD SLEEVES FLAT: Symmetrically spread the sleeves outward away from the torso at a natural flat-lay angle (30-45 degrees), lying completely flat on the surface.";
+    let prompt = '';
 
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
-    const prompt = `PRIMARY TRANSFORMATION GOAL (ABSOLUTE HIGHEST PRIORITY):
+    if (isHeadwear) {
+      prompt = `PRIMARY TRANSFORMATION GOAL (ABSOLUTE HIGHEST PRIORITY):
+TRANSFORM THE HEADWEAR SHOWN IN THE INPUT IMAGE INTO A 100% AUTHENTIC E-COMMERCE TABLETOP FLAT-LAY / CATALOG PHOTOGRAPH (BIRD'S-EYE TOP-DOWN SHOT).
+
+CRITICAL FLAT-LAY STYLING DIRECTIVES:
+1. TABLETOP OVERHEAD CATALOG SHOT:
+   - The hat/cap is neatly positioned on a clean white horizontal studio surface, photographed from direct overhead top-down perspective (bird's-eye view, like luxury e-commerce catalog shots on SSENSE, Kith, Mr Porter).
+   - ABSOLUTELY FORBIDDEN: NO SLEEVES, NO ARMS, NO COLLAR, NO NECK OPENING, NO BODY TORSO.
+   - The front crown is completely solid, intact, and unbroken. Brim/visor rests smoothly.
+   - REAR CLOSURE: Hidden behind the hat or cleanly tucked. Under NO circumstances cut a hole into the front crown.
+   - If there is a brim sticker (e.g. metallic/foil brand sticker), crown rope, or embroidered logo, keep it completely intact, sharp, and straight.
+
+2. VIEWPOINT:
+   - ${viewPoint || 'Front View'}. Render the hat from this perspective laid on the surface.
+
+3. EXACT FABRIC, COLOR & DETAILS (MATCH INPUT SOURCE):
+   - Exact same color, hue, saturation, and brightness as the input hat.
+   - Faithful texture reproduction (twill, mesh, corduroy, wool, nylon).
+   - Trims: rope, eyelets, top button, stickers, and embroidery replicated with 100% fidelity.
+
+4. ISOLATION & STUDIO LIGHTING:
+   - Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF).
+   - Soft, balanced, diffused studio overhead lighting without harsh shadows.`;
+    } else if (isBottoms) {
+      prompt = `PRIMARY TRANSFORMATION GOAL (ABSOLUTE HIGHEST PRIORITY):
+TRANSFORM THE BOTTOMS SHOWN IN THE INPUT IMAGE INTO A 100% AUTHENTIC 2D TABLETOP FLAT-LAY APPAREL PHOTOGRAPH (E-COMMERCE CATALOG BIRD'S-EYE OVERHEAD TOP-DOWN SHOT).
+
+CRITICAL FLAT-LAY STYLING & POSE DIRECTIVES:
+1. 100% TRUE 2D FLAT-LAY ON HORIZONTAL SURFACE:
+   - The pants/shorts are physically laid out completely flat on a smooth horizontal studio tabletop surface, neatly pressed.
+   - DIRECT 90-DEGREE TOP-DOWN OVERHEAD PERSPECTIVE: Perpendicular bird's-eye view.
+   - ZERO 3D THICKNESS OR BULGING: Pressed completely flat against the table.
+   - ABSOLUTELY NO SLEEVES, NO ARMS, NO COLLAR, NO TORSO!
+   - Waistband is pressed straight across horizontally, both legs laid parallel, straight, and flat.
+
+2. EXACT FABRIC, COLOR & DETAILS (MATCH INPUT SOURCE):
+   - Exact same color, hue, saturation, and wash as the input garment.
+   - Replicate waistband, button, fly, pockets, belt loops, stitching, and hems.
+   - Garment: ${gender || 'Unisex'}'s ${garmentType || 'Pants'}.
+   - Viewpoint: ${viewPoint || 'Front View'}.
+
+3. ISOLATION & STUDIO LIGHTING:
+   - Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF).
+   - Soft, balanced, diffused studio overhead lighting.`;
+    } else {
+      // Garment-specific flat-lay styling directives (e-commerce catalog standard)
+      const GARMENT_FLATLAY_STYLES: Record<string, string> = {
+        'T-Shirt': "T-SHIRT FLAT-LAY: Spread short sleeves symmetrically outward to the sides at a natural 25-35 degree downward angle. The body is a flat 2D rectangular spread with a straight bottom hem, lying completely flat on the surface.",
+        'Long Sleeve': "LONG SLEEVE FLAT-LAY (STRICT REQUIREMENT): The long sleeves MUST NOT hang down vertically along the sides of the torso! Spread both long sleeves symmetrically OUTWARD away from the torso at an elegant 35-45 degree angle, lying completely flat against the tabletop surface (or neatly and symmetrically folded at the forearms in classic luxury e-commerce catalog flat-lay styling).",
+        'Hoodie': "HOODIE FLAT-LAY: Lay the torso and sleeves completely flat on the tabletop. Symmetrically spread the sleeves outward at a 35-45 degree angle. Smoothly flatten the hood above the collar flat against the surface, with drawstrings resting naturally and straight on the flat chest.",
+        'Polo': "POLO FLAT-LAY: The ribbed polo collar and button placket lie pressed completely flat against the chest. Short sleeves extend outward symmetrically flat to the sides.",
+        'Quarter Zip': "QUARTER ZIP FLAT-LAY: Stand collar is pressed flat, zipper lies flat down the center chest, long sleeves spread outward at a 35-45 degree angle.",
+        'Tank Top': "TANK TOP FLAT-LAY: Sleeveless shoulder straps lie completely flat against the surface, armhole curves laid flat.",
+        'Outerwear': "OUTERWEAR FLAT-LAY: Jacket laid completely flat, front zipper/buttons flat down the center, sleeves spread outward at 35-45 degrees.",
+      };
+
+      const specificGarmentDirective = garmentType && GARMENT_FLATLAY_STYLES[garmentType] 
+        ? GARMENT_FLATLAY_STYLES[garmentType] 
+        : "SPREAD SLEEVES FLAT: Symmetrically spread the sleeves outward away from the torso at a natural flat-lay angle (30-45 degrees), lying completely flat on the surface.";
+
+      prompt = `PRIMARY TRANSFORMATION GOAL (ABSOLUTE HIGHEST PRIORITY):
 TRANSFORM THE APPAREL SHOWN IN THE INPUT IMAGE FROM ITS CURRENT 3D BODY / MANNEQUIN FORM INTO A 100% AUTHENTIC 2D TABLETOP FLAT-LAY APPAREL PHOTOGRAPH (E-COMMERCE CATALOG BIRD'S-EYE OVERHEAD TOP-DOWN SHOT).
 
 CRITICAL FLAT-LAY STYLING & POSE DIRECTIVES:
@@ -79,6 +131,9 @@ CRITICAL FLAT-LAY STYLING & POSE DIRECTIVES:
 6. ISOLATION & STUDIO LIGHTING:
    - Isolated on a 100% mathematically solid pure white background (HEX #FFFFFF).
    - Soft, balanced, diffused studio overhead lighting showing authentic fabric texture and stitching without harsh shadows.`;
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
 
     let result: any = null;
     const maxRetries = 2;

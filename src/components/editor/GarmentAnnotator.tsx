@@ -103,6 +103,7 @@ interface GarmentAnnotatorProps {
   onGenerateFlatlay?: (gender: string, garmentType: string, viewPoint: string) => Promise<string>;
   onSaveMannequinImage?: (imgUrl: string) => Promise<void>;
   onSaveErasedImage?: (imgUrl: string) => Promise<void>;
+  defaultGarmentType?: string;
 }
 
 export function GarmentAnnotator({ 
@@ -114,7 +115,8 @@ export function GarmentAnnotator({
   onGenerateMannequin,
   onGenerateFlatlay,
   onSaveMannequinImage,
-  onSaveErasedImage
+  onSaveErasedImage,
+  defaultGarmentType
 }: GarmentAnnotatorProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -130,6 +132,28 @@ export function GarmentAnnotator({
   const [mannequinGarmentType, setMannequinGarmentType] = useState('Hoodie');
   const [mannequinViewPoint, setMannequinViewPoint] = useState('Front View');
   const [mannequinFitStyle, setMannequinFitStyle] = useState('Standard');
+
+  useEffect(() => {
+    if (defaultGarmentType) {
+      const normalized = defaultGarmentType.toLowerCase();
+      if (normalized.includes('hat') || normalized.includes('cap')) {
+        setMannequinGarmentType('Hats');
+        setFlatlayGarmentType('Hats');
+      } else if (normalized.includes('pant') || normalized.includes('jean') || normalized.includes('trouser')) {
+        setMannequinGarmentType('Pants');
+        setFlatlayGarmentType('Pants');
+      } else if (normalized.includes('short')) {
+        setMannequinGarmentType('Shorts');
+        setFlatlayGarmentType('Shorts');
+      } else if (normalized.includes('hoodie')) {
+        setMannequinGarmentType('Hoodie');
+        setFlatlayGarmentType('Hoodie');
+      } else if (normalized.includes('t-shirt') || normalized.includes('tee')) {
+        setMannequinGarmentType('T-Shirt');
+        setFlatlayGarmentType('T-Shirt');
+      }
+    }
+  }, [defaultGarmentType]);
   const [isGeneratingMannequin, setIsGeneratingMannequin] = useState(false);
   const [isSavingMannequin, setIsSavingMannequin] = useState(false);
   const [mannequinResultImage, setMannequinResultImage] = useState<string | null>(null);
@@ -875,7 +899,15 @@ export function GarmentAnnotator({
                       <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Garment Type</label>
                       <select
                         value={mannequinGarmentType}
-                        onChange={e => setMannequinGarmentType(e.target.value)}
+                        onChange={e => {
+                          const newType = e.target.value;
+                          setMannequinGarmentType(newType);
+                          if (newType === 'Hats') {
+                            setMannequinFitStyle('Standard');
+                          } else if (['Structured', 'High Crown', 'Mid Profile', 'Low Profile'].includes(mannequinFitStyle)) {
+                            setMannequinFitStyle('Standard');
+                          }
+                        }}
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
                       >
                         <option value="T-Shirt">T-Shirt</option>
@@ -910,17 +942,31 @@ export function GarmentAnnotator({
                     </div>
 
                     <div>
-                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Fit / Silhouette</label>
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">
+                        {mannequinGarmentType === 'Hats' ? 'Crown Profile / Fit' : 'Fit / Silhouette'}
+                      </label>
                       <select
                         value={mannequinFitStyle}
                         onChange={e => setMannequinFitStyle(e.target.value)}
                         className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all appearance-none cursor-pointer"
                       >
-                        <option value="Fitted">Fitted</option>
-                        <option value="Standard">Standard</option>
-                        <option value="Loose">Loose</option>
-                        <option value="Boxy">Boxy</option>
-                        <option value="Athleisure">Athleisure</option>
+                        {mannequinGarmentType === 'Hats' ? (
+                          <>
+                            <option value="Standard">Standard 3D Profile</option>
+                            <option value="Structured">Structured (Firm Front Panels)</option>
+                            <option value="High Crown">High Crown (Tall / Flat Brim)</option>
+                            <option value="Mid Profile">Mid Profile (Snapback / Trucker)</option>
+                            <option value="Low Profile">Low Profile / Dad Hat (Unstructured)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="Fitted">Fitted</option>
+                            <option value="Standard">Standard</option>
+                            <option value="Loose">Loose</option>
+                            <option value="Boxy">Boxy</option>
+                            <option value="Athleisure">Athleisure</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   </div>
