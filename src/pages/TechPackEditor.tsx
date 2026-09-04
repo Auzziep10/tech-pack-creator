@@ -278,7 +278,7 @@ export function TechPackEditor() {
       alert("Translations are read-only to preserve your original English specifications. Please switch back to English to make edits.");
       return true;
     }
-    if (displayData?.isLocked || data?.isLocked) {
+    if (isTechPackLocked || displayData?.isLocked || data?.isLocked) {
       alert("🔒 This Tech Pack is locked. Click the Lock button in the top bar to unlock and make edits.");
       return true;
     }
@@ -380,7 +380,13 @@ export function TechPackEditor() {
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
-  const isTechPackLocked = !!(displayData?.isLocked || data?.isLocked);
+  const isTechPackLocked = !!(
+    displayData?.isLocked || 
+    data?.isLocked || 
+    data?.techPack?.isLocked || 
+    (location.state as any)?.isLocked || 
+    (location.state as any)?.techPack?.isLocked
+  );
   const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
@@ -398,6 +404,7 @@ export function TechPackEditor() {
     if (id && id !== 'draft') {
       try {
         await updateDoc(doc(db, 'techPacks', id), {
+          "isLocked": nextLocked,
           "techPack.isLocked": nextLocked
         });
       } catch (err) {
@@ -825,12 +832,14 @@ export function TechPackEditor() {
   useEffect(() => {
     if (location.state?.techPack && isLoading) {
       const pack = location.state.techPack;
+      const isLockedState = !!(location.state.isLocked ?? pack?.isLocked);
       let loadedUnit = pack?.unit;
       if (!loadedUnit) {
         loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
       }
       setData({
         ...pack,
+        isLocked: isLockedState,
         unit: loadedUnit || pack?.unit || 'cm',
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
@@ -871,6 +880,10 @@ export function TechPackEditor() {
           }
 
           const pack = packInfo.techPack || {};
+          const isLockedFromDb = (packInfo as any).isLocked !== undefined 
+            ? !!(packInfo as any).isLocked 
+            : !!pack?.isLocked;
+
           let loadedUnit = pack?.unit;
           if (!loadedUnit) {
             loadedUnit = detectUnitFromMeasurements(pack?.measurements) || undefined;
@@ -878,6 +891,7 @@ export function TechPackEditor() {
 
           setData((prev: any) => ({
             ...pack,
+            isLocked: isLockedFromDb,
             unit: loadedUnit || pack?.unit || 'cm',
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
@@ -1922,14 +1936,17 @@ export function TechPackEditor() {
                           key={idx} 
                           draggable={!isTechPackLocked}
                           onDragStart={(e) => {
-                            if (checkReadonly()) return;
+                            if (isTechPackLocked || checkReadonly()) {
+                              e.preventDefault();
+                              return;
+                            }
                             e.dataTransfer.setData('text/plain', idx.toString());
                             e.dataTransfer.effectAllowed = 'move';
                           }}
                           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                           onDrop={async (e) => {
                             e.preventDefault();
-                            if (checkReadonly()) return;
+                            if (isTechPackLocked || checkReadonly()) return;
                             const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
                             if (isNaN(fromIdx) || fromIdx === idx) return;
                             const newGallery = [...galleryImages];
@@ -1966,7 +1983,7 @@ export function TechPackEditor() {
                               <button 
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  if (checkReadonly()) return;
+                                  if (isTechPackLocked || checkReadonly()) return;
                                   const newGallery = [...galleryImages];
                                   const [moved] = newGallery.splice(idx, 1);
                                   newGallery.unshift(moved);
@@ -2018,16 +2035,27 @@ export function TechPackEditor() {
                            </button>
                            {!isTechPackLocked && (
                              <button
-                               onClick={(e) => {
+                               onClick={async (e) => {
                                  e.stopPropagation();
-                                 if (checkReadonly()) return;
+                                 if (isTechPackLocked || checkReadonly()) return;
                                  if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
                                     const newGallery = [...galleryImages];
                                     newGallery.splice(idx, 1);
                                     setGalleryImages(newGallery);
                                     setData((d: any) => ({ ...d, gallery: newGallery }));
+                                    const newMainImg = imageUrl === gImg ? (newGallery[0] || '') : imageUrl;
                                     if (imageUrl === gImg) {
-                                       setImageUrl(newGallery[0] || '');
+                                       setImageUrl(newMainImg);
+                                    }
+                                    if (id && id !== 'draft') {
+                                       try {
+                                         await updateDoc(doc(db, 'techPacks', id), {
+                                            imageUrl: newMainImg,
+                                            "techPack.gallery": newGallery
+                                         });
+                                       } catch (err) {
+                                         console.error("Auto-sync image deletion error:", err);
+                                       }
                                     }
                                  }
                                }}
@@ -2293,37 +2321,45 @@ export function TechPackEditor() {
               <div className="border-b border-gray-200 pb-1 mb-4 flex items-center justify-between">
                 <input 
                   value={mod.title || ''} 
+                  disabled={isTechPackLocked}
                   onChange={(e) => updateDetailModuleStr(mIdx, 'title', e.target.value)} 
-                  className="w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  className={`w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent ${isTechPackLocked ? 'cursor-default' : 'hover:border-gray-300 focus:border-black'} outline-none transition-colors`}
                   placeholder="Detail Closeups"
                 />
-                <div className="flex items-center ml-4 gap-2 opacity-0 group-hover/mod:opacity-100 transition-opacity print:hidden shrink-0">
-                   {mIdx > 0 && (
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         const temp = newData.detailModules[mIdx - 1];
-                         newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
-                         newData.detailModules[mIdx] = temp;
-                         setData(newData);
-                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowUp size={14} /></button>
-                   )}
-                   {mIdx < dModules.length - 1 && (
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         const temp = newData.detailModules[mIdx + 1];
-                         newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
-                         newData.detailModules[mIdx] = temp;
-                         setData(newData);
-                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowDown size={14} /></button>
-                   )}
-                   {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         newData.detailModules.splice(mIdx, 1);
-                         setData(newData);
-                      }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1"><X size={14} /></button>
-                   )}
-                </div>
+                {!isTechPackLocked && (
+                  <div className="flex items-center ml-4 gap-2 opacity-0 group-hover/mod:opacity-100 transition-opacity print:hidden shrink-0">
+                     {mIdx > 0 && (
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           const newData = { ...data };
+                           const temp = newData.detailModules[mIdx - 1];
+                           newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
+                           newData.detailModules[mIdx] = temp;
+                           setData(newData);
+                        }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Up"><ArrowUp size={14} /></button>
+                     )}
+                     {mIdx < dModules.length - 1 && (
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           const newData = { ...data };
+                           const temp = newData.detailModules[mIdx + 1];
+                           newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
+                           newData.detailModules[mIdx] = temp;
+                           setData(newData);
+                        }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Down"><ArrowDown size={14} /></button>
+                     )}
+                     {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           if (window.confirm('Are you sure you want to delete this entire detail module? This cannot be undone.')) {
+                              const newData = { ...data };
+                              newData.detailModules.splice(mIdx, 1);
+                              setData(newData);
+                           }
+                        }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1" title="Delete Detail Module"><X size={14} /></button>
+                     )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0 print:break-inside-avoid">
                  <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
@@ -2336,18 +2372,21 @@ export function TechPackEditor() {
                                    images={images} 
                                    details={mod.details || []}
                                    onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
-                                   isLocked={!!mod.isLocked}
+                                   isLocked={isTechPackLocked || !!mod.isLocked}
                                    onToggleLock={(locked) => updateDetailModuleVal(mIdx, 'isLocked', locked)}
                                    onRemoveImage={(imgIdx) => {
-                                      const newImages = [...images];
-                                      newImages.splice(imgIdx, 1);
-                                      const newData = { ...data };
-                                      newData.detailModules[mIdx].detailImages = newImages;
-                                      newData.detailModules[mIdx].detailImage = newImages[0] || '';
-                                      setData(newData);
+                                      if (isTechPackLocked || checkReadonly()) return;
+                                      if (window.confirm('Are you sure you want to remove this closeup photo? This cannot be undone.')) {
+                                         const newImages = [...images];
+                                         newImages.splice(imgIdx, 1);
+                                         const newData = { ...data };
+                                         newData.detailModules[mIdx].detailImages = newImages;
+                                         newData.detailModules[mIdx].detailImage = newImages[0] || '';
+                                         setData(newData);
+                                      }
                                    }}
-                                   onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
-                                   qrTriggerNode={user && (id || id === 'draft') ? (
+                                   onAddImageClick={isTechPackLocked ? undefined : () => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
+                                   qrTriggerNode={user && (id || id === 'draft') && !isTechPackLocked ? (
                                       <button onClick={() => setQrModalUrl(`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`)} className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-1 items-center justify-center shrink-0 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer">
                                          <QrCode className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
                                          <span className="text-[8px] font-bold text-gray-500 group-hover:text-black">CONNECT</span>

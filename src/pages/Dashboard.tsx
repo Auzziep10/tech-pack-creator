@@ -12,7 +12,8 @@ import {
   Edit2, 
   ChevronRight,
   Home,
-  FolderOpen
+  FolderOpen,
+  Lock
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -968,7 +969,15 @@ export function Dashboard() {
                     </div>
                   )}
 
-                  {(!isSelectMode && (profile?.role === 'admin' || pack.userId === user?.uid)) && (
+                  {/* Lock Indicator Badge */}
+                  {!isSelectMode && (pack.isLocked || pack.techPack?.isLocked) && (
+                    <div className="absolute top-3 right-3 z-10 bg-black/85 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shadow-sm border border-white/20" title="Tech Pack is Locked">
+                      <Lock size={10} className="text-white" />
+                      <span>Locked</span>
+                    </div>
+                  )}
+
+                  {(!isSelectMode && !(pack.isLocked || pack.techPack?.isLocked) && (profile?.role === 'admin' || pack.userId === user?.uid)) && (
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                      <button 
                        onClick={(e) => handleDelete(e, pack.id)}

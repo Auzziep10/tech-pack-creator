@@ -24,6 +24,7 @@ export interface TechPackData {
   techPack: any;
   activityLog?: any[];
   isTeamEditable?: boolean;
+  isLocked?: boolean;
   folderId?: string | null;
   sortOrder?: number;
 }
@@ -108,6 +109,7 @@ export const saveTechPack = async (
     name: name || 'Untitled',
     imageUrl: finalImageUrl || '',
     techPack: sanitizedTechPack || {},
+    isLocked: !!sanitizedTechPack?.isLocked,
     activityLog: updatedLog,
     isTeamEditable
   });

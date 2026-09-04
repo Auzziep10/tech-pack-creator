@@ -265,10 +265,17 @@ export function DetailAnnotator({
                   })}
                 </div>
                 
-                {/* Remove Image Button (Digital only, active only) */}
-                {isActive && onRemoveImage && (
+                {/* Remove Image Button (Digital only, active only, NOT when locked) */}
+                {isActive && onRemoveImage && !isLocked && (
                   <button 
-                    onClick={(e) => { e.stopPropagation(); onRemoveImage(imgIdx); if (imgIdx > 0) setActiveImageIndex(prev => prev - 1); }} 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (isLocked) return;
+                      if (window.confirm('Are you sure you want to remove this closeup photo?')) {
+                        onRemoveImage(imgIdx); 
+                        if (imgIdx > 0) setActiveImageIndex(prev => prev - 1); 
+                      }
+                    }} 
                     className="absolute top-3 right-3 p-1.5 bg-white rounded-full shadow-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/main:opacity-100 transition-opacity print:hidden pointer-events-auto border border-gray-100"
                     title="Remove image"
                   >
@@ -283,7 +290,7 @@ export function DetailAnnotator({
         )}
       </div>
 
-      {(images.length > 1 || onAddImageClick) && (
+      {(images.length > 1 || (onAddImageClick && !isLocked)) && (
         <div className="flex items-center gap-2 overflow-x-auto pb-2 print:hidden min-h-[60px]">
           {images.map((img, idx) => (
             <button
@@ -296,7 +303,7 @@ export function DetailAnnotator({
               <img src={img} className="w-full h-full object-cover" />
             </button>
           ))}
-          {onAddImageClick && (
+          {onAddImageClick && !isLocked && (
             <button
               onClick={onAddImageClick}
               className="w-14 h-14 shrink-0 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-black hover:border-black transition-colors hover:bg-gray-50 flex-col gap-0.5"
@@ -305,7 +312,7 @@ export function DetailAnnotator({
               <span className="text-[9px] font-bold">ADD</span>
             </button>
           )}
-          {qrTriggerNode && (
+          {qrTriggerNode && !isLocked && (
             <div className="ml-2 flex items-center shrink-0">
               {qrTriggerNode}
             </div>
