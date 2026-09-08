@@ -270,61 +270,143 @@ export function TechPackEditor() {
   const MEASUREMENT_UNIT_KEY = 'global_unit_v2';
   const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>(() => (localStorage.getItem(MEASUREMENT_UNIT_KEY) as 'in' | 'cm') || 'cm');
 
+  const parseToDecimal = (val: string | undefined): { numericValue: number; sign: string } | null => {
+    if (!val || !val.trim()) return null;
+    let str = val.trim();
+
+    let sign = '';
+    if (str.startsWith('+')) {
+      sign = '+';
+      str = str.substring(1).trim();
+    } else if (str.startsWith('-')) {
+      sign = '-';
+      str = str.substring(1).trim();
+    } else if (str.startsWith('±')) {
+      sign = '±';
+      str = str.substring(1).trim();
+    }
+
+    str = str.replace(/["']|\b(cm|in|inch|inches|centimeters)\b/gi, '').trim();
+
+    const mixedMatch = str.match(/^(\d+)[\s-]+(\d+)\/(\d+)$/);
+    if (mixedMatch) {
+      const whole = parseInt(mixedMatch[1], 10);
+      const num = parseInt(mixedMatch[2], 10);
+      const den = parseInt(mixedMatch[3], 10);
+      if (den !== 0) {
+        return { numericValue: whole + num / den, sign };
+      }
+    }
+
+    const fracMatch = str.match(/^(\d+)\/(\d+)$/);
+    if (fracMatch) {
+      const num = parseInt(fracMatch[1], 10);
+      const den = parseInt(fracMatch[2], 10);
+      if (den !== 0) {
+        return { numericValue: num / den, sign };
+      }
+    }
+
+    const floatVal = parseFloat(str);
+    if (!isNaN(floatVal)) {
+      return { numericValue: floatVal, sign };
+    }
+
+    return null;
+  };
+
+  const decimalToNearestFractionStr = (decimal: number, sign: string = '', denominator: number = 8): string => {
+    if (isNaN(decimal)) return '';
+    const rounded = Math.round(decimal * denominator) / denominator;
+    const whole = Math.floor(rounded);
+    const fraction = Math.round((rounded - whole) * denominator);
+
+    let result = '';
+    if (fraction === 0) {
+      result = `${whole}`;
+    } else if (fraction === denominator) {
+      result = `${whole + 1}`;
+    } else {
+      let num = fraction;
+      let den = denominator;
+      while (num % 2 === 0 && den % 2 === 0) {
+        num /= 2;
+        den /= 2;
+      }
+      if (whole === 0) {
+        result = `${num}/${den}`;
+      } else {
+        result = `${whole} ${num}/${den}`;
+      }
+    }
+    return sign ? `${sign}${result}` : result;
+  };
+
+  const autoConvertValue = (str: string | undefined, targetUnit: 'in' | 'cm'): string => {
+    if (!str || !str.trim()) return str || '';
+    const parsed = parseToDecimal(str);
+    if (!parsed) return str;
+
+    const { numericValue, sign } = parsed;
+
+    if (targetUnit === 'cm') {
+      const cmValue = numericValue * 2.54;
+      const cmStr = cmValue.toFixed(2).replace(/\.00$/, '');
+      return sign ? `${sign}${cmStr}` : cmStr;
+    } else {
+      const inValue = numericValue / 2.54;
+      return decimalToNearestFractionStr(inValue, sign, 8);
+    }
+  };
+
+  const autoConvertMeasurement = (m: any, targetUnit: 'in' | 'cm'): any => {
+    const newM = { ...m };
+    if (newM.value) newM.value = autoConvertValue(newM.value, targetUnit);
+    if (newM.tolMinus) newM.tolMinus = autoConvertValue(newM.tolMinus, targetUnit);
+    if (newM.tolPlus) newM.tolPlus = autoConvertValue(newM.tolPlus, targetUnit);
+    if (newM.tolerance) newM.tolerance = autoConvertValue(newM.tolerance, targetUnit);
+
+    if (newM.sizes && typeof newM.sizes === 'object') {
+      const newSizes: Record<string, string> = {};
+      for (const [sz, val] of Object.entries(newM.sizes)) {
+        if (typeof val === 'string') {
+          newSizes[sz] = autoConvertValue(val, targetUnit);
+        } else {
+          newSizes[sz] = String(val);
+        }
+      }
+      newM.sizes = newSizes;
+    }
+
+    return newM;
+  };
+
+  const detectInitialUnit = (techPackData: any): 'in' | 'cm' => {
+    if (techPackData?.globalUnit === 'in' || techPackData?.unit === 'in' || techPackData?.properties?.unit === 'in') {
+      return 'in';
+    }
+    if (techPackData?.globalUnit === 'cm' || techPackData?.unit === 'cm' || techPackData?.properties?.unit === 'cm') {
+      return 'cm';
+    }
+    const measurements = techPackData?.measurements || [];
+    for (const m of measurements) {
+      const combined = `${m?.value || ''} ${m?.tolMinus || ''} ${m?.tolPlus || ''}`;
+      if (combined.includes('/') || combined.includes('"') || /\b(in|inch|inches)\b/i.test(combined)) {
+        return 'in';
+      }
+    }
+    return 'cm';
+  };
+
   const toggleUnit = () => {
     const nextUnit = globalUnit === 'in' ? 'cm' : 'in';
     setGlobalUnit(nextUnit);
     localStorage.setItem(MEASUREMENT_UNIT_KEY, nextUnit);
 
-    // Auto-convert existing measurements
     setData((prev: any) => {
-      const newMs = (prev.measurements || []).map((m: any) => ({
-        ...m,
-        value: autoConvert(m.value, nextUnit),
-        tolMinus: autoConvert(m.tolMinus, nextUnit),
-        tolPlus: autoConvert(m.tolPlus, nextUnit),
-        tolerance: autoConvert(m.tolerance, nextUnit)
-      }));
-      return { ...prev, measurements: newMs };
+      const newMs = (prev.measurements || []).map((m: any) => autoConvertMeasurement(m, nextUnit));
+      return { ...prev, globalUnit: nextUnit, measurements: newMs };
     });
-  };
-
-  const autoConvert = (str: string | undefined, targetUnit: 'in' | 'cm') => {
-    if (!str || !str.trim()) return str;
-    const val = str.trim();
-    
-    // Convert TO cm from IN
-    if (targetUnit === 'cm') {
-      const dec = parseFractionToDecimal(val);
-      if (dec === null) return str;
-      return (dec * 2.54).toFixed(2).replace(/\.00$/, '');
-    } else {
-      // Convert TO IN from CM
-      const float = parseFloat(val);
-      if (isNaN(float)) return str;
-      const dec = float / 2.54;
-      return decimalToNearestFractionStr(dec, 8);
-    }
-  };
-
-  const parseFractionToDecimal = (val: string): number | null => {
-    let match = val.match(/^(\d+)[\s-]+(\d+)\/(\d+)$/);
-    if (match) return parseInt(match[1]) + (parseInt(match[2]) / parseInt(match[3]));
-    match = val.match(/^(\d+)\/(\d+)$/);
-    if (match) return parseInt(match[1]) / parseInt(match[2]);
-    const float = parseFloat(val);
-    return isNaN(float) ? null : float;
-  };
-
-  const decimalToNearestFractionStr = (decimal: number, denominator: number = 8): string => {
-    const whole = Math.floor(decimal);
-    const fraction = decimal - whole;
-    const num = Math.round(fraction * denominator);
-    if (num === 0) return whole === 0 ? "0" : whole.toString();
-    if (num === denominator) return (whole + 1).toString();
-    let n = num, d = denominator;
-    while (n % 2 === 0 && d % 2 === 0) { n /= 2; d /= 2; }
-    if (whole === 0) return `${n}/${d}`;
-    return `${whole} ${n}/${d}`;
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
@@ -428,8 +510,11 @@ export function TechPackEditor() {
 
   useEffect(() => {
     if (location.state?.techPack) {
+      const detectedUnit = detectInitialUnit(location.state.techPack);
+      setGlobalUnit(detectedUnit);
       setData({
         ...location.state.techPack,
+        globalUnit: detectedUnit,
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
@@ -449,8 +534,11 @@ export function TechPackEditor() {
     } else if (id && id !== 'draft') {
       getTechPack(id).then((packInfo) => {
         if (packInfo) {
+          const detectedUnit = detectInitialUnit(packInfo.techPack);
+          setGlobalUnit(detectedUnit);
           setData({
             ...packInfo.techPack,
+            globalUnit: detectedUnit,
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
             activityLog: packInfo.activityLog
@@ -1280,7 +1368,7 @@ export function TechPackEditor() {
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
                   <button onClick={toggleUnit} className="print:hidden text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
-                    Convert to {globalUnit === 'in' ? 'Centimeters' : 'Inches'}
+                    TO {globalUnit === 'in' ? 'CM' : 'INCHES'}
                   </button>
                 </h3>
 
