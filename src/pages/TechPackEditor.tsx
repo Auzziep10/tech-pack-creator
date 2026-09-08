@@ -946,21 +946,34 @@ export function TechPackEditor() {
       removeTechPackPresence(id, user.uid);
     };
   }, [id, user, profile]);
+
+  // Real-Time Tech Pack Subscription & Data Synchronization
+  useEffect(() => {
+    if (location.state?.techPack && isLoading) {
+      const pack = location.state.techPack;
+      const isLockedState = !!(location.state.isLocked ?? pack?.isLocked);
+      const loadedUnit = detectInitialUnit(pack);
+
+      setData({
+        ...pack,
+        isLocked: isLockedState,
+        globalUnit: loadedUnit,
+        unit: loadedUnit,
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
       });
+
       if (loadedUnit) {
         setGlobalUnit(loadedUnit);
         localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
       }
       const initialImage = pack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
-      
 
       const initialGallery = pack?.gallery || [];
       if (initialImage && !initialGallery.includes(initialImage)) {
-         initialGallery.unshift(initialImage);
+        initialGallery.unshift(initialImage);
       }
       setGalleryImages(initialGallery);
 
@@ -995,15 +1008,6 @@ export function TechPackEditor() {
             isLocked: isLockedFromDb,
             globalUnit: loadedUnit,
             unit: loadedUnit,
-            userId: packInfo.userId,
-            isTeamEditable: packInfo.isTeamEditable,
-            activityLog: packInfo.activityLog || prev?.activityLog
-          }));
-
-          if (loadedUnit) {
-            setGlobalUnit(loadedUnit);
-            localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
-          }
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
             activityLog: packInfo.activityLog || prev?.activityLog
