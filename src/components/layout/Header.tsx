@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Bell, Search, LogOut, User } from 'lucide-react';
+import { Bell, Search, LogOut, User, Menu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ProfileSettingsModal } from '../ui/ProfileSettingsModal';
 
-export function Header() {
-  const { user, logout } = useAuth();
+export function Header({ onOpenMobileSidebar }: { onOpenMobileSidebar?: () => void }) {
+  const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -23,13 +23,21 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 flex items-center justify-between px-8">
-      <div className="flex items-center gap-4 w-96">
+    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 md:px-8">
+      <div className="flex items-center gap-3 w-full max-w-[200px] sm:max-w-xs md:w-96">
+        <button
+          onClick={onOpenMobileSidebar}
+          className="p-2 -ml-1 text-gray-600 hover:text-black hover:bg-gray-100 rounded-lg md:hidden shrink-0 transition-colors"
+          title="Open Menu"
+        >
+          <Menu size={22} />
+        </button>
+
         <div className="relative w-full">
            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
            <input 
-              placeholder="Search active orders..." 
-              className="w-full bg-gray-50 border border-gray-200 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" 
+              placeholder="Search..." 
+              className="w-full bg-gray-50 border border-gray-200 rounded-full pl-9 pr-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" 
            />
         </div>
       </div>
@@ -59,7 +67,16 @@ export function Header() {
         {showProfile && (
            <div className="absolute top-12 right-0 w-64 bg-white border border-gray-100 rounded-xl shadow-lg p-2 z-50 animate-in slide-in-from-top-2 fade-in">
              <div className="px-3 py-2 border-b border-gray-50 mb-1">
-               <p className="font-bold text-gray-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis">{user?.displayName || 'Designer'}</p>
+               <div className="flex items-center justify-between gap-2 mb-1">
+                 <p className="font-bold text-gray-900 text-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]">{user?.displayName || 'Designer'}</p>
+                 <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                   (profile?.role || 'staff') === 'admin' 
+                     ? 'bg-purple-100 text-purple-700' 
+                     : 'bg-gray-100 text-gray-600'
+                 }`}>
+                   {profile?.role || 'staff'}
+                 </span>
+               </div>
                <p className="text-gray-500 text-xs truncate">{user?.email}</p>
              </div>
              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left" onClick={() => { setShowProfile(false); setShowSettingsModal(true); }}>

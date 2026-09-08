@@ -11,25 +11,43 @@ export const config = {
 };
 
 export default async function handler(req: any, res: any) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    const apiKey = process.env.NANOBANANA_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY configuration.' });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const { base64Data, mimeType } = req.body;
+    const { base64Data, mimeType, colorHex } = req.body;
 
-    if (!base64Data || !mimeType) {
-       return res.status(400).json({ error: 'Missing base64Data or mimeType payload.' });
+    if (!base64Data || !mimeType || !colorHex) {
+       return res.status(400).json({ error: 'Missing base64Data, mimeType, or colorHex payload.' });
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-image" });
-    const prompt = "Act as an expert technical CAD designer. Perform a meticulous image trace on the outline of the garment and its prominent internal structural features. Create a pristine, flat black-and-white technical line-art CAD blueprint representation of the garment shown in the image, EXACTLY like a professional apparel tech pack. Include construction stitching and typical tech pack aesthetic, but DO NOT include measurement guide lines, arrows, or text callouts (those will be drawn manually).\n\nCRITICAL SPECIFICATIONS:\n1. The garment MUST look PERFECTLY IRONED AND FLAT. Do NOT draw any internal lines that represent wrinkles, fabric folds, or draping. ONLY draw actual physical seams, stitches, and structural boundaries.\n2. If the garment has a hood, the hood MUST be drawn UP and prominently visible, mimicking its exact structure from the photo.\n3. The completely blank space around the garment MUST BE PURE WHITE (#FFFFFF). Do NOT render a light grey background. Do not render drop shadows. THE BACKGROUND CAN ONLY BE PURE WHITE.\n\nKeep the output purely structural. Pure #FFFFFF white background, high contrast lines, no photorealistic shading.";
+    const prompt = `TASK: Recoloring
+CRITICAL CONSTRAINTS:
+1. ONLY change the color of the garment in the image to exactly match this hex color code: ${colorHex}.
+2. Preserve all lighting, shadows, fabric textures, folds, and details authentically ON THE GARMENT ONLY.
+3. ISOLATE ON PURE WHITE (ULTRA-CRITICAL): The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Absolutely NO shadows on the floor. NO cream, off-white, light grey, or transparent backgrounds. NO gradients. Every non-garment pixel MUST be exactly #FFFFFF.
+4. EXACT CROPPING & POSITION (CRITICAL): You MUST output an image with the EXACT same framing, dimensions, padding, zoom level, and centered placement as the FIRST image. The garment MUST perfectly overlap the first image pixel-for-pixel in scale and position.`;
 
     let result: any = null;
     const maxRetries = 2;
@@ -52,7 +70,7 @@ export default async function handler(req: any, res: any) {
                             genErr?.message?.includes('504') ||
                             genErr?.message?.includes('429');
         if (isTransient && attempt < maxRetries) {
-          console.warn(`[Vectorize API] Transient error (attempt ${attempt + 1}/${maxRetries + 1}):`, genErr.message);
+          console.warn(`[Recolor API] Transient error (attempt ${attempt + 1}/${maxRetries + 1}):`, genErr.message);
           await new Promise(r => setTimeout(r, (attempt + 1) * 1500));
           continue;
         }
@@ -80,10 +98,10 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ data: `data:image/png;base64,${text}` });
 
   } catch (err: any) {
-    console.error("Vectorization Error:", err);
+    console.error("Recoloring Error:", err);
     let errMsg = err.message || 'Internal Server Error';
     if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
-      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click Vectorize again in a few moments to retry.';
+      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click Recoloring again in a few moments to retry.';
     }
     return res.status(500).json({ error: errMsg });
   }

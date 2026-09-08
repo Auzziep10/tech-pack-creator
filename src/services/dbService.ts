@@ -1,6 +1,16 @@
-import { collection, addDoc, updateDoc, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
+
+export interface FolderData {
+  id?: string;
+  name: string;
+  companyId: string;
+  userId: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  createdAt?: any;
+}
 
 export interface TechPackData {
   id?: string;
@@ -14,7 +24,36 @@ export interface TechPackData {
   techPack: any;
   activityLog?: any[];
   isTeamEditable?: boolean;
+  isLocked?: boolean;
+  folderId?: string | null;
+  sortOrder?: number;
 }
+
+export const uploadAllBase64InObject = async (obj: any, userId: string): Promise<any> => {
+  if (!obj) return obj;
+  if (typeof obj === 'string') {
+    if (obj.startsWith('data:image/') || (obj.startsWith('data:') && obj.length > 200)) {
+      try {
+        return await uploadBase64Image(obj, userId);
+      } catch (e) {
+        console.error("Failed auto-uploading base64 image string:", e);
+        return obj;
+      }
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return await Promise.all(obj.map(item => uploadAllBase64InObject(item, userId)));
+  }
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = await uploadAllBase64InObject(obj[key], userId);
+    }
+    return result;
+  }
+  return obj;
+};
 
 export const saveTechPack = async (
   userId: string, 
@@ -37,6 +76,19 @@ export const saveTechPack = async (
     });
   }
 
+  // Ensure main imageUrl is uploaded to storage if base64
+  let finalImageUrl = imageUrl || '';
+  if (finalImageUrl.startsWith('data:')) {
+    try {
+      finalImageUrl = await uploadBase64Image(finalImageUrl, userId);
+    } catch (e) {
+      console.error("Failed uploading main base64 imageUrl:", e);
+    }
+  }
+
+  // Recursively convert any remaining base64 images inside techPack to Storage URLs
+  const sanitizedTechPack = await uploadAllBase64InObject(techPack, userId);
+
   const stripUndefined = (obj: any): any => {
     if (obj === undefined) return null;
     if (Array.isArray(obj)) return obj.map(stripUndefined);
@@ -55,8 +107,9 @@ export const saveTechPack = async (
   const payload = stripUndefined({
     companyId: companyId || userId,
     name: name || 'Untitled',
-    imageUrl: imageUrl || '',
-    techPack: techPack || {},
+    imageUrl: finalImageUrl || '',
+    techPack: sanitizedTechPack || {},
+    isLocked: !!sanitizedTechPack?.isLocked,
     activityLog: updatedLog,
     isTeamEditable
   });
@@ -99,32 +152,24 @@ export const uploadBase64Image = async (base64String: string, userId: string): P
 };
 
 export const getUserAndCompanyTechPacks = async (userId: string, companyId: string) => {
-  if (userId === companyId) {
-    const q = query(collection(db, 'techPacks'), where("companyId", "==", companyId));
-    const snap = await getDocs(q);
-    const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
-    return results.sort((a, b) => {
-      const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-      const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
-      return timeB - timeA;
-    });
-  }
-
-  const qCompany = query(collection(db, 'techPacks'), where("companyId", "==", companyId));
-  const qUser = query(collection(db, 'techPacks'), where("userId", "==", userId));
-
-  const [snapCompany, snapUser] = await Promise.all([getDocs(qCompany), getDocs(qUser)]);
-  
-  const map = new Map<string, TechPackData>();
-  snapCompany.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() } as TechPackData));
-  snapUser.docs.forEach(doc => map.set(doc.id, { id: doc.id, ...doc.data() } as TechPackData));
-  
-  const results = Array.from(map.values());
+  const q = query(collection(db, 'techPacks'));
+  const snap = await getDocs(q);
+  const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
   return results.sort((a, b) => {
     const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
     const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
     return timeB - timeA;
   });
+};
+
+export const getAllUsers = async (): Promise<any[]> => {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(doc => doc.data());
+};
+
+export const updateUserRole = async (uid: string, role: 'admin' | 'staff') => {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { role });
 };
 
 export const getTechPack = async (id: string) => {
@@ -165,3 +210,207 @@ export const completeScanSession = async (sessionId: string, backImageUrl: strin
     updatedAt: serverTimestamp()
   });
 };
+
+// --- Dashboard Folder Features ---
+
+export const getCompanyFolders = async (companyId: string): Promise<FolderData[]> => {
+  const q = query(collection(db, 'folders'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
+  const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as FolderData[];
+  return results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+};
+
+export const createFolder = async (userId: string, companyId: string, name: string, parentId?: string | null): Promise<string> => {
+  const docRef = await addDoc(collection(db, 'folders'), {
+    name: name.trim(),
+    companyId,
+    userId,
+    parentId: parentId || null,
+    createdAt: serverTimestamp()
+  });
+  return docRef.id;
+};
+
+export const updateFolder = async (folderId: string, name: string): Promise<void> => {
+  const folderRef = doc(db, 'folders', folderId);
+  await updateDoc(folderRef, {
+    name: name.trim()
+  });
+};
+
+export const updateFolderParent = async (folderId: string, parentId: string | null): Promise<void> => {
+  const folderRef = doc(db, 'folders', folderId);
+  await updateDoc(folderRef, {
+    parentId: parentId || null
+  });
+};
+
+export const deleteFolder = async (folderId: string): Promise<void> => {
+  const folderRef = doc(db, 'folders', folderId);
+  const folderSnap = await getDoc(folderRef);
+  const parentId = folderSnap.exists() ? (folderSnap.data().parentId || null) : null;
+
+  await deleteDoc(folderRef);
+  
+  // Re-parent child subfolders to parentId (so subfolders aren't orphaned)
+  const childFoldersQuery = query(collection(db, 'folders'), where('parentId', '==', folderId));
+  const childFoldersSnap = await getDocs(childFoldersQuery);
+
+  // Unassign tech packs belonging to this folder (move to parentId)
+  const techPacksQuery = query(collection(db, 'techPacks'), where('folderId', '==', folderId));
+  const techPacksSnap = await getDocs(techPacksQuery);
+
+  if (!childFoldersSnap.empty || !techPacksSnap.empty) {
+    const batch = writeBatch(db);
+    childFoldersSnap.docs.forEach(d => {
+      batch.update(d.ref, { parentId });
+    });
+    techPacksSnap.docs.forEach(d => {
+      batch.update(d.ref, { folderId: parentId });
+    });
+    await batch.commit();
+  }
+};
+
+export const updateTechPackFolder = async (packId: string, folderId: string | null): Promise<void> => {
+  const packRef = doc(db, 'techPacks', packId);
+  await updateDoc(packRef, {
+    folderId: folderId || null,
+    updatedAt: serverTimestamp()
+  });
+};
+
+export const moveTechPacksToFolder = async (packIds: string[], folderId: string | null): Promise<void> => {
+  if (packIds.length === 0) return;
+  const batch = writeBatch(db);
+  packIds.forEach(id => {
+    const ref = doc(db, 'techPacks', id);
+    batch.update(ref, {
+      folderId: folderId || null,
+      updatedAt: serverTimestamp()
+    });
+  });
+  await batch.commit();
+};
+
+export const updateFolderOrders = async (orders: { id: string; sortOrder: number }[]): Promise<void> => {
+  if (orders.length === 0) return;
+  const batch = writeBatch(db);
+  orders.forEach(({ id, sortOrder }) => {
+    const ref = doc(db, 'folders', id);
+    batch.update(ref, { sortOrder });
+  });
+  await batch.commit();
+};
+
+export const updateTechPackOrders = async (orders: { id: string; sortOrder: number }[]): Promise<void> => {
+  if (orders.length === 0) return;
+  const batch = writeBatch(db);
+  orders.forEach(({ id, sortOrder }) => {
+    const ref = doc(db, 'techPacks', id);
+    batch.update(ref, { sortOrder });
+  });
+  await batch.commit();
+};
+
+// --- Real-Time Synchronization & Presence Features ---
+
+export const subscribeToTechPack = (
+  id: string, 
+  callback: (pack: TechPackData | null) => void
+) => {
+  const packRef = doc(db, 'techPacks', id);
+  return onSnapshot(packRef, (snap) => {
+    if (snap.exists()) {
+      callback({ id: snap.id, ...snap.data() } as TechPackData);
+    } else {
+      callback(null);
+    }
+  }, (err) => {
+    console.error("Error in subscribeToTechPack:", err);
+  });
+};
+
+export const subscribeToUserAndCompanyTechPacks = (
+  companyId: string,
+  callback: (packs: TechPackData[]) => void
+) => {
+  const q = query(collection(db, 'techPacks'));
+  return onSnapshot(q, (snap) => {
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as TechPackData[];
+    results.sort((a, b) => {
+      const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+      const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+      return timeB - timeA;
+    });
+    callback(results);
+  }, (err) => {
+    console.error("Error in subscribeToUserAndCompanyTechPacks:", err);
+  });
+};
+
+export const subscribeToCompanyFolders = (
+  companyId: string,
+  callback: (folders: FolderData[]) => void
+) => {
+  const q = query(collection(db, 'folders'), where('companyId', '==', companyId));
+  return onSnapshot(q, (snap) => {
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as FolderData[];
+    results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    callback(results);
+  }, (err) => {
+    console.error("Error in subscribeToCompanyFolders:", err);
+  });
+};
+
+export interface UserPresence {
+  uid: string;
+  email: string;
+  name?: string;
+  lastSeen: any;
+}
+
+export const updateTechPackPresence = async (
+  packId: string,
+  user: { uid: string; email: string; name?: string }
+) => {
+  if (!packId || !user.uid) return;
+  const presenceRef = doc(db, 'techPacks', packId, 'presence', user.uid);
+  await setDoc(presenceRef, {
+    uid: user.uid,
+    email: user.email,
+    name: user.name || user.email.split('@')[0],
+    lastSeen: serverTimestamp()
+  }, { merge: true });
+};
+
+export const removeTechPackPresence = async (packId: string, uid: string) => {
+  if (!packId || !uid) return;
+  try {
+    const presenceRef = doc(db, 'techPacks', packId, 'presence', uid);
+    await deleteDoc(presenceRef);
+  } catch (e) {
+    console.error("Error removing presence:", e);
+  }
+};
+
+export const subscribeToTechPackPresence = (
+  packId: string,
+  callback: (users: UserPresence[]) => void
+) => {
+  const presenceColl = collection(db, 'techPacks', packId, 'presence');
+  return onSnapshot(presenceColl, (snap) => {
+    const now = Date.now();
+    const users = snap.docs
+      .map(d => d.data() as UserPresence)
+      .filter(u => {
+        if (!u.lastSeen) return true;
+        const millis = u.lastSeen.toMillis ? u.lastSeen.toMillis() : 0;
+        return millis === 0 || (now - millis < 120000);
+      });
+    callback(users);
+  }, (err) => {
+    console.error("Error in subscribeToTechPackPresence:", err);
+  });
+};
+

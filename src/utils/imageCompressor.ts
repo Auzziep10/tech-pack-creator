@@ -1,4 +1,4 @@
-export const compressImageFile = async (file: File, maxWidth = 1600): Promise<string> => {
+export const compressImageFile = async (file: File, maxWidth = 2048): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -13,8 +13,8 @@ export const compressImageFile = async (file: File, maxWidth = 1600): Promise<st
           width = maxWidth;
         }
         
-        // Ensure max height is also reasonable to prevent vertical panoramas blowing up
-        const maxHeight = 1600;
+        // Ensure max height is 2048px (2K ultra-sharp) for high-definition Gemini Vision & detail closeups
+        const maxHeight = 2048;
         if (height > maxHeight) {
            width = Math.round((width * maxHeight) / height);
            height = maxHeight;
@@ -36,9 +36,8 @@ export const compressImageFile = async (file: File, maxWidth = 1600): Promise<st
 
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Compress heavily to WebP to natively shrink PDFs (or JPEG fallback)
-        // 0.8 is great quality but 10x smaller file size than raw PNG/JPEG
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        // 2K Ultra-Sharp 90% JPEG quality for fine collar tags, stitching, and texture visibility
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
         resolve(dataUrl);
       };
       img.onerror = reject;

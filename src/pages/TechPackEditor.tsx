@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence } from '../services/dbService';
+import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -94,7 +95,7 @@ const AutoTextarea = ({ value, onChange, className, placeholder }: { value: stri
   );
 };
 
-const RichTextCallouts = ({ value, onChange, className, placeholder }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string }) => {
+const RichTextCallouts = ({ value, onChange, className, placeholder, readOnly = false }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string, readOnly?: boolean }) => {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -143,8 +144,8 @@ const RichTextCallouts = ({ value, onChange, className, placeholder }: { value: 
 
   return (
     <div 
-      onClick={() => setIsEditing(true)}
-      className={`${className} cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors`}
+      onClick={() => !readOnly && setIsEditing(true)}
+      className={`${className} ${!readOnly ? 'cursor-text hover:bg-gray-50 border border-transparent hover:border-gray-200' : ''} transition-colors`}
     >
       {renderRichText(value)}
     </div>
@@ -157,6 +158,21 @@ const formatName = (email?: string | null) => {
   return namePart.split(/[\.\-_]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
 };
 
+const detectUnitFromMeasurements = (measurements: any[]): 'in' | 'cm' | null => {
+  if (!measurements || !Array.isArray(measurements)) return null;
+  for (const m of measurements) {
+    if (
+      (typeof m.value === 'string' && m.value.includes('/')) ||
+      (typeof m.tolMinus === 'string' && m.tolMinus.includes('/')) ||
+      (typeof m.tolPlus === 'string' && m.tolPlus.includes('/')) ||
+      (typeof m.tolerance === 'string' && m.tolerance.includes('/'))
+    ) {
+      return 'in';
+    }
+  }
+  return null;
+};
+
 export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
@@ -165,11 +181,21 @@ export function TechPackEditor() {
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<any>({ properties: {}, measurements: [], callouts: [], bom: [] });
+  const [data, setData] = useState<any>(() => {
+    const initialLocked = (location.state as any)?.isLocked ?? (location.state as any)?.techPack?.isLocked;
+    return { 
+      properties: {}, 
+      measurements: [], 
+      callouts: [], 
+      bom: [],
+      ...(initialLocked !== undefined ? { isLocked: Boolean(initialLocked) } : {})
+    };
+  });
   const [imageUrl, setImageUrl] = useState('');
 
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [activeCollaborators, setActiveCollaborators] = useState<UserPresence[]>([]);
   
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -181,12 +207,43 @@ export function TechPackEditor() {
   const [colorwayMockupImage, setColorwayMockupImage] = useState<string | null>(null);
   const [extractedColorways, setExtractedColorways] = useState<any[]>([]);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
+  const [colorwayTab, setColorwayTab] = useState<'generate' | 'upload'>('generate');
+  const [recolorBaseImage, setRecolorBaseImage] = useState('');
+  const [recolorHex, setRecolorHex] = useState('#1D4ED8');
+  const [recolorName, setRecolorName] = useState('Cobalt Blue');
+  const [isRecoloring, setIsRecoloring] = useState(false);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
+  const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
+  const [galleryScanSessionId, setGalleryScanSessionId] = useState<string | null>(null);
   const annotatorRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true);
+  const lastSavedJsonRef = useRef<string>('');
+
+  const [isDownloadingMain, setIsDownloadingMain] = useState(false);
+  const [downloadingGalleryIdx, setDownloadingGalleryIdx] = useState<number | null>(null);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDownloadMenu]);
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
   const [activeSizeTab, setActiveSizeTab] = useState<string>(data?.properties?.baseSize || 'M');
   const [isGrading, setIsGrading] = useState(false);
+  const [isExpandingPOMs, setIsExpandingPOMs] = useState(false);
+  const [isGeneratingCoreSpecs, setIsGeneratingCoreSpecs] = useState(false);
+  const [isClarifying, setIsClarifying] = useState(false);
 
   const LANGUAGES = ['English', 'Spanish', 'Mandarin', 'Vietnamese', 'Portuguese', 'Italian', 'French', 'Turkish', 'Bengali'];
   const [activeLanguage, setActiveLanguage] = useState('English');
@@ -228,6 +285,10 @@ export function TechPackEditor() {
   const checkReadonly = () => {
     if (isTranslated) {
       alert("Translations are read-only to preserve your original English specifications. Please switch back to English to make edits.");
+      return true;
+    }
+    if (isTechPackLocked) {
+      alert("🔒 This Tech Pack is locked. Click the Lock button in the top bar to unlock and make edits.");
       return true;
     }
     return false;
@@ -405,18 +466,57 @@ export function TechPackEditor() {
 
     setData((prev: any) => {
       const newMs = (prev.measurements || []).map((m: any) => autoConvertMeasurement(m, nextUnit));
-      return { ...prev, globalUnit: nextUnit, measurements: newMs };
+      return { ...prev, globalUnit: nextUnit, unit: nextUnit, measurements: newMs };
     });
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
-  const canEdit = isCreator || (displayData?.isTeamEditable !== false);
+  const isTechPackLocked = Boolean(data?.isLocked);
+  const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
     if (!isCreator) return;
     const isLocking = displayData?.isTeamEditable ?? true;
     pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing');
     setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
+  };
+
+  const toggleLock = async () => {
+    const nextLocked = !isTechPackLocked;
+    setData((prev: any) => {
+      const updated = { ...prev, isLocked: nextLocked };
+      if (updated.techPack && typeof updated.techPack === 'object') {
+        updated.techPack = { ...updated.techPack, isLocked: nextLocked };
+      }
+      return updated;
+    });
+    pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack');
+
+    // Update location.state in history so refreshes or back/forward keep updated lock status
+    if (location.state) {
+      navigate(location.pathname + location.search, {
+        replace: true,
+        state: {
+          ...(location.state as any),
+          isLocked: nextLocked,
+          techPack: {
+            ...((location.state as any)?.techPack || {}),
+            isLocked: nextLocked
+          }
+        }
+      });
+    }
+
+    if (id && id !== 'draft') {
+      try {
+        await updateDoc(doc(db, 'techPacks', id), {
+          "isLocked": nextLocked,
+          "techPack.isLocked": nextLocked
+        });
+      } catch (err: any) {
+        console.error("Failed to update lock status in database:", err);
+      }
+    }
   };
 
   const pushLog = (message: string) => {
@@ -449,6 +549,296 @@ export function TechPackEditor() {
     }
   };
 
+  const handleGenerateMannequin = async (gender: string, garmentType: string, viewPoint: string, fitStyle: string): Promise<string> => {
+    const { generateInvisibleMockup } = await import('../services/nanobananaService');
+    return await generateInvisibleMockup(imageUrl, gender, garmentType, viewPoint, fitStyle);
+  };
+
+  const handleGenerateFlatlay = async (gender: string, garmentType: string, viewPoint: string): Promise<string> => {
+    const { generateFlatlayMockup } = await import('../services/nanobananaService');
+    return await generateFlatlayMockup(imageUrl, gender, garmentType, viewPoint);
+  };
+
+  const handleSaveMannequinImage = async (base64Image: string) => {
+    if (!user) {
+      throw new Error("You must be logged in to save images.");
+    }
+    const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
+    const newGallery = [uploadedUrl, ...galleryImages.filter(img => img !== uploadedUrl)];
+    setGalleryImages(newGallery);
+    setImageUrl(uploadedUrl);
+
+    const updatedData = {
+      ...data,
+      gallery: newGallery,
+      images: {
+        ...(data?.images || {}),
+        original: uploadedUrl
+      }
+    };
+    setData(updatedData);
+
+    try {
+      const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+      delete sanitizedData.userId;
+      delete sanitizedData.isTeamEditable;
+      delete sanitizedData.activityLog;
+
+      const existingId = (!id || id === 'draft') ? undefined : id;
+      const savedId = await saveTechPack(
+        user.uid,
+        profile?.companyId || user.uid,
+        packName,
+        uploadedUrl,
+        sanitizedData,
+        user.email || 'Unknown',
+        existingId,
+        displayData.activityLog || [],
+        displayData.isTeamEditable ?? true
+      );
+      pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`);
+      if (!id || id === 'draft') {
+        navigate(`/pack/${savedId}`, { replace: true });
+      }
+    } catch (err) {
+      console.error("Auto-save after mannequin failed:", err);
+    }
+  };
+
+  const handleSaveErasedImage = async (base64Image: string) => {
+    if (!user) {
+      throw new Error("You must be logged in to save images.");
+    }
+    const uploadedUrl = await uploadBase64Image(base64Image, user.uid);
+    const newGallery = [uploadedUrl, ...galleryImages.filter(img => img !== uploadedUrl)];
+    setGalleryImages(newGallery);
+    setImageUrl(uploadedUrl);
+
+    const updatedData = {
+      ...data,
+      gallery: newGallery,
+      images: {
+        ...(data?.images || {}),
+        original: uploadedUrl
+      }
+    };
+    setData(updatedData);
+
+    try {
+      const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+      delete sanitizedData.userId;
+      delete sanitizedData.isTeamEditable;
+      delete sanitizedData.activityLog;
+
+      const existingId = (!id || id === 'draft') ? undefined : id;
+      const savedId = await saveTechPack(
+        user.uid,
+        profile?.companyId || user.uid,
+        packName,
+        uploadedUrl,
+        sanitizedData,
+        user.email || 'Unknown',
+        existingId,
+        displayData.activityLog || [],
+        displayData.isTeamEditable ?? true
+      );
+      pushLog(`Erased garment logo/branding & saved tech pack successfully`);
+      if (!id || id === 'draft') {
+        navigate(`/pack/${savedId}`, { replace: true });
+      }
+    } catch (err) {
+      console.error("Auto-save after erasing failed:", err);
+    }
+  };
+
+  const handleRecolorGarment = async (baseImage: string, hexColor: string): Promise<string> => {
+    const { recolorGarmentImage } = await import('../services/nanobananaService');
+    return await recolorGarmentImage(baseImage, hexColor);
+  };
+
+  const handleRecolorAndExtract = async () => {
+    if (!recolorBaseImage || !recolorHex) return;
+    setIsRecoloring(true);
+    try {
+      const generatedBase64 = await handleRecolorGarment(recolorBaseImage, recolorHex);
+      
+      let uploadedImage = generatedBase64;
+      if (user?.uid && generatedBase64 && generatedBase64.startsWith('data:')) {
+        try {
+          uploadedImage = await uploadBase64Image(generatedBase64, user.uid);
+        } catch (err) {
+          console.error("Error pre-uploading recolored image:", err);
+        }
+      }
+
+      const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: generatedBase64 })
+      });
+      const resData = await response.json();
+      
+      const newColorway: any = {
+        id: `recolor_${Date.now()}`,
+        name: recolorName || 'Recolored',
+        hex: recolorHex,
+        image: uploadedImage,
+        lab: [50.0, 0.0, 0.0]
+      };
+
+      if (resData.success && resData.colorways && resData.colorways[0]) {
+        newColorway.lab = resData.colorways[0].lab || [50.0, 0.0, 0.0];
+      }
+
+      setExtractedColorways(prev => [...prev, newColorway]);
+    } catch (err: any) {
+      alert("Failed to recolor: " + err.message);
+    } finally {
+      setIsRecoloring(false);
+    }
+  };
+
+  const handleExpandMeasurements = async () => {
+    setIsExpandingPOMs(true);
+    try {
+      const { expandMeasurements } = await import('../services/nanobananaService');
+      const newPOMs = await expandMeasurements(
+        imageUrl,
+        displayData?.measurements || [],
+        displayData?.properties?.baseSize || 'M',
+        displayData?.properties?.category || packName || 'Garment',
+        globalUnit || 'in'
+      );
+      
+      if (newPOMs && newPOMs.length > 0) {
+        setData((prev: any) => {
+          const currentMs = prev.measurements || [];
+          // Avoid duplicate IDs or names (case-insensitive)
+          const filteredNew = newPOMs.filter((nm: any) => 
+            !currentMs.some((cm: any) => cm.id === nm.id || cm.point?.toLowerCase() === nm.point?.toLowerCase())
+          );
+          if (filteredNew.length === 0) {
+            alert("No additional measurements could be found that aren't already listed.");
+            return prev;
+          }
+          const updated = [...currentMs, ...filteredNew];
+          pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`);
+          return { ...prev, measurements: updated };
+        });
+      } else {
+        alert("Gemini did not return any new measurements for this garment type.");
+      }
+    } catch (e: any) {
+      alert("Failed to generate additional measurements: " + e.message);
+    } finally {
+      setIsExpandingPOMs(false);
+    }
+  };
+
+  const handleGenerateCoreSpecs = async () => {
+    setIsGeneratingCoreSpecs(true);
+    try {
+      const { generateCoreSpecs } = await import('../services/nanobananaService');
+      const corePOMs = await generateCoreSpecs(
+        imageUrl,
+        displayData?.properties?.category || packName || 'Garment',
+        globalUnit || 'in',
+        displayData?.properties?.baseSize || 'M'
+      );
+
+      if (corePOMs && corePOMs.length > 0) {
+        setData((prev: any) => {
+          const currentMs = [...(prev.measurements || [])];
+          
+          const chestIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return (name.includes('chest') || name.includes('bust')) && !name.includes('pocket') && !name.includes('height');
+          });
+          const waistIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('waist') && !name.includes('height');
+          });
+          const hemIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('hem') && !name.includes('height') && !name.includes('rib') && !name.includes('cuff');
+          });
+          const sleeveIndex = currentMs.findIndex((m: any) => {
+            const name = (m.point || '').toLowerCase();
+            return name.includes('sleeve') && !name.includes('cuff') && !name.includes('height') && !name.includes('width') && !name.includes('opening') && !name.includes('rib');
+          });
+
+          corePOMs.forEach((coreM: any) => {
+            let targetIndex = -1;
+            if (coreM.id === 'CH001') targetIndex = chestIndex;
+            else if (coreM.id === 'WS001') targetIndex = waistIndex;
+            else if (coreM.id === 'HM001') targetIndex = hemIndex;
+            else if (coreM.id === 'SL001') targetIndex = sleeveIndex;
+
+            if (targetIndex !== -1) {
+              currentMs[targetIndex] = {
+                ...currentMs[targetIndex],
+                value: coreM.value,
+                description: coreM.description || currentMs[targetIndex].description
+              };
+            } else {
+              currentMs.push({
+                ...coreM,
+                sizes: {
+                  [displayData?.properties?.baseSize || 'M']: coreM.value
+                }
+              });
+            }
+          });
+
+          pushLog(`Successfully updated/generated core matching measurements`);
+          return { ...prev, measurements: currentMs };
+        });
+      } else {
+        alert("Gemini did not return any core measurements.");
+      }
+    } catch (e: any) {
+      alert("Failed to generate core measurements: " + e.message);
+    } finally {
+      setIsGeneratingCoreSpecs(false);
+    }
+  };
+
+  const handleClarifyInstructions = async () => {
+    if (!displayData?.measurements?.length) {
+      alert("No measurements found to clarify.");
+      return;
+    }
+    setIsClarifying(true);
+    try {
+      const { clarifyMeasurements } = await import('../services/nanobananaService');
+      const clarified = await clarifyMeasurements(
+        displayData.measurements,
+        displayData?.properties?.category || packName || 'Garment'
+      );
+
+      if (clarified && clarified.length > 0) {
+        setData((prev: any) => {
+          const currentMs = (prev.measurements || []).map((m: any) => {
+            const match = clarified.find((c: any) => c.id === m.id || c.point?.toLowerCase() === m.point?.toLowerCase());
+            if (match && match.description) {
+              return { ...m, description: match.description };
+            }
+            return m;
+          });
+          pushLog("Clarified measurement instructions successfully");
+          return { ...prev, measurements: currentMs };
+        });
+      } else {
+        alert("Failed to clarify measurement instructions.");
+      }
+    } catch (err: any) {
+      alert("Failed to clarify instructions: " + err.message);
+    } finally {
+      setIsClarifying(false);
+    }
+  };
+
   const [pendingScans, setPendingScans] = useState<any[]>([]);
   const [showScansInbox, setShowScansInbox] = useState(false);
 
@@ -471,6 +861,19 @@ export function TechPackEditor() {
           const docData = change.doc.data();
           const docId = change.doc.id;
           
+          if (docData.imageUrl && docId.startsWith(`${user.uid}_${id}_gallery_`)) {
+             const newImgUrl = docData.imageUrl;
+             setGalleryImages((prev) => {
+                if (prev.includes(newImgUrl)) return prev;
+                const newGallery = [...prev, newImgUrl];
+                setData((d: any) => ({ ...d, gallery: newGallery }));
+                return newGallery;
+             });
+             setImageUrl((prev) => prev || newImgUrl);
+             setShowAddPhotoModal(false);
+             deleteDoc(doc(db, 'companionUploads', docId)).catch(() => {});
+          }
+
           if (docData.imageUrl && docId.startsWith(`${user.uid}_${id}_detail_`)) {
              const mIdxStr = docId.split('_detail_')[1];
              const mIdx = parseInt(mIdxStr, 10);
@@ -508,22 +911,54 @@ export function TechPackEditor() {
     return () => { unsub(); unsubScans(); };
   }, [user, id]);
 
+  // Live Presence Management
   useEffect(() => {
     if (location.state?.techPack) {
       const detectedUnit = detectInitialUnit(location.state.techPack);
       setGlobalUnit(detectedUnit);
-      setData({
+      setData((prev: any) => ({
         ...location.state.techPack,
         globalUnit: detectedUnit,
+        unit: detectedUnit,
+        userId: location.state.userId,
+        isTeamEditable: location.state.isTeamEditable,
+        activityLog: location.state.activityLog
+      }));
+    }
+
+    if (!id || id === 'draft' || !user) return;
+
+    const userName = profile?.name || formatName(user.email);
+    updateTechPackPresence(id, { uid: user.uid, email: user.email || 'Teammate', name: userName });
+
+    // Send presence heartbeat every 30s
+    const heartbeat = setInterval(() => {
+      updateTechPackPresence(id, { uid: user.uid, email: user.email || 'Teammate', name: userName });
+    }, 30000);
+
+    const unsubPresence = subscribeToTechPackPresence(id, (users) => {
+      setActiveCollaborators(users);
+    });
+
+    return () => {
+      clearInterval(heartbeat);
+      unsubPresence();
+      removeTechPackPresence(id, user.uid);
+    };
+  }, [id, user, profile]);
         userId: location.state.userId,
         isTeamEditable: location.state.isTeamEditable,
         activityLog: location.state.activityLog
       });
-      const initialImage = location.state.techPack?.images?.original || location.state.image || '';
+      if (loadedUnit) {
+        setGlobalUnit(loadedUnit);
+        localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
+      }
+      const initialImage = pack?.images?.original || location.state.image || '';
       setImageUrl(initialImage);
       
 
-      const initialGallery = location.state.techPack?.gallery || [];
+      const initialGallery = pack?.gallery || [];
       if (initialImage && !initialGallery.includes(initialImage)) {
          initialGallery.unshift(initialImage);
       }
@@ -531,42 +966,205 @@ export function TechPackEditor() {
 
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
-    } else if (id && id !== 'draft') {
-      getTechPack(id).then((packInfo) => {
+    }
+
+    if (id && id !== 'draft') {
+      const unsub = subscribeToTechPack(id, (packInfo) => {
         if (packInfo) {
-          const detectedUnit = detectInitialUnit(packInfo.techPack);
-          setGlobalUnit(detectedUnit);
-          setData({
-            ...packInfo.techPack,
-            globalUnit: detectedUnit,
+          const isInputFocused = () => {
+            if (typeof document === 'undefined') return false;
+            const activeEl = document.activeElement;
+            if (!activeEl) return false;
+            const tag = activeEl.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
+          };
+
+          if (isInputFocused()) {
+            return;
+          }
+
+          const pack = packInfo.techPack || {};
+          const isLockedFromDb = (packInfo as any).isLocked !== undefined 
+            ? !!(packInfo as any).isLocked 
+            : !!pack?.isLocked;
+
+          const loadedUnit = detectInitialUnit(pack);
+
+          setData((prev: any) => ({
+            ...pack,
+            isLocked: isLockedFromDb,
+            globalUnit: loadedUnit,
+            unit: loadedUnit,
             userId: packInfo.userId,
             isTeamEditable: packInfo.isTeamEditable,
-            activityLog: packInfo.activityLog
-          });
-          const initialImage = packInfo.techPack?.images?.original || packInfo.imageUrl;
-          setImageUrl(initialImage);
-          
+            activityLog: packInfo.activityLog || prev?.activityLog
+          }));
 
-          const initialGallery = packInfo.techPack?.gallery || [];
-          if (initialImage && !initialGallery.includes(initialImage)) {
-             initialGallery.unshift(initialImage);
+          if (loadedUnit) {
+            setGlobalUnit(loadedUnit);
+            localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
           }
-          setGalleryImages(initialGallery);
+            userId: packInfo.userId,
+            isTeamEditable: packInfo.isTeamEditable,
+            activityLog: packInfo.activityLog || prev?.activityLog
+          }));
 
-          setPackName(packInfo.name);
+          if (loadedUnit) {
+            setGlobalUnit(loadedUnit);
+            localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
+          }
+          const initialImage = pack?.images?.original || packInfo.imageUrl || '';
+          
+          const docGallery: string[] = pack?.gallery || [];
+          const combinedGallery = [...docGallery];
+          if (packInfo.imageUrl && !combinedGallery.includes(packInfo.imageUrl)) {
+            combinedGallery.unshift(packInfo.imageUrl);
+          }
+          if (initialImage && !combinedGallery.includes(initialImage)) {
+            combinedGallery.unshift(initialImage);
+          }
+
+          const selImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : (initialImage || packInfo.imageUrl || combinedGallery[0] || '');
+
+          setImageUrl((prev) => {
+            if (prev && combinedGallery.includes(prev)) return prev;
+            return selImg;
+          });
+
+          setGalleryImages(combinedGallery);
+          const pName = packInfo.name || 'Untitled Garment';
+          setPackName(pName);
+
+          // Record current state hash to prevent echoing incoming Firestore updates back into save loop
+          lastSavedJsonRef.current = JSON.stringify({
+            data: pack,
+            packName: pName,
+            imageUrl: selImg,
+            galleryImages: combinedGallery
+          });
         }
         setIsLoading(false);
       });
+
+      return () => unsub();
     } else {
       setIsLoading(false);
     }
-  }, [id, location.state]);
+  }, [id]);
+
+  useEffect(() => {
+    isFirstLoad.current = true;
+  }, [id]);
+
+  // Debounced Auto-Save to Firestore (2.5-second debounce, only saves when user stops typing or blurs)
+  useEffect(() => {
+    if (isLoading || !id || id === 'draft' || isTechPackLocked || isTranslated || !user) {
+      return;
+    }
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      return;
+    }
+
+    const currentJson = JSON.stringify({
+      data,
+      packName,
+      imageUrl,
+      galleryImages
+    });
+
+    // DO NOT SAVE IF NO CHANGES WERE MADE!
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      // Do not auto-save mid-keystroke while the user is actively focused on an input element!
+      const isInputFocused = () => {
+        if (typeof document === 'undefined') return false;
+        const activeEl = document.activeElement;
+        if (!activeEl) return false;
+        const tag = activeEl.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
+      };
+
+      if (isInputFocused()) {
+        return;
+      }
+
+      try {
+        setIsSaving(true);
+        lastSavedJsonRef.current = currentJson;
+
+        const techPackDataToSave = JSON.parse(JSON.stringify(data));
+        delete techPackDataToSave.userId;
+        delete techPackDataToSave.isTeamEditable;
+        delete techPackDataToSave.activityLog;
+
+        let finalGalleryImages = [];
+        for (const gImg of galleryImages) {
+           let finalUrl = gImg;
+           if (gImg.startsWith('data:')) {
+              finalUrl = await uploadBase64Image(gImg, user.uid);
+           }
+           finalGalleryImages.push(finalUrl);
+        }
+        techPackDataToSave.gallery = finalGalleryImages;
+        if (!techPackDataToSave.images) techPackDataToSave.images = {};
+        techPackDataToSave.images.original = imageUrl;
+
+        await saveTechPack(
+          user.uid,
+          profile?.companyId || user.uid,
+          packName,
+          imageUrl || finalGalleryImages[0] || '',
+          techPackDataToSave,
+          user.email || 'Unknown',
+          id,
+          displayData.activityLog || [],
+          displayData.isTeamEditable ?? true
+        );
+      } catch (err) {
+        console.error("Debounced auto-save error:", err);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [data, packName, imageUrl, galleryImages, isLoading, id, isTechPackLocked, isTranslated, user]);
 
   const handleSyncToWovn = async () => {
     setIsSyncing(true);
     try {
       const extractMatrix = (keywords: string[]) => {
-        const m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
+        let m = null;
+        
+        const findMatch = (incl: string[], excl: string[]) => {
+          return displayData?.measurements?.find((x: any) => {
+            const name = (x.point || '').toLowerCase();
+            const matchesIncl = incl.some(k => name.includes(k));
+            const matchesExcl = excl.some(k => name.includes(k));
+            return matchesIncl && !matchesExcl;
+          });
+        };
+
+        if (keywords.includes('sleeve')) {
+          m = findMatch(['sleeve'], ['cuff', 'height', 'rib', 'width', 'opening', 'cap', 'bicep']);
+          if (!m) m = findMatch(['sleeve', 'length'], []);
+        } else if (keywords.includes('hem')) {
+          m = findMatch(['hem'], ['height', 'rib', 'cuff']);
+          if (!m) m = findMatch(['bottom', 'opening', 'sweep'], []);
+        } else if (keywords.includes('chest') || keywords.includes('bust')) {
+          m = findMatch(['chest', 'bust'], ['pocket', 'height', 'width from']);
+        } else if (keywords.includes('waist')) {
+          m = findMatch(['waist'], ['height']);
+        }
+
+        if (!m) {
+          m = displayData?.measurements?.find((x: any) => keywords.some(k => x.point?.toLowerCase().includes(k)));
+        }
+
         if (!m) return null;
         const baseSizeName = displayData?.properties?.baseSize || 'M';
         const baseVal = m.value || 0;
@@ -593,14 +1191,27 @@ export function TechPackEditor() {
          }
       }
 
+      const chest = extractMatrix(['chest', 'bust']);
+      const defaultMatrix = chest || {
+        base: 22,
+        grades: {
+          [displayData?.properties?.baseSize || 'M']: 22
+        }
+      };
+
+      const finalChest = chest || defaultMatrix;
+      const finalWaist = extractMatrix(['waist']) || finalChest;
+      const finalHem = extractMatrix(['hem']) || finalChest;
+      const finalSleeve = extractMatrix(['sleeve']);
+
       const payload = {
         name: packName,
         baseSize: displayData?.properties?.baseSize || 'M',
         globalUnit: globalUnit || 'cm',
-        chestMatrix: extractMatrix(['chest', 'bust']),
-        waistMatrix: extractMatrix(['waist']),
-        hemMatrix: extractMatrix(['hem']),
-        sleeveMatrix: extractMatrix(['sleeve']),
+        chestMatrix: finalChest,
+        waistMatrix: finalWaist,
+        hemMatrix: finalHem,
+        sleeveMatrix: finalSleeve,
         stretchCoefficient: 1.0,
         garmentType: displayData?.properties?.category || 'Top',
         audience: displayData?.properties?.audience || 'Unisex',
@@ -695,7 +1306,7 @@ export function TechPackEditor() {
         techPackDataToSave.detailImage = await uploadBase64Image(techPackDataToSave.detailImage, user.uid);
       }
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
-      techPackDataToSave.images.original = techPackDataToSave.images.original || imageUrl;
+      techPackDataToSave.images.original = imageUrl;
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
 
       if (techPackDataToSave.properties?.dominantColorways?.length) {
@@ -720,16 +1331,29 @@ export function TechPackEditor() {
         user.uid, 
         profile?.companyId || user.uid, 
         packName, 
-        finalGalleryImages[0] || imageUrl, 
+        imageUrl || finalGalleryImages[0], 
         sanitizedTechPackData, 
         user.email || 'Unknown',
         existingId,
         finalActivityLog,
         displayData.isTeamEditable ?? true
       );
-      if (id === 'draft') {
-        navigate(`/pack/${savedId}`, { replace: true, state: { techPack: techPackDataToSave, image: imageUrl, name: packName } });
-      }
+      
+      const currentFromFolder = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
+
+      // Update browser history state to ensure page refreshes display the saved values
+      navigate(`/pack/${savedId}`, { 
+        replace: true, 
+        state: { 
+          techPack: sanitizedTechPackData, 
+          image: imageUrl || finalGalleryImages[0], 
+          name: packName,
+          userId: displayData.userId || user.uid,
+          isTeamEditable: displayData.isTeamEditable ?? true,
+          activityLog: finalActivityLog,
+          fromFolderId: currentFromFolder
+        } 
+      });
     } catch (e: any) {
       console.error(e);
       alert("Failed to save tech pack: \n\n" + (e.message || String(e)));
@@ -863,6 +1487,14 @@ export function TechPackEditor() {
     setData(newData);
   };
 
+  const updateDetailModuleVal = (modIndex: number, field: string, value: any) => {
+    if (checkReadonly()) return;
+    const newData = { ...data };
+    if (!newData.detailModules) newData.detailModules = ensureDetailModules();
+    newData.detailModules[modIndex][field] = value;
+    setData(newData);
+  };
+
   const updateDetailDesc = (modIndex: number, index: number, description: string) => {
     if (checkReadonly()) return;
     const newData = { ...data };
@@ -946,99 +1578,212 @@ export function TechPackEditor() {
     );
   }
 
+  const handleBack = () => {
+    const returnFolderId = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
+    const targetFolder = returnFolderId && returnFolderId !== 'ALL' ? returnFolderId : null;
+    if (targetFolder) {
+      sessionStorage.setItem('activeFolderId', targetFolder);
+      navigate(`/?folder=${targetFolder}`);
+    } else {
+      sessionStorage.setItem('activeFolderId', 'ALL');
+      navigate('/');
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-y-4">
-        <div className="flex items-center gap-4 flex-1 min-w-[200px] mr-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors shrink-0">
-            <ArrowLeft size={20} />
-          </button>
-          <input 
-            value={packName} 
-            onChange={(e) => setPackName(e.target.value)} 
-            className="text-4xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 w-full truncate" 
-            placeholder="Garment Name"
-          />
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {pendingScans.length > 0 && (
-            <Button 
-               onClick={() => setShowScansInbox(true)} 
-               className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0"
-               title="New 3D Scans Available"
-            >
-               <Smartphone size={16} className="mr-2" />
-               <span className="font-bold text-sm hidden sm:inline">Mobile Scans</span>
-               <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
-                 {pendingScans.length}
-               </div>
-            </Button>
-          )}
-          
-          <div className="flex bg-gray-100 p-1 rounded-xl mr-2 print:hidden hidden sm:flex shrink-0">
-             <button onClick={() => setViewMode('techpack')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
-             <button onClick={() => setViewMode('linesheet')} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
-          </div>
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-1.5 shadow-sm mr-2 print:hidden">
-            <span className="text-[10px] uppercase font-bold text-gray-400">Language:</span>
-            <select 
-              className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-24"
-              value={activeLanguage}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              disabled={isTranslating}
-            >
-              {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            {isTranslating && <div className="w-3 h-3 border-2 border-gray-200 border-t-black rounded-full animate-spin" />}
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-hidden">
+      {/* Top Header Navigation & Controls */}
+      <div className="space-y-3 print:hidden">
+        {/* Tier 1: Document Title & Primary Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-sm p-3 rounded-2xl border border-gray-100 shadow-sm">
+          {/* Title & Status */}
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <button onClick={handleBack} className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-colors shrink-0" title="Back to Garment Location">
+              <ArrowLeft size={20} />
+            </button>
+            
+            <input 
+              value={packName} 
+              onChange={(e) => setPackName(e.target.value)} 
+              className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 flex-1 min-w-0 truncate" 
+              placeholder="Garment Name"
+            />
+
+            {/* Live Cloud Sync Status Badge */}
+            {id && id !== 'draft' && (
+              <div 
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border bg-gray-50 border-gray-200 text-xs font-semibold shrink-0"
+                title={isSaving ? "Saving changes to cloud..." : "All changes automatically saved to cloud"}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-blue-600 font-bold text-[11px]">Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-gray-600 font-medium text-[11px]">Saved</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
-          {isCreator && (
-            <Button 
-               onClick={toggleTeamEditable} 
-               variant="secondary" 
-               className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
-               title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
-            >
-               {displayData?.isTeamEditable === false ? <Lock size={16} /> : <Unlock size={16} />}
-            </Button>
-          )}
-          {!canEdit && (
-            <div className="bg-orange-50 border border-orange-200 text-orange-600 px-3 h-9 rounded-xl text-xs font-bold flex items-center gap-2 hidden sm:flex shrink-0">
-               <Lock size={14} /> View Only
-            </div>
-          )}
-          {canEdit && (
-            <Button onClick={handleSave} isLoading={isSaving} variant="secondary" className="px-3 md:px-4 h-9 shrink-0">
-              <div className="flex items-center gap-2 text-sm">
-                <Save size={16} />
-                <span className="hidden sm:inline font-semibold">Save</span>
+          {/* Primary Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0 justify-end">
+            {/* Active Collaborators Badges */}
+            {activeCollaborators.length > 0 && (
+              <div className="flex items-center gap-1.5 print:hidden mr-1" title="Active Collaborators on this Tech Pack">
+                <div className="flex -space-x-2 overflow-hidden">
+                  {activeCollaborators.map((c) => {
+                    const isMe = c.uid === user?.uid;
+                    const initial = (c.name || c.email || 'U').charAt(0).toUpperCase();
+                    return (
+                      <div
+                        key={c.uid}
+                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-extrabold text-white border-2 border-white shadow-sm transition-transform hover:scale-110 cursor-pointer ${
+                          isMe ? 'bg-blue-600' : 'bg-emerald-600'
+                        }`}
+                        title={`${c.name || c.email}${isMe ? ' (You)' : ' (Teammate online)'}`}
+                      >
+                        {initial}
+                      </div>
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] font-bold text-emerald-600 hidden md:inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  {activeCollaborators.length} live
+                </span>
+              </div>
+            )}
+
+            <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3.5 h-9 shadow-sm shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs font-bold rounded-xl">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Download size={14} />
+                <span>Export</span>
               </div>
             </Button>
-          )}
-          <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0" title="Activity Log">
-             <History size={16} />
-          </Button>
-          <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-black text-white hover:bg-gray-800 transition-colors">
-            <div className="flex items-center gap-2 text-sm">
-              <Download size={16} />
-              <span className="hidden sm:inline font-semibold">Export</span>
+
+            <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3.5 h-9 shadow-sm shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-bold rounded-xl">
+              <div className="flex items-center gap-1.5 font-semibold">
+                <span>Sync</span>
+              </div>
+            </Button>
+          </div>
+        </div>
+
+        {/* Tier 2: Secondary Toolbar (Scrollable on Mobile) */}
+        <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-hide py-1 px-1">
+          {/* Left Controls: View Mode & Language */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
+               <button onClick={() => setViewMode('techpack')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'techpack' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Tech Pack</button>
+               <button onClick={() => setViewMode('linesheet')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'linesheet' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Line Sheet</button>
             </div>
-          </Button>
-          <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3 md:px-4 h-9 shadow-md shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="hidden sm:inline font-semibold">Sync to WOVN</span>
+
+            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 shadow-sm shrink-0">
+              <span className="text-[10px] uppercase font-bold text-gray-400">LANG:</span>
+              <select 
+                className="text-xs font-bold text-gray-900 bg-transparent outline-none cursor-pointer w-20"
+                value={activeLanguage}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                disabled={isTranslating}
+              >
+                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              {isTranslating && <div className="w-3 h-3 border-2 border-gray-200 border-t-black rounded-full animate-spin" />}
             </div>
-          </Button>
+          </div>
+
+          {/* Right Controls: Scans, Locks, Save & History */}
+          <div className="flex items-center gap-2 shrink-0">
+            {pendingScans.length > 0 && (
+              <Button 
+                 onClick={() => setShowScansInbox(true)} 
+                 className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0 text-xs rounded-xl"
+                 title="New 3D Scans Available"
+              >
+                 <Smartphone size={15} className="mr-1.5" />
+                 <span className="font-bold">Scans</span>
+                 <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
+                   {pendingScans.length}
+                 </div>
+              </Button>
+            )}
+
+            {isCreator && (
+              <Button 
+                 onClick={toggleTeamEditable} 
+                 variant="secondary" 
+                 className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
+                 title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
+              >
+                 {displayData?.isTeamEditable === false ? <Lock size={15} /> : <Unlock size={15} />}
+              </Button>
+            )}
+
+            <Button 
+              onClick={handleSave} 
+              disabled={isTechPackLocked || isSaving} 
+              isLoading={isSaving} 
+              variant="secondary" 
+              className={`px-3 h-9 shrink-0 text-xs font-semibold rounded-xl ${
+                isTechPackLocked 
+                  ? 'opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border border-gray-200' 
+                  : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Save size={14} />
+                <span>Save</span>
+              </div>
+            </Button>
+
+            <button 
+              onClick={toggleLock} 
+              className={`px-3 h-9 shrink-0 text-xs font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
+                isTechPackLocked 
+                  ? 'bg-black text-white hover:bg-gray-800 border-black shadow-sm' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+              }`}
+              title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
+            >
+              {isTechPackLocked ? <Lock size={14} className="text-white" /> : <Unlock size={14} className="text-gray-500" />}
+              <span className={isTechPackLocked ? "text-white font-bold" : "text-gray-700 font-semibold"}>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
+            </button>
+
+            <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl" title="Activity Log">
+               <History size={15} />
+            </Button>
+          </div>
         </div>
       </div>
 
+      {isTechPackLocked && (
+        <div className="bg-gray-900 border border-gray-800 text-white px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-sm animate-in slide-in-from-top duration-200 print:hidden">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
+            <Lock size={16} className="text-gray-300 shrink-0" />
+            <span>Tech Pack is Locked — All specifications, measurements, and images are protected from updates</span>
+          </div>
+          <button 
+            onClick={toggleLock}
+            className="bg-white hover:bg-gray-100 text-gray-900 text-xs font-bold rounded-xl py-1.5 px-3.5 shrink-0 border border-white shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Unlock size={14} className="text-gray-900 shrink-0" />
+            <span>Unlock Tech Pack</span>
+          </button>
+        </div>
+      )}
+
       <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm relative">
         {/* Export Container */}
-        <div ref={exportRef} className="p-10 w-full bg-white text-gray-900 print-container">
+        <div ref={exportRef} className="p-4 sm:p-8 md:p-10 w-full bg-white text-gray-900 print-container max-w-full overflow-x-hidden">
           
           <header className="border-b border-gray-200 pb-2 mb-2 flex justify-between items-end">
             <div>
-              <h1 className="text-3xl font-serif font-extrabold tracking-tight leading-none uppercase">
+              <h1 className="text-2xl sm:text-3xl font-serif font-extrabold tracking-tight leading-none uppercase">
                  {packName ? `${packName} - ` : ''}{viewMode === 'linesheet' ? 'LINE SHEET' : 'TECH PACK'}
               </h1>
               <div className="text-gray-500 font-sans font-medium tracking-widest text-[11px] uppercase mt-1">{viewMode === 'linesheet' ? 'WHOLESALE SUMMARY' : 'GARMENT SPECIFICATION'}</div>
@@ -1050,11 +1795,11 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
+          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-3 sm:gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.style || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('style', e.target.value)}
@@ -1063,7 +1808,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.season || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('season', e.target.value)}
@@ -1072,7 +1817,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.category || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('category', e.target.value)}
@@ -1081,7 +1826,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
                <select 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
                  value={displayData?.properties?.occasion || ''}
                  onChange={(e) => updateProperty('occasion', e.target.value)}
                >
@@ -1096,11 +1841,13 @@ export function TechPackEditor() {
              <div className="space-y-0.5 relative group">
                <div className="flex items-center gap-2">
                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
-                 {!checkReadonly() && (
+                 {!isTechPackLocked && !isTranslated && (
                    <button 
                      onClick={() => {
-                       setExtractedColorways(displayData?.properties?.dominantColorways || []);
-                       setShowColorwayModal(true);
+                        setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                        setRecolorBaseImage(imageUrl);
+                        setColorwayTab('generate');
+                        setShowColorwayModal(true);
                      }}
                      className="text-[8px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm transition-colors whitespace-nowrap leading-none border border-blue-100"
                    >
@@ -1109,7 +1856,7 @@ export function TechPackEditor() {
                  )}
                </div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.colorsText || ''}
                  placeholder="Navy, Black"
                  onChange={(e) => {
@@ -1123,7 +1870,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.designer || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('designer', e.target.value)}
@@ -1132,7 +1879,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
                <input 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                  value={displayData?.properties?.gender || ''}
                  placeholder="N/A"
                  onChange={(e) => updateProperty('gender', e.target.value)}
@@ -1141,7 +1888,7 @@ export function TechPackEditor() {
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
                <select 
-                 className="w-full text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
                  value={displayData?.properties?.baseSize || 'M'}
                  onChange={(e) => updateProperty('baseSize', e.target.value)}
                >
@@ -1165,21 +1912,133 @@ export function TechPackEditor() {
                       <GarmentAnnotator 
                         imageUrl={imageUrl} 
                         measurements={displayData.measurements}
+                        isLocked={isTechPackLocked}
                         onVectorize={handleVectorize}
                         isVectorizing={isVectorizing}
+                        onGenerateMannequin={handleGenerateMannequin}
+                        onGenerateFlatlay={handleGenerateFlatlay}
+                        onSaveMannequinImage={handleSaveMannequinImage}
+                        onSaveErasedImage={handleSaveErasedImage}
+                        defaultGarmentType={displayData?.properties?.category || displayData?.properties?.garmentType}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        forceDownload(imageUrl, `${packName || 'techpack'}_main.jpg`);
-                      }}
-                      className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md text-gray-500 hover:text-black hover:bg-gray-50 opacity-0 group-hover/mainimg:opacity-100 transition-opacity print:hidden border border-gray-200 z-10"
-                      title="Download Main Image"
-                    >
-                      <Download size={16} />
-                    </button>
+                    {/* Main Image Download Menu */}
+                    <div ref={downloadMenuRef} className="absolute top-3 right-3 z-20 print:hidden opacity-0 group-hover/mainimg:opacity-100 transition-opacity">
+                      <div className="flex items-center bg-white/95 backdrop-blur-sm rounded-full shadow-md border border-gray-200 p-0.5 hover:shadow-lg transition-all">
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (isDownloadingMain) return;
+                            try {
+                              setIsDownloadingMain(true);
+                              await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'large' });
+                            } catch (err) {
+                              console.error('Download failed:', err);
+                              alert('Download failed. Please try again.');
+                            } finally {
+                              setIsDownloadingMain(false);
+                            }
+                          }}
+                          disabled={isDownloadingMain}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold text-gray-700 hover:text-black hover:bg-gray-100 transition-colors"
+                          title="Download Large Full-Size PNG (2.5K Studio Quality)"
+                        >
+                          {isDownloadingMain ? (
+                            <Loader2 size={14} className="animate-spin text-black" />
+                          ) : (
+                            <Download size={14} />
+                          )}
+                          <span className="text-[11px] font-bold">PNG</span>
+                        </button>
+                        <div className="w-[1px] h-4 bg-gray-200 my-auto" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDownloadMenu(!showDownloadMenu);
+                          }}
+                          className="p-1.5 hover:bg-gray-100 rounded-full text-gray-500 hover:text-black transition-colors"
+                          title="Select PNG Resolution (2.5K, 4K, Original)"
+                        >
+                          <ChevronDown size={13} className={`transition-transform duration-200 ${showDownloadMenu ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Dropdown Menu */}
+                      <AnimatePresence>
+                        {showDownloadMenu && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 4 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute right-0 top-full mt-1 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 p-2 z-30 flex flex-col gap-1 text-left"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider text-gray-400 border-b border-gray-100 mb-1">
+                              Download PNG Options
+                            </div>
+                            
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'large' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>✨ Large PNG (2.5K Studio)</span>
+                                <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-bold">2560px</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">High-definition studio print quality (Recommended)</span>
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: '4k' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>🌟 Ultra 4K PNG</span>
+                                <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-bold">4096px</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">Maximum definition for tech pack spec sheets</span>
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                setShowDownloadMenu(false);
+                                setIsDownloadingMain(true);
+                                try {
+                                  await downloadAsLargePng(imageUrl, `${packName || 'techpack'}_main`, { resolution: 'original' });
+                                } finally {
+                                  setIsDownloadingMain(false);
+                                }
+                              }}
+                              className="flex flex-col text-left px-3 py-2 rounded-xl hover:bg-gray-50 text-gray-800 transition-colors group/item"
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-gray-900">
+                                <span>📷 Original Resolution PNG</span>
+                                <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-bold">1:1 Native</span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 mt-0.5">Exact unscaled native pixels converted to PNG</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
 
                   {/* Photo Gallery Strip */}
@@ -1187,14 +2046,19 @@ export function TechPackEditor() {
                      {galleryImages.map((gImg, idx) => (
                        <div 
                           key={idx} 
-                          draggable
+                          draggable={!isTechPackLocked}
                           onDragStart={(e) => {
+                            if (isTechPackLocked || checkReadonly()) {
+                              e.preventDefault();
+                              return;
+                            }
                             e.dataTransfer.setData('text/plain', idx.toString());
                             e.dataTransfer.effectAllowed = 'move';
                           }}
                           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                           onDrop={async (e) => {
                             e.preventDefault();
+                            if (isTechPackLocked || checkReadonly()) return;
                             const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
                             if (isNaN(fromIdx) || fromIdx === idx) return;
                             const newGallery = [...galleryImages];
@@ -1220,17 +2084,18 @@ export function TechPackEditor() {
                             }
                           }}
 
-                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-move overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
+                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
                           onClick={() => setImageUrl(gImg)}
                        >
                           <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
                           {idx === 0 && (
                               <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm">MAIN</div>
                            )}
-                            {idx !== 0 && (
+                            {idx !== 0 && !isTechPackLocked && (
                               <button 
                                 onClick={async (e) => {
                                   e.stopPropagation();
+                                  if (isTechPackLocked || checkReadonly()) return;
                                   const newGallery = [...galleryImages];
                                   const [moved] = newGallery.splice(idx, 1);
                                   newGallery.unshift(moved);
@@ -1257,69 +2122,104 @@ export function TechPackEditor() {
                               </button>
                            )}
                            <button
-                             onClick={(e) => {
+                             onClick={async (e) => {
                                e.stopPropagation();
-                               forceDownload(gImg, `${packName || 'techpack'}_image_${idx + 1}.jpg`);
-                             }}
-                             className="absolute bottom-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                             title="Download Image"
-                           >
-                             <Download size={12} />
-                           </button>
-                           <button
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
-                                  const newGallery = [...galleryImages];
-                                  newGallery.splice(idx, 1);
-                                  setGalleryImages(newGallery);
-                                  setData((d: any) => ({ ...d, gallery: newGallery }));
-                                  if (imageUrl === gImg) {
-                                     setImageUrl(newGallery[0] || '');
-                                  }
+                               if (downloadingGalleryIdx !== null) return;
+                               try {
+                                 setDownloadingGalleryIdx(idx);
+                                 await downloadAsLargePng(gImg, `${packName || 'techpack'}_image_${idx + 1}`, { resolution: 'large' });
+                               } catch (err) {
+                                 console.error('Gallery image download failed:', err);
+                                 alert('Download failed. Please try again.');
+                               } finally {
+                                 setDownloadingGalleryIdx(null);
                                }
                              }}
-                             className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                             title="Delete Image"
+                             disabled={downloadingGalleryIdx === idx}
+                             className="absolute bottom-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                             title="Download Large Full-Size PNG (2.5K Studio Quality)"
                            >
-                             <X size={12} />
+                             {downloadingGalleryIdx === idx ? (
+                               <Loader2 size={10} className="animate-spin" />
+                             ) : (
+                               <Download size={12} />
+                             )}
                            </button>
+                           {!isTechPackLocked && (
+                             <button
+                               onClick={async (e) => {
+                                 e.stopPropagation();
+                                 if (isTechPackLocked || checkReadonly()) return;
+                                 if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                                    const newGallery = [...galleryImages];
+                                    newGallery.splice(idx, 1);
+                                    setGalleryImages(newGallery);
+                                    setData((d: any) => ({ ...d, gallery: newGallery }));
+                                    const newMainImg = imageUrl === gImg ? (newGallery[0] || '') : imageUrl;
+                                    if (imageUrl === gImg) {
+                                       setImageUrl(newMainImg);
+                                    }
+                                    if (id && id !== 'draft') {
+                                       try {
+                                         await updateDoc(doc(db, 'techPacks', id), {
+                                            imageUrl: newMainImg,
+                                            "techPack.gallery": newGallery
+                                         });
+                                       } catch (err) {
+                                         console.error("Auto-sync image deletion error:", err);
+                                       }
+                                    }
+                                 }
+                               }}
+                               className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                               title="Delete Image"
+                             >
+                               <X size={12} />
+                             </button>
+                           )}
                        </div>
-                     ))}
-                     <label className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group">
-                        <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
-                        <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
-                           if (e.target.files) {
-                              const files = Array.from(e.target.files);
-                              const promises = files.map(file => compressImageFile(file, 1600));
-                              const newImages = await Promise.all(promises);
-                              const newGallery = [...galleryImages, ...newImages];
-                              setGalleryImages(newGallery);
-                              if (!imageUrl && newImages.length > 0) {
-                                setImageUrl(newImages[0]);
-                              }
-                           }
-                        }} />
-                     </label>
-                  </div>
+                      ))}
+                      {!isTechPackLocked && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (checkReadonly()) return;
+                            const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                            setGalleryScanSessionId(session);
+                            setShowAddPhotoModal(true);
+                          }}
+                          className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
+                          title="Add Image or Scan with Phone"
+                        >
+                           <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
+                        </button>
+                      )}
+                   </div>
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
-                  <label className="cursor-pointer group flex flex-col items-center gap-4">
-                     <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
-                        <span className="text-2xl leading-none font-bold">+</span>
-                     </div>
-                     <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
-                     <input type="file" multiple accept="image/*" className="hidden" onChange={async (e) => {
-                         if (e.target.files && e.target.files.length > 0) {
-                            const files = Array.from(e.target.files);
-                            const promises = files.map(file => compressImageFile(file, 1600));
-                            const newImages = await Promise.all(promises);
-                            setGalleryImages(newImages);
-                            setImageUrl(newImages[0]);
-                         }
-                      }} />
-                  </label>
+                  {!isTechPackLocked ? (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (checkReadonly()) return;
+                        const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                        setGalleryScanSessionId(session);
+                        setShowAddPhotoModal(true);
+                      }}
+                      className="cursor-pointer group flex flex-col items-center gap-4"
+                    >
+                       <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-200 flex items-center justify-center group-hover:shadow-md transition-all text-gray-400 group-hover:text-black">
+                          <span className="text-2xl leading-none font-bold">+</span>
+                       </div>
+                       <span className="text-sm font-bold text-gray-500 group-hover:text-black">Upload Garment Photo</span>
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-gray-400">
+                      <Lock size={24} />
+                      <span className="text-xs font-bold uppercase tracking-wider">Garment Photo Locked</span>
+                    </div>
+                  )}
                 </div>
               )}
                     </div>
@@ -1339,60 +2239,59 @@ export function TechPackEditor() {
                     </div>
                   </div>
 
-                  {isCreator && (
-                    <div className="print-force-new-page">
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
-                        <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
-                      </div>
-                      <div className="text-xs print:text-[10px] text-gray-700 w-full block">
-                        <RichTextCallouts 
-                          className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
-                          value={
-                            typeof displayData.callouts === 'string' 
-                              ? displayData.callouts 
-                              : (Array.isArray(displayData.callouts) && displayData.callouts.length > 0)
-                                ? displayData.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
-                                : ''
-                          }
-                          onChange={(val: string) => updateConstruction(val)}
-                        />
-                      </div>
+                  <div className="print-force-new-page">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
+                      <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
                     </div>
-                  )}
+                    <div className="text-xs print:text-[10px] text-gray-700 w-full block">
+                      <RichTextCallouts 
+                        className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
+                        readOnly={!canEdit}
+                        value={
+                          typeof displayData.callouts === 'string' 
+                            ? displayData.callouts 
+                            : (Array.isArray(displayData.callouts) && displayData.callouts.length > 0)
+                              ? displayData.callouts.map((c: any, i: number) => `${i + 1}. ${c.description || ''}`).join('\n')
+                              : ''
+                        }
+                        onChange={(val: string) => updateConstruction(val)}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right Column (Digital) / Bottom Column (Print) */}
                 <div className="col-span-12 lg:col-span-7 print:w-full space-y-4">
                   {/* Measurements Table */}
               <div className="print-force-new-page">
-                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex items-center justify-between leading-tight">
+                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 leading-tight">
                   <span>Measurements <span className="text-sm font-sans tracking-wide text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span></span>
-                  <button onClick={toggleUnit} className="print:hidden text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
-                    TO {globalUnit === 'in' ? 'CM' : 'INCHES'}
-                  </button>
+                    <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
+                      TO {globalUnit === 'in' ? 'CM' : 'INCHES'}
+                    </button>
                 </h3>
 
-                <div className="flex items-center justify-between mb-4 print:hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 print:hidden">
                   <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 overflow-x-auto max-w-full">
                     {SIZES.map(size => (
                       <button 
                         key={size}
                         onClick={() => setActiveSizeTab(size)}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeSizeTab === size ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
                       >
                         {size} {displayData?.properties?.baseSize === size || (!displayData?.properties?.baseSize && size === 'M') ? '(Base)' : ''}
                       </button>
                     ))}
                   </div>
                   {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (
-                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 ml-4 shrink-0">
+                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 shrink-0 text-xs">
                       <Calculator size={14} className="mr-1 inline-block"/> Compute Size {activeSizeTab}
                     </Button>
                   )}
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-xs print:text-[10px] text-left">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
+                  <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-2 py-1 font-medium w-24">DIM (ID)</th>
@@ -1431,8 +2330,8 @@ export function TechPackEditor() {
               {/* Style BOM (Bill of Materials) Table */}
               <div className="print-force-new-page">
                 <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 leading-tight">Style BOM (Bill of Materials)</h3>
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <table className="w-full text-xs print:text-[10px] text-left">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
+                  <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="px-2 py-1 font-medium w-28">Category</th>
@@ -1492,37 +2391,45 @@ export function TechPackEditor() {
               <div className="border-b border-gray-200 pb-1 mb-4 flex items-center justify-between">
                 <input 
                   value={mod.title || ''} 
+                  disabled={isTechPackLocked}
                   onChange={(e) => updateDetailModuleStr(mIdx, 'title', e.target.value)} 
-                  className="w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  className={`w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent ${isTechPackLocked ? 'cursor-default' : 'hover:border-gray-300 focus:border-black'} outline-none transition-colors`}
                   placeholder="Detail Closeups"
                 />
-                <div className="flex items-center ml-4 gap-2 opacity-0 group-hover/mod:opacity-100 transition-opacity print:hidden shrink-0">
-                   {mIdx > 0 && (
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         const temp = newData.detailModules[mIdx - 1];
-                         newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
-                         newData.detailModules[mIdx] = temp;
-                         setData(newData);
-                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowUp size={14} /></button>
-                   )}
-                   {mIdx < dModules.length - 1 && (
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         const temp = newData.detailModules[mIdx + 1];
-                         newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
-                         newData.detailModules[mIdx] = temp;
-                         setData(newData);
-                      }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors"><ArrowDown size={14} /></button>
-                   )}
-                   {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
-                      <button onClick={() => {
-                         const newData = { ...data };
-                         newData.detailModules.splice(mIdx, 1);
-                         setData(newData);
-                      }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1"><X size={14} /></button>
-                   )}
-                </div>
+                {!isTechPackLocked && (
+                  <div className="flex items-center ml-4 gap-2 opacity-0 group-hover/mod:opacity-100 transition-opacity print:hidden shrink-0">
+                     {mIdx > 0 && (
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           const newData = { ...data };
+                           const temp = newData.detailModules[mIdx - 1];
+                           newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
+                           newData.detailModules[mIdx] = temp;
+                           setData(newData);
+                        }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Up"><ArrowUp size={14} /></button>
+                     )}
+                     {mIdx < dModules.length - 1 && (
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           const newData = { ...data };
+                           const temp = newData.detailModules[mIdx + 1];
+                           newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
+                           newData.detailModules[mIdx] = temp;
+                           setData(newData);
+                        }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Down"><ArrowDown size={14} /></button>
+                     )}
+                     {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
+                        <button onClick={() => {
+                           if (checkReadonly()) return;
+                           if (window.confirm('Are you sure you want to delete this entire detail module? This cannot be undone.')) {
+                              const newData = { ...data };
+                              newData.detailModules.splice(mIdx, 1);
+                              setData(newData);
+                           }
+                        }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1" title="Delete Detail Module"><X size={14} /></button>
+                     )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-12 gap-6 bg-white border border-gray-200 rounded-2xl p-6 print:border-none print:p-0 print:break-inside-avoid">
                  <div className="col-span-12 md:col-span-7 print:col-span-8 space-y-4">
@@ -1535,16 +2442,21 @@ export function TechPackEditor() {
                                    images={images} 
                                    details={mod.details || []}
                                    onUpdateDetail={(i, d) => updateDetailObj(mIdx, i, d)}
+                                   isLocked={isTechPackLocked || !!mod.isLocked}
+                                   onToggleLock={(locked) => updateDetailModuleVal(mIdx, 'isLocked', locked)}
                                    onRemoveImage={(imgIdx) => {
-                                      const newImages = [...images];
-                                      newImages.splice(imgIdx, 1);
-                                      const newData = { ...data };
-                                      newData.detailModules[mIdx].detailImages = newImages;
-                                      newData.detailModules[mIdx].detailImage = newImages[0] || '';
-                                      setData(newData);
+                                      if (isTechPackLocked || checkReadonly()) return;
+                                      if (window.confirm('Are you sure you want to remove this closeup photo? This cannot be undone.')) {
+                                         const newImages = [...images];
+                                         newImages.splice(imgIdx, 1);
+                                         const newData = { ...data };
+                                         newData.detailModules[mIdx].detailImages = newImages;
+                                         newData.detailModules[mIdx].detailImage = newImages[0] || '';
+                                         setData(newData);
+                                      }
                                    }}
-                                   onAddImageClick={() => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
-                                   qrTriggerNode={user && (id || id === 'draft') ? (
+                                   onAddImageClick={isTechPackLocked ? undefined : () => document.getElementById(`hidden-detail-upload-${mIdx}`)?.click()}
+                                   qrTriggerNode={user && (id || id === 'draft') && !isTechPackLocked ? (
                                       <button onClick={() => setQrModalUrl(`${window.location.origin}/detail-camera/${user.uid}_${id}_detail_${mIdx}`)} className="group relative w-14 h-14 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-1 items-center justify-center shrink-0 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer">
                                          <QrCode className="w-5 h-5 text-gray-400 group-hover:text-black transition-colors" />
                                          <span className="text-[8px] font-bold text-gray-500 group-hover:text-black">CONNECT</span>
@@ -1554,7 +2466,7 @@ export function TechPackEditor() {
                                  <input type="file" id={`hidden-detail-upload-${mIdx}`} className="hidden" accept="image/*" multiple onChange={async (e) => {
                                     if (e.target.files && e.target.files.length > 0) {
                                        const files = Array.from(e.target.files);
-                                       const promises = files.map(file => compressImageFile(file, 1600));
+                                       const promises = files.map(file => compressImageFile(file, 2048));
                                        const compressedDataUrLs = await Promise.all(promises);
                                        
                                        setData((prev: any) => {
@@ -1664,6 +2576,34 @@ export function TechPackEditor() {
                                    <div className="w-8 h-6 bg-white border border-gray-200 rounded shrink-0 p-0.5 shadow-sm">
                                       <img src={detail.iconUrl} className="w-full h-full object-contain pointer-events-none" />
                                    </div>
+                                )}
+                                {detail.position && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const hasLine = !!detail.lineEndPosition;
+                                      const updatedDetail = { ...detail };
+                                      if (hasLine) {
+                                        updatedDetail.lineEndPosition = null;
+                                      } else {
+                                        const basePos = detail.position || { x: 50, y: 50 };
+                                        updatedDetail.lineEndPosition = { 
+                                          x: Math.max(5, Math.min(95, basePos.x + 10)), 
+                                          y: Math.max(5, Math.min(95, basePos.y + 10)) 
+                                        };
+                                      }
+                                      updateDetailObj(mIdx, index, updatedDetail);
+                                    }}
+                                    className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-colors shrink-0 flex items-center gap-1 border ${
+                                      detail.lineEndPosition
+                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                                    title={detail.lineEndPosition ? "Remove Callout Line" : "Add Callout Line"}
+                                  >
+                                    <TrendingUp size={12} className={detail.lineEndPosition ? "text-red-500" : "text-gray-400"} />
+                                    {detail.lineEndPosition ? "Callout" : "Line"}
+                                  </button>
                                 )}
                               </div>
                               <button 
@@ -1911,133 +2851,334 @@ export function TechPackEditor() {
       </Modal>
 
       {/* Colorway Mockup Dialog */}
-      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Extraction" maxWidth="max-w-2xl">
-         <div className="flex flex-col gap-6 p-4">
-            <label className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 group bg-gray-50/30 transition-all">
-                <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100 mb-3 group-hover:scale-110 transition-transform">
-                    <Scan className="text-blue-500" size={24} />
+      <Modal isOpen={showColorwayModal} onClose={() => { setShowColorwayModal(false); setColorwayMockupImage(null); setExtractedColorways([]); }} title="Colorway Management" maxWidth="max-w-3xl">
+          <div className="flex flex-col gap-6 p-4">
+             {/* Tabs Header */}
+             <div className="flex border-b border-gray-200">
+                <button
+                   onClick={() => setColorwayTab('generate')}
+                   className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${colorwayTab === 'generate' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                   <Sparkles size={16} /> Generate Colorways
+                </button>
+                <button
+                   onClick={() => setColorwayTab('upload')}
+                   className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center justify-center gap-2 ${colorwayTab === 'upload' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                >
+                   <Upload size={16} /> Upload Swatches
+                </button>
+             </div>
+
+             {colorwayTab === 'generate' ? (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                   {/* Left Column: Base Image Selection */}
+                   <div className="md:col-span-5 space-y-4">
+                      <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 block">Base Mockup Image</label>
+                      <div className="aspect-[3/4] bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden flex items-center justify-center relative p-2">
+                         {recolorBaseImage ? (
+                            <img src={recolorBaseImage} className="w-full h-full object-contain" alt="Recolor Base" />
+                         ) : (
+                            <div className="text-gray-400 text-xs italic">No base image selected</div>
+                         )}
+                         {isRecoloring && (
+                            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+                               <div className="text-xs font-bold text-black uppercase tracking-widest animate-pulse">Recoloring Garment...</div>
+                            </div>
+                         )}
+                      </div>
+                      
+                      {galleryImages.length > 1 && (
+                         <div className="space-y-1.5">
+                            <label className="text-[9px] uppercase tracking-widest font-bold text-gray-400 block">Select Base Image</label>
+                            <div className="flex gap-2 overflow-x-auto pb-1 max-w-full">
+                               {galleryImages.map((img, idx) => (
+                                  <button
+                                     key={idx}
+                                     onClick={() => setRecolorBaseImage(img)}
+                                     className={`w-12 h-16 border rounded-lg overflow-hidden flex-shrink-0 bg-gray-50 p-0.5 transition-all ${recolorBaseImage === img ? 'border-black ring-2 ring-black/10' : 'border-gray-200 hover:border-gray-400'}`}
+                                  >
+                                     <img src={img} className="w-full h-full object-contain" />
+                                  </button>
+                               ))}
+                            </div>
+                         </div>
+                      )}
+                   </div>
+
+                   {/* Right Column: Colors Picker and Presets */}
+                   <div className="md:col-span-7 space-y-6">
+                      <div className="space-y-4">
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Color Name</label>
+                            <input
+                               type="text"
+                               value={recolorName}
+                               onChange={e => setRecolorName(e.target.value)}
+                               className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm outline-none focus:border-black transition-all"
+                               placeholder="e.g. Cobalt Blue"
+                            />
+                         </div>
+
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2 block">Select Color Code</label>
+                            <div className="flex gap-3">
+                               <div className="w-12 h-12 rounded-xl border border-gray-200 overflow-hidden relative flex-shrink-0">
+                                  <input
+                                     type="color"
+                                     value={recolorHex}
+                                     onChange={e => setRecolorHex(e.target.value)}
+                                     className="absolute inset-0 w-full h-full p-0 border-0 cursor-pointer scale-150"
+                                  />
+                               </div>
+                               <input
+                                  type="text"
+                                  value={recolorHex}
+                                  onChange={e => setRecolorHex(e.target.value)}
+                                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 text-sm font-mono outline-none focus:border-black transition-all"
+                                  placeholder="#FFFFFF"
+                               />
+                            </div>
+                         </div>
+
+                         <div>
+                            <label className="text-[10px] uppercase tracking-widest font-bold text-gray-400 mb-2.5 block">Premium Color Presets</label>
+                            <div className="grid grid-cols-4 gap-2">
+                               {[
+                                  { name: 'Cobalt Blue', hex: '#1D4ED8' },
+                                  { name: 'Forest Green', hex: '#065F46' },
+                                  { name: 'Rust Orange', hex: '#9A3412' },
+                                  { name: 'Terracotta', hex: '#C86B4D' },
+                                  { name: 'Sand Beige', hex: '#D0C9B6' },
+                                  { name: 'Charcoal Grey', hex: '#374151' },
+                                  { name: 'Burgundy', hex: '#5F1D33' },
+                                  { name: 'Lavender', hex: '#7C3AED' }
+                               ].map((preset, idx) => (
+                                  <button
+                                     key={idx}
+                                     onClick={() => {
+                                        setRecolorHex(preset.hex);
+                                        setRecolorName(preset.name);
+                                     }}
+                                     className="flex items-center gap-1.5 p-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all text-left"
+                                  >
+                                     <span className="w-4 h-4 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: preset.hex }}></span>
+                                     <span className="text-[10px] font-bold text-gray-700 truncate">{preset.name}</span>
+                                  </button>
+                               ))}
+                            </div>
+                         </div>
+                      </div>
+
+                      <Button
+                         onClick={handleRecolorAndExtract}
+                         disabled={isRecoloring || !recolorBaseImage}
+                         isLoading={isRecoloring}
+                         className="w-full bg-black text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+                      >
+                         <Sparkles size={14} /> Generate Recolor Mockup
+                      </Button>
+                   </div>
                 </div>
-                <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
-                <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
-                   if (e.target.files && e.target.files.length > 0) {
-                      const files = Array.from(e.target.files);
-                      const queueItems = files.map((file, i) => ({
-                          id: `queue_${Date.now()}_${i}`,
-                          isPending: true,
-                          image: URL.createObjectURL(file), // instant local preview
-                          file: file,
-                          name: 'Pending...'
-                      }));
+             ) : (
+                <label className="w-full h-40 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 group bg-gray-50/30 transition-all">
+                    <div className="bg-white p-3 rounded-full shadow-sm border border-gray-100 mb-3 group-hover:scale-110 transition-transform">
+                        <Scan className="text-blue-500" size={24} />
+                    </div>
+                    <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
+                    <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                       if (e.target.files && e.target.files.length > 0) {
+                          const files = Array.from(e.target.files);
+                          const queueItems = files.map((file, i) => ({
+                              id: `queue_${Date.now()}_${i}`,
+                              isPending: true,
+                              image: URL.createObjectURL(file),
+                              file: file,
+                              name: 'Pending...'
+                          }));
 
-                      setExtractedColorways((prev: any) => [...prev, ...queueItems]);
+                          setExtractedColorways((prev: any) => [...prev, ...queueItems]);
 
-                      for (const item of queueItems) {
-                          // Update status to analyzing
-                          setExtractedColorways((prev: any) => prev.map((c: any) => 
-                              c.id === item.id ? { ...c, name: 'Analyzing...' } : c
-                          ));
+                          for (const item of queueItems) {
+                              setExtractedColorways((prev: any) => prev.map((c: any) => 
+                                  c.id === item.id ? { ...c, name: 'Analyzing...' } : c
+                              ));
 
-                          try {
-                              const base64 = await compressImageFile(item.file, 1600);
-                              const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
-                              const response = await fetch(endpoint, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ imageBase64: base64 })
-                              });
-                              const resData = await response.json();
-                              
-                              if (resData.success && resData.colorways) {
-                                  const primaryColor = resData.colorways[0];
-                                  if (primaryColor) {
-                                      setExtractedColorways((prev: any) => prev.map((c: any) => 
-                                          c.id === item.id ? { ...primaryColor, image: base64 } : c
-                                      ));
+                              try {
+                                  const base64 = await compressImageFile(item.file, 2048);
+                                  const endpoint = 'https://wovn-apparel.vercel.app/api/extract-colors';
+                                  const response = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ imageBase64: base64 })
+                                  });
+                                  const resData = await response.json();
+                                  
+                                  if (resData.success && resData.colorways) {
+                                      const primaryColor = resData.colorways[0];
+                                      if (primaryColor) {
+                                          setExtractedColorways((prev: any) => prev.map((c: any) => 
+                                              c.id === item.id ? { ...primaryColor, image: base64 } : c
+                                          ));
+                                      } else {
+                                          setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
+                                      }
                                   } else {
                                       setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                                   }
-                              } else {
+                              } catch (err) {
                                   setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                               }
-                          } catch (err) {
-                              setExtractedColorways((prev: any) => prev.filter((c: any) => c.id !== item.id));
                           }
+                       }
+                    }} />
+                </label>
+             )}
+
+             {extractedColorways.length > 0 && (
+                 <div className="w-full mt-2">
+                     <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
+                     <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
+                         {extractedColorways.map((cw: any, i: number) => (
+                             <div key={i} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
+                                 {cw.image && (
+                                     <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center border border-gray-100 shadow-inner">
+                                         <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
+                                     </div>
+                                 )}
+                                 <div className="flex-1 min-w-0">
+                                     {cw.isPending ? (
+                                         <div className="flex items-center gap-3">
+                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                             <div className="text-sm font-medium text-blue-600 animate-pulse">{cw.name}</div>
+                                         </div>
+                                     ) : (
+                                         <>
+                                             <input 
+                                                 className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
+                                                 value={cw.name}
+                                                 onChange={(e) => {
+                                                     const updated = [...extractedColorways];
+                                                     updated[i] = { ...updated[i], name: e.target.value };
+                                                     setExtractedColorways(updated);
+                                                 }}
+                                                 placeholder="Color Name"
+                                             />
+                                             <div className="flex items-center gap-2 flex-wrap">
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab?.[0]?.toFixed(1)}</div>
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab?.[1]?.toFixed(1)}</div>
+                                                 <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab?.[2]?.toFixed(1)}</div>
+                                             </div>
+                                         </>
+                                     )}
+                                 </div>
+                                 <button 
+                                     className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
+                                     onClick={() => {
+                                         setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
+                                     }}
+                                     title="Remove Colorway"
+                                 >
+                                     <X size={16} />
+                                 </button>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+             )}
+
+             {extractedColorways.length > 0 && (
+                 <button
+                     className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                     disabled={extractedColorways.some((cw: any) => cw.isPending)}
+                     onClick={() => {
+                         const names = extractedColorways.map((c: any) => c.name).join(', ');
+                         updateProperty('colorsText', names);
+                         updateProperty('dominantColorways', extractedColorways);
+                         
+                         // Automatically append newly generated colorway mockups to the tech pack's main photo gallery
+                         const newImages = extractedColorways.map((c: any) => c.image).filter((img: string) => img && !galleryImages.includes(img));
+                         if (newImages.length > 0) {
+                            setGalleryImages((prev: string[]) => {
+                               const updated = [...prev, ...newImages];
+                               setData((d: any) => ({ ...d, gallery: updated }));
+                               return updated;
+                            });
+                         }
+
+                         setShowColorwayModal(false);
+                         setColorwayMockupImage(null);
+                         setExtractedColorways([]);
+                     }}
+                 >
+                     Apply to Tech Pack
+                 </button>
+             )}
+           </div>
+        </Modal>
+
+        {/* Add Photo Modal (Computer Upload or Phone Camera QR) */}
+        <Modal
+          isOpen={showAddPhotoModal}
+          onClose={() => setShowAddPhotoModal(false)}
+          title="Add Garment Photo"
+        >
+          <div className="space-y-6 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Option 1: Computer Upload */}
+              <label className="p-6 border-2 border-gray-200 hover:border-black rounded-2xl cursor-pointer flex flex-col items-center justify-center text-center transition-all group bg-gray-50/50 hover:bg-gray-50">
+                <Upload size={36} className="text-gray-400 group-hover:text-black mb-3 transition-colors" />
+                <span className="font-bold text-gray-900 text-sm">Upload from Computer</span>
+                <span className="text-xs text-gray-500 mt-1">Select files from your device</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      const files = Array.from(e.target.files);
+                      const promises = files.map(file => compressImageFile(file, 2048));
+                      const newImages = await Promise.all(promises);
+                      const newGallery = [...galleryImages, ...newImages];
+                      setGalleryImages(newGallery);
+                      setData((d: any) => ({ ...d, gallery: newGallery }));
+                      if (!imageUrl && newImages.length > 0) {
+                        setImageUrl(newImages[0]);
                       }
-                   }
-                }} />
-            </label>
+                      setShowAddPhotoModal(false);
+                    }
+                  }}
+                />
+              </label>
 
-            {extractedColorways.length > 0 && (
-                <div className="w-full mt-2">
-                    <h4 className="text-sm font-bold text-gray-800 mb-3 uppercase tracking-wider text-center border-t border-gray-100 pt-4">Extracted Colors</h4>
-                    <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto p-1">
-                        {extractedColorways.map((cw: any, i: number) => (
-                            <div key={i} className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
-                                {cw.image && (
-                                    <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 bg-gray-50 flex items-center justify-center border border-gray-100 shadow-inner">
-                                        <img src={cw.image} className="max-w-full max-h-full object-contain" alt={cw.name} />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    {cw.isPending ? (
-                                        <div className="flex items-center gap-3">
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                            <div className="text-sm font-medium text-blue-600 animate-pulse">{cw.name}</div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <input 
-                                                className="text-base font-bold text-gray-900 leading-tight mb-2 truncate bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors w-full"
-                                                value={cw.name}
-                                                onChange={(e) => {
-                                                    const updated = [...extractedColorways];
-                                                    updated[i] = { ...updated[i], name: e.target.value };
-                                                    setExtractedColorways(updated);
-                                                }}
-                                                placeholder="Color Name"
-                                            />
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">L: {cw.lab?.[0]?.toFixed(1)}</div>
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">A: {cw.lab?.[1]?.toFixed(1)}</div>
-                                                <div className="text-xs text-gray-600 font-mono bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">B: {cw.lab?.[2]?.toFixed(1)}</div>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                                <button 
-                                    className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100 hover:text-red-700 shrink-0"
-                                    onClick={() => {
-                                        setExtractedColorways(extractedColorways.filter((_: any, index: number) => index !== i));
-                                    }}
-                                    title="Remove Colorway"
-                                >
-                                    <X size={16} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {extractedColorways.length > 0 && (
-                <button
-                    className="mt-4 w-full py-3 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={extractedColorways.some((cw: any) => cw.isPending)}
-                    onClick={() => {
-                        const names = extractedColorways.map((c: any) => c.name).join(', ');
-                        updateProperty('colorsText', names);
-                        updateProperty('dominantColorways', extractedColorways);
-                        setShowColorwayModal(false);
-                        setColorwayMockupImage(null);
-                        setExtractedColorways([]);
-                    }}
-                >
-                    Apply to Tech Pack
-                </button>
-            )}
-         </div>
-      </Modal>
-    </div>
+              {/* Option 2: Phone Camera QR Code */}
+              <div className="p-6 border-2 border-blue-200 bg-blue-50/40 rounded-2xl flex flex-col items-center justify-center text-center">
+                <Smartphone size={32} className="text-blue-600 mb-1" />
+                <span className="font-bold text-gray-900 text-sm">Scan with Phone Camera</span>
+                <span className="text-xs text-gray-500 mt-0.5 mb-3">Snap 1 photo & crop directly on phone</span>
+                
+                {galleryScanSessionId && (
+                  <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm flex flex-col items-center">
+                    <QRCodeSVG
+                      value={`${window.location.origin}/single-scan/${galleryScanSessionId}`}
+                      size={150}
+                    />
+                    <a
+                      href={`${window.location.origin}/single-scan/${galleryScanSessionId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-bold text-blue-600 hover:underline mt-2.5 flex items-center gap-1"
+                    >
+                      <span>Open Camera Link</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal>
+     </div>
   );
 }

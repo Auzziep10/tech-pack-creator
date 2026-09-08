@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Target, X, Plus } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Target, X, Plus, Lock, Unlock } from 'lucide-react';
 
 interface Point {
   x: number;
@@ -10,6 +10,7 @@ export interface DetailItem {
   id: string; // e.g., "1", "2"
   description: string;
   position: Point | null; // null if not placed yet
+  lineEndPosition?: Point | null; // end of callout line
   imageIndex?: number;
   iconUrl?: string;
 }
@@ -21,15 +22,62 @@ interface DetailAnnotatorProps {
   onRemoveImage?: (index: number) => void;
   onAddImageClick?: () => void;
   qrTriggerNode?: React.ReactNode;
+  isLocked?: boolean;
+  onToggleLock?: (locked: boolean) => void;
 }
 
-export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage, onAddImageClick, qrTriggerNode }: DetailAnnotatorProps) {
+export function DetailAnnotator({ 
+  images, 
+  details, 
+  onUpdateDetail, 
+  onRemoveImage, 
+  onAddImageClick, 
+  qrTriggerNode,
+  isLocked = false,
+  onToggleLock
+}: DetailAnnotatorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [draggedItem, setDraggedItem] = useState<{ id: string; part: 'badge' | 'lineEnd' } | null>(null);
+
+  // Global pointer listeners for smooth dragging
+  useEffect(() => {
+    if (!draggedItem) return;
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+
+      const index = details.findIndex(d => d.id === draggedItem.id);
+      if (index !== -1) {
+        const updated = { ...details[index] };
+        if (draggedItem.part === 'badge') {
+          updated.position = { x, y };
+        } else {
+          updated.lineEndPosition = { x, y };
+        }
+        onUpdateDetail(index, updated);
+      }
+    };
+
+    const handleGlobalPointerUp = () => {
+      setDraggedItem(null);
+    };
+
+    window.addEventListener('pointermove', handleGlobalPointerMove);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+    };
+  }, [draggedItem, details, onUpdateDetail]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (!activeId || !containerRef.current) return;
+    if (isLocked || !activeId || !containerRef.current) return;
     
     const rect = containerRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -44,7 +92,15 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
 
   const removeSticker = (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
-    onUpdateDetail(index, { ...details[index], position: null, imageIndex: undefined });
+    onUpdateDetail(index, { ...details[index], position: null, lineEndPosition: null, imageIndex: undefined });
+  };
+
+  const handleStartDrag = (e: React.PointerEvent, id: string, part: 'badge' | 'lineEnd') => {
+    if (isLocked || (e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    e.stopPropagation();
+    setDraggedItem({ id, part });
   };
 
   const activeImageUrl = images[activeImageIndex];
@@ -55,17 +111,39 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
         {details.map((d) => (
           <button
             key={d.id}
-            onClick={() => setActiveId(activeId === d.id ? null : d.id)}
+            onClick={() => !isLocked && setActiveId(activeId === d.id ? null : d.id)}
+            disabled={isLocked}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 shrink-0 ${
-              activeId === d.id 
-                ? 'bg-blue-600 text-white shadow-md' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              isLocked
+                ? 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-100'
+                : activeId === d.id 
+                  ? 'bg-blue-600 text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <Target size={14} />
             Place #{d.id}
           </button>
         ))}
+        
+        {/* Lock / Unlock Toggle Button */}
+        <button
+          onClick={() => {
+            if (onToggleLock) {
+              onToggleLock(!isLocked);
+            }
+            setActiveId(null); // Clear active placement state when locking
+          }}
+          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-2 shrink-0 border ml-auto ${
+            isLocked 
+              ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' 
+              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
+          title={isLocked ? "Unlock annotations to edit/drag" : "Lock annotations to prevent editing/dragging"}
+        >
+          {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+          {isLocked ? "Locked" : "Lock Layout"}
+        </button>
       </div>
 
       <div 
@@ -93,6 +171,62 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     draggable={false}
                     className={`max-w-full h-auto object-contain pointer-events-none rounded-lg shadow-sm ${images.length > 1 ? 'max-h-[700px] print:max-h-[3.2in]' : 'max-h-[700px] print:max-h-[5in]'}`}
                   />
+                  
+                  {/* SVG Lines Layer */}
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+                    {details.map((d) => {
+                      const targetIdx = d.imageIndex ?? 0;
+                      if (!d.position || !d.lineEndPosition || targetIdx !== imgIdx) return null;
+                      return (
+                        <g key={`line-${d.id}`}>
+                          {/* White outline for high contrast */}
+                          <line 
+                            x1={`${d.position.x}%`} 
+                            y1={`${d.position.y}%`} 
+                            x2={`${d.lineEndPosition.x}%`} 
+                            y2={`${d.lineEndPosition.y}%`} 
+                            stroke="#ffffff" 
+                            strokeWidth="4.5"
+                            strokeLinecap="round"
+                            strokeDasharray="6 4"
+                          />
+                          {/* Red main line */}
+                          <line 
+                            x1={`${d.position.x}%`} 
+                            y1={`${d.position.y}%`} 
+                            x2={`${d.lineEndPosition.x}%`} 
+                            y2={`${d.lineEndPosition.y}%`} 
+                            stroke="#ef4444" 
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeDasharray="6 4"
+                          />
+                          {/* Endpoint dot */}
+                          <circle 
+                            cx={`${d.lineEndPosition.x}%`} 
+                            cy={`${d.lineEndPosition.y}%`} 
+                            r="4" 
+                            fill="#ef4444" 
+                            stroke="#ffffff" 
+                            strokeWidth="1.5"
+                          />
+                          {/* Draggable endpoint handle (only screen, hidden in print, only on active image, and only when unlocked) */}
+                          {isActive && !isLocked && (
+                            <circle 
+                              cx={`${d.lineEndPosition.x}%`} 
+                              cy={`${d.lineEndPosition.y}%`} 
+                              r="12" 
+                              fill="transparent" 
+                              stroke="#ef4444" 
+                              strokeWidth="2"
+                              className="cursor-move pointer-events-auto hover:fill-red-500/20 active:fill-red-500/40 transition-colors print:hidden"
+                              onPointerDown={(e) => handleStartDrag(e, d.id, 'lineEnd')}
+                            />
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
               
                   {/* Stickers Layer for this specific image */}
                   {details.map((d, dIdx) => {
@@ -101,7 +235,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                     return (
                       <div 
                         key={d.id}
-                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center cursor-pointer group pointer-events-auto z-10"
+                        className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-auto z-20 group"
                         style={{ left: `${d.position.x}%`, top: `${d.position.y}%` }}
                       >
                         {d.iconUrl && (
@@ -109,14 +243,20 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                             <img src={d.iconUrl} alt="Seam icon" className="w-full h-full object-contain" />
                           </div>
                         )}
-                        <div className="flex items-center justify-center w-6 h-6 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md">
-                          <span className="group-hover:hidden">{d.id}</span>
-                          {isActive && (
+                        <div 
+                          className={`flex items-center justify-center w-8 h-8 bg-red-500 border-2 border-white text-white rounded-full text-xs font-bold shadow-md select-none transition-transform ${
+                            isActive && !isLocked ? 'cursor-move hover:scale-110 active:scale-95' : ''
+                          }`}
+                          onPointerDown={isActive && !isLocked ? (e) => handleStartDrag(e, d.id, 'badge') : undefined}
+                        >
+                          <span className={isActive && !isLocked ? "group-hover:hidden" : ""}>{d.id}</span>
+                          {isActive && !isLocked && (
                             <button 
                               onClick={(e) => removeSticker(e, dIdx)} 
-                              className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="hidden group-hover:flex items-center justify-center w-full h-full bg-black/90 rounded-full cursor-pointer"
                             >
-                              <X size={12} />
+                              <X size={14} />
                             </button>
                           )}
                         </div>
@@ -125,10 +265,17 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
                   })}
                 </div>
                 
-                {/* Remove Image Button (Digital only, active only) */}
-                {isActive && onRemoveImage && (
+                {/* Remove Image Button (Digital only, active only, NOT when locked) */}
+                {isActive && onRemoveImage && !isLocked && (
                   <button 
-                    onClick={(e) => { e.stopPropagation(); onRemoveImage(imgIdx); if (imgIdx > 0) setActiveImageIndex(prev => prev - 1); }} 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (isLocked) return;
+                      if (window.confirm('Are you sure you want to remove this closeup photo?')) {
+                        onRemoveImage(imgIdx); 
+                        if (imgIdx > 0) setActiveImageIndex(prev => prev - 1); 
+                      }
+                    }} 
                     className="absolute top-3 right-3 p-1.5 bg-white rounded-full shadow-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover/main:opacity-100 transition-opacity print:hidden pointer-events-auto border border-gray-100"
                     title="Remove image"
                   >
@@ -143,7 +290,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
         )}
       </div>
 
-      {(images.length > 1 || onAddImageClick) && (
+      {(images.length > 1 || (onAddImageClick && !isLocked)) && (
         <div className="flex items-center gap-2 overflow-x-auto pb-2 print:hidden min-h-[60px]">
           {images.map((img, idx) => (
             <button
@@ -156,7 +303,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
               <img src={img} className="w-full h-full object-cover" />
             </button>
           ))}
-          {onAddImageClick && (
+          {onAddImageClick && !isLocked && (
             <button
               onClick={onAddImageClick}
               className="w-14 h-14 shrink-0 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:text-black hover:border-black transition-colors hover:bg-gray-50 flex-col gap-0.5"
@@ -165,7 +312,7 @@ export function DetailAnnotator({ images, details, onUpdateDetail, onRemoveImage
               <span className="text-[9px] font-bold">ADD</span>
             </button>
           )}
-          {qrTriggerNode && (
+          {qrTriggerNode && !isLocked && (
             <div className="ml-2 flex items-center shrink-0">
               {qrTriggerNode}
             </div>

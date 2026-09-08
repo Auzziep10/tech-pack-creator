@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -28,11 +28,19 @@ export function Login() {
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: name });
+
+        // Find if there are admins
+        const usersRef = collection(db, 'users');
+        const adminsQuery = query(usersRef, where('role', '==', 'admin'));
+        const adminsSnap = await getDocs(adminsQuery);
+        const role = adminsSnap.empty ? 'admin' : 'staff';
+
         await setDoc(doc(db, 'users', cred.user.uid), {
            uid: cred.user.uid,
            email: email,
            name: name,
-           companyId: cred.user.uid
+           companyId: 'default_company',
+           role: role
         }, { merge: true });
       }
       navigate('/');

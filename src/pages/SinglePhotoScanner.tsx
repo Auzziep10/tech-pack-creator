@@ -1,11 +1,13 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { completeScanSession, updateScanSessionFront, uploadGarmentImage } from '../services/dbService';
+import { uploadGarmentImage } from '../services/dbService';
 import { Camera, CheckCircle2, RefreshCw } from 'lucide-react';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { FreeCropper } from './MobileScanner';
 
-// Helper function to extract the visually cropped portion of the image into a neat JPEG
+// Helper function to extract the visually cropped portion of the image into a high-res 2K JPEG
 const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number; width: number; height: number }): Promise<string> => {
   const image = new Image();
   image.src = imageSrc;
@@ -16,8 +18,25 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number
   
   if (!ctx || !pixelCrop || !pixelCrop.width || !pixelCrop.height) return imageSrc;
 
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // Scale crops up to crisp 2K resolution (up to 2048px) matching original scans
+  let targetW = pixelCrop.width;
+  let targetH = pixelCrop.height;
+  const maxDim = 2048;
+  if (targetW > maxDim || targetH > maxDim) {
+    if (targetW > targetH) {
+      targetH = Math.round((targetH * maxDim) / targetW);
+      targetW = maxDim;
+    } else {
+      targetW = Math.round((targetW * maxDim) / targetH);
+      targetH = maxDim;
+    }
+  }
+
+  canvas.width = targetW;
+  canvas.height = targetH;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, targetW, targetH);
 
   ctx.drawImage(
     image,
@@ -27,399 +46,30 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y: number
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height
+    targetW,
+    targetH
   );
 
-  return canvas.toDataURL('image/jpeg', 0.95);
+  return canvas.toDataURL('image/jpeg', 0.92);
 };
 
-interface FreeCropperProps {
-  imageSrc: string;
-  onCropComplete: (pixelCrop: { x: number; y: number; width: number; height: number }) => void;
-}
-
-export function FreeCropper({ imageSrc, onCropComplete }: FreeCropperProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-
-  // Aspect ratio state: default to '4:5' vertical for perfect Tech Pack card fitting!
-  const [aspectMode, setAspectMode] = useState<'free' | '4:5' | '1:1' | '3:4' | 'full'>('4:5');
-
-  // Crop box percentage values relative to displayed image: 0 to 100
-  const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number }>({
-    x: 5,
-    y: 5,
-    w: 90,
-    h: 90,
-  });
-
-  const [activeHandle, setActiveHandle] = useState<string | null>(null);
-  const startTouchRef = useRef<{ touchX: number; touchY: number; initialBox: { x: number; y: number; w: number; h: number } } | null>(null);
-  const naturalSizeRef = useRef<{ width: number; height: number }>({ width: 1, height: 1 });
-
-  const emitPixelCrop = useCallback((box: { x: number; y: number; w: number; h: number }) => {
-    const { width: nw, height: nh } = naturalSizeRef.current;
-    const pixelCrop = {
-      x: Math.max(0, Math.round((box.x / 100) * nw)),
-      y: Math.max(0, Math.round((box.y / 100) * nh)),
-      width: Math.min(nw, Math.round((box.w / 100) * nw)),
-      height: Math.min(nh, Math.round((box.h / 100) * nh)),
-    };
-    onCropComplete(pixelCrop);
-  }, [onCropComplete]);
-
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    naturalSizeRef.current = { width: img.naturalWidth, height: img.naturalHeight };
-    
-    // Automatically apply 4:5 vertical ratio crop box on load to fit card perfectly
-    const nw = img.naturalWidth;
-    const nh = img.naturalHeight;
-    const targetRatio = 4 / 5;
-    let newBox = { x: 5, y: 5, w: 90, h: 90 };
-
-    const imgRatio = (nw * 0.9) / (nh * 0.9);
-    if (imgRatio > targetRatio) {
-      const targetW = ((nh * 0.9 * targetRatio) / nw) * 100;
-      newBox.x = Math.max(0, (100 - targetW) / 2);
-      newBox.w = targetW;
-      newBox.y = 5;
-      newBox.h = 90;
-    } else {
-      const targetH = (((nw * 0.9) / targetRatio) / nh) * 100;
-      newBox.y = Math.max(0, (100 - targetH) / 2);
-      newBox.h = targetH;
-      newBox.x = 5;
-      newBox.w = 90;
-    }
-
-    setCropBox(newBox);
-    emitPixelCrop(newBox);
-  };
-
-  // Adjust crop box when aspect ratio preset button is clicked
-  const handleAspectChange = (mode: 'free' | '4:5' | '1:1' | '3:4' | 'full') => {
-    setAspectMode(mode);
-    let newBox = { ...cropBox };
-
-    if (mode === 'full') {
-      newBox = { x: 2, y: 2, w: 96, h: 96 };
-    } else if (mode !== 'free') {
-      const ratioMap: Record<string, number> = {
-        '4:5': 4 / 5,
-        '1:1': 1 / 1,
-        '3:4': 3 / 4,
-      };
-      const targetRatio = ratioMap[mode];
-      const { width: nw, height: nh } = naturalSizeRef.current;
-      const imgRatio = (nw * (newBox.w / 100)) / (nh * (newBox.h / 100));
-
-      if (imgRatio > targetRatio) {
-        const targetW = ((nh * (newBox.h / 100) * targetRatio) / nw) * 100;
-        newBox.x = Math.max(0, newBox.x + (newBox.w - targetW) / 2);
-        newBox.w = targetW;
-      } else {
-        const targetH = (((nw * (newBox.w / 100)) / targetRatio) / nh) * 100;
-        newBox.y = Math.max(0, newBox.y + (newBox.h - targetH) / 2);
-        newBox.h = targetH;
-      }
-    }
-
-    setCropBox(newBox);
-    emitPixelCrop(newBox);
-  };
-
-  const handlePointerStart = (handle: string, clientX: number, clientY: number) => {
-    setActiveHandle(handle);
-    startTouchRef.current = {
-      touchX: clientX,
-      touchY: clientY,
-      initialBox: { ...cropBox },
-    };
-  };
-
-  const handlePointerMove = useCallback((clientX: number, clientY: number) => {
-    if (!activeHandle || !startTouchRef.current || !imgRef.current) return;
-    const rect = imgRef.current.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-
-    const deltaXPercent = ((clientX - startTouchRef.current.touchX) / rect.width) * 100;
-    const deltaYPercent = ((clientY - startTouchRef.current.touchY) / rect.height) * 100;
-
-    const { initialBox } = startTouchRef.current;
-    let { x, y, w, h } = initialBox;
-
-    const minSize = 8; // minimum 8% width/height
-
-    if (activeHandle === 'move') {
-      x = Math.max(0, Math.min(100 - w, initialBox.x + deltaXPercent));
-      y = Math.max(0, Math.min(100 - h, initialBox.y + deltaYPercent));
-    } else {
-      if (activeHandle.includes('w')) {
-        const newX = Math.max(0, Math.min(initialBox.x + initialBox.w - minSize, initialBox.x + deltaXPercent));
-        w = initialBox.x + initialBox.w - newX;
-        x = newX;
-      }
-      if (activeHandle.includes('e')) {
-        w = Math.max(minSize, Math.min(100 - initialBox.x, initialBox.w + deltaXPercent));
-      }
-      if (activeHandle.includes('n')) {
-        const newY = Math.max(0, Math.min(initialBox.y + initialBox.h - minSize, initialBox.y + deltaYPercent));
-        h = initialBox.y + initialBox.h - newY;
-        y = newY;
-      }
-      if (activeHandle.includes('s')) {
-        h = Math.max(minSize, Math.min(100 - initialBox.y, initialBox.h + deltaYPercent));
-      }
-    }
-
-    const updatedBox = { x, y, w, h };
-    setCropBox(updatedBox);
-    emitPixelCrop(updatedBox);
-  }, [activeHandle, emitPixelCrop]);
-
-  const handlePointerEnd = useCallback(() => {
-    setActiveHandle(null);
-    startTouchRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    const handleResize = () => {
-      window.scrollTo(0, 0);
-      if (imgRef.current) {
-        emitPixelCrop(cropBox);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, [cropBox, emitPixelCrop]);
-
-  return (
-    <div className="flex flex-col h-full w-full select-none bg-black">
-      {/* Aspect Ratio Selector Pills */}
-      <div className="bg-black/90 px-4 py-2 landscape:py-1 flex items-center justify-center gap-2 z-30 overflow-x-auto scrollbar-hide border-b border-white/10">
-        <span className="text-white/60 text-[10px] sm:text-xs font-bold shrink-0 uppercase tracking-wider mr-1">Crop Ratio:</span>
-        {[
-          { key: 'free', label: 'Free Crop' },
-          { key: '4:5', label: '4 : 5' },
-          { key: '1:1', label: '1 : 1' },
-          { key: '3:4', label: '3 : 4' },
-          { key: 'full', label: 'Full Image' },
-        ].map((btn) => (
-          <button
-            key={btn.key}
-            onClick={() => handleAspectChange(btn.key as any)}
-            className={`px-3 py-1 landscape:py-0.5 rounded-full text-xs font-bold transition-all shrink-0 ${
-              aspectMode === btn.key
-                ? 'bg-white text-black shadow-md scale-105'
-                : 'bg-white/10 text-white/80 hover:bg-white/20'
-            }`}
-          >
-            {btn.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Main Image Cropping Canvas Area */}
-      <div
-        ref={containerRef}
-        className="flex-1 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden touch-none min-h-0"
-        onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
-        onMouseUp={handlePointerEnd}
-        onTouchMove={(e) => {
-          if (e.touches.length > 0) {
-            handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
-          }
-        }}
-        onTouchEnd={handlePointerEnd}
-      >
-        <div className="relative inline-block max-w-full max-h-full">
-          <img
-            ref={imgRef}
-            src={imageSrc}
-            alt="Captured Garment"
-            onLoad={handleImageLoad}
-            className="max-w-full max-h-[48vh] sm:max-h-[55vh] landscape:max-h-[65vh] object-contain block mx-auto pointer-events-none rounded-lg"
-          />
-
-          {/* Dark Overlay around crop box */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              clipPath: `polygon(
-                0% 0%, 0% 100%, 
-                ${cropBox.x}% 100%, 
-                ${cropBox.x}% ${cropBox.y}%, 
-                ${cropBox.x + cropBox.w}% ${cropBox.y}%, 
-                ${cropBox.x + cropBox.w}% ${cropBox.y + cropBox.h}%, 
-                ${cropBox.x}% ${cropBox.y + cropBox.h}%, 
-                ${cropBox.x}% 100%, 
-                100% 100%, 100% 0%
-              )`,
-              backgroundColor: 'rgba(0, 0, 0, 0.65)',
-            }}
-          />
-
-          {/* Interactive Free Crop Box */}
-          <div
-            className="absolute border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.5)] touch-none cursor-move"
-            style={{
-              left: `${cropBox.x}%`,
-              top: `${cropBox.y}%`,
-              width: `${cropBox.w}%`,
-              height: `${cropBox.h}%`,
-            }}
-            onMouseDown={(e) => handlePointerStart('move', e.clientX, e.clientY)}
-            onTouchStart={(e) => {
-              if (e.touches.length > 0) {
-                handlePointerStart('move', e.touches[0].clientX, e.touches[0].clientY);
-              }
-            }}
-          >
-            {/* Rule of Thirds Grid Lines */}
-            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-40">
-              <div className="border-r border-b border-white/60" />
-              <div className="border-r border-b border-white/60" />
-              <div className="border-b border-white/60" />
-              <div className="border-r border-b border-white/60" />
-              <div className="border-r border-b border-white/60" />
-              <div className="border-b border-white/60" />
-              <div className="border-r border-white/60" />
-              <div className="border-r border-white/60" />
-              <div />
-            </div>
-
-            {/* 4 Corner Touch Handles */}
-            {['nw', 'ne', 'sw', 'se'].map((pos) => {
-              const isTop = pos.includes('n');
-              const isLeft = pos.includes('w');
-              return (
-                <div
-                  key={pos}
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    handlePointerStart(pos, e.clientX, e.clientY);
-                  }}
-                  onTouchStart={(e) => {
-                    e.stopPropagation();
-                    if (e.touches.length > 0) {
-                      handlePointerStart(pos, e.touches[0].clientX, e.touches[0].clientY);
-                    }
-                  }}
-                  style={{
-                    top: isTop ? '-14px' : 'auto',
-                    bottom: !isTop ? '-14px' : 'auto',
-                    left: isLeft ? '-14px' : 'auto',
-                    right: !isLeft ? '-14px' : 'auto',
-                  }}
-                  className="absolute w-7 h-7 bg-white border-2 border-black rounded-full shadow-lg flex items-center justify-center z-20 cursor-pointer active:scale-125 transition-transform"
-                >
-                  <div className="w-2 h-2 bg-black rounded-full" />
-                </div>
-              );
-            })}
-
-            {/* 4 Edge Touch Handles */}
-            {/* Top Handle */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                handlePointerStart('n', e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                if (e.touches.length > 0) {
-                  handlePointerStart('n', e.touches[0].clientX, e.touches[0].clientY);
-                }
-              }}
-              className="absolute -top-3 left-1/2 -translate-x-1/2 w-12 h-6 flex items-center justify-center cursor-pointer z-20"
-            >
-              <div className="w-8 h-2 bg-white border border-black rounded-full shadow-md" />
-            </div>
-
-            {/* Bottom Handle */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                handlePointerStart('s', e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                if (e.touches.length > 0) {
-                  handlePointerStart('s', e.touches[0].clientX, e.touches[0].clientY);
-                }
-              }}
-              className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-12 h-6 flex items-center justify-center cursor-pointer z-20"
-            >
-              <div className="w-8 h-2 bg-white border border-black rounded-full shadow-md" />
-            </div>
-
-            {/* Left Handle */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                handlePointerStart('w', e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                if (e.touches.length > 0) {
-                  handlePointerStart('w', e.touches[0].clientX, e.touches[0].clientY);
-                }
-              }}
-              className="absolute top-1/2 -translate-y-1/2 -left-3 h-12 w-6 flex items-center justify-center cursor-pointer z-20"
-            >
-              <div className="h-8 w-2 bg-white border border-black rounded-full shadow-md" />
-            </div>
-
-            {/* Right Handle */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                handlePointerStart('e', e.clientX, e.clientY);
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                if (e.touches.length > 0) {
-                  handlePointerStart('e', e.touches[0].clientX, e.touches[0].clientY);
-                }
-              }}
-              className="absolute top-1/2 -translate-y-1/2 -right-3 h-12 w-6 flex items-center justify-center cursor-pointer z-20"
-            >
-              <div className="h-8 w-2 bg-white border border-black rounded-full shadow-md" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function MobileScanner() {
+export function SinglePhotoScanner() {
   const { sessionId } = useParams();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [scanSide, setScanSide] = useState<'front' | 'back'>('front');
   const [isUploading, setIsUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [hasCameraError, setHasCameraError] = useState(false);
 
-  // Digital Pre-Crop Zoom
   const [preZoom, setPreZoom] = useState(1);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
-  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // Post-Capture Cropper Pixel State
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const startCamera = useCallback(async (deviceId?: string, targetBadge?: string) => {
@@ -478,7 +128,6 @@ export function MobileScanner() {
       try {
          tempStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       } catch (permissionError) {
-         console.warn("Could not get environment camera, requesting any video...");
          tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
@@ -533,7 +182,6 @@ export function MobileScanner() {
     window.addEventListener('orientationchange', handleOrientationOrResize);
     window.addEventListener('resize', handleOrientationOrResize);
 
-    // Authenticate anonymously if not already signed in
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         setIsAuthLoading(false);
@@ -560,14 +208,6 @@ export function MobileScanner() {
       if (stream) stream.getTracks().forEach(track => track.stop());
     };
   }, []);
-
-  const cycleCamera = () => {
-    if (videoDevices.length > 1) {
-      const nextIdx = (currentDeviceIndex + 1) % videoDevices.length;
-      setCurrentDeviceIndex(nextIdx);
-      startCamera(videoDevices[nextIdx].deviceId);
-    }
-  };
 
   useEffect(() => {
     if (videoRef.current && stream && !capturedImage) {
@@ -607,23 +247,20 @@ export function MobileScanner() {
     if (!capturedImage || !sessionId || !croppedAreaPixels) return;
     setIsUploading(true);
     try {
-       // Bake the users crop settings into a final flat image URL
        const finalCroppedImageDataUrl = await getCroppedImg(capturedImage, croppedAreaPixels);
 
        const res = await fetch(finalCroppedImageDataUrl);
        const blob = await res.blob();
-       const file = new File([blob], `scan_${sessionId}_${scanSide}.jpg`, { type: 'image/jpeg' });
+       const file = new File([blob], `gallery_scan_${sessionId}.jpg`, { type: 'image/jpeg' });
        
-       const uploadedUrl = await uploadGarmentImage(file, auth.currentUser?.uid || `${sessionId}_${scanSide}`);
+       const uploadedUrl = await uploadGarmentImage(file, auth.currentUser?.uid || `gallery_scan_${sessionId}`);
        
-       if (scanSide === 'front') {
-         await updateScanSessionFront(sessionId, uploadedUrl);
-         setScanSide('back');
-         setCapturedImage(null);
-       } else {
-         await completeScanSession(sessionId, uploadedUrl);
-         setSuccess(true);
-       }
+       await setDoc(doc(db, 'companionUploads', sessionId), {
+         imageUrl: uploadedUrl,
+         timestamp: serverTimestamp()
+       });
+       
+       setSuccess(true);
     } catch (err: any) {
       console.error("Upload failed", err);
       alert(`Failed to send image: ${err?.message || err}`);
@@ -638,9 +275,9 @@ export function MobileScanner() {
         <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-6">
           <CheckCircle2 size={48} className="text-green-600" />
         </div>
-        <h1 className="text-3xl font-serif font-bold text-gray-900 mb-2">Scan Complete!</h1>
+        <h1 className="text-3xl font-serif font-bold text-gray-900 mb-2">Photo Uploaded!</h1>
         <p className="text-gray-500 text-lg max-w-xs mx-auto">
-          The garment image has been sent to your desktop securely. You can now close this tab.
+          The photo has been added to your tech pack gallery. You can now close this tab.
         </p>
       </div>
     );
@@ -650,7 +287,7 @@ export function MobileScanner() {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white">
         <div className="w-10 h-10 border-4 border-gray-600 border-t-white rounded-full animate-spin mb-4" />
-        <p className="text-gray-400 font-sans">Initializing secure session...</p>
+        <p className="text-gray-400 font-sans">Initializing camera session...</p>
       </div>
     );
   }
@@ -672,8 +309,8 @@ export function MobileScanner() {
            <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between">
               <div className="bg-black/50 backdrop-blur-sm h-24 sm:h-28 landscape:h-12 flex items-center justify-center pt-6 sm:pt-8 landscape:pt-1 px-6">
                  <div className="text-center">
-                   <h2 className="text-white font-serif text-lg sm:text-xl landscape:text-sm font-bold tracking-wide uppercase">Scan {scanSide} of Garment</h2>
-                   <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Lay flat and align within the frame</p>
+                   <h2 className="text-white font-serif text-lg sm:text-xl landscape:text-sm font-bold tracking-wide uppercase">Snap Garment Photo</h2>
+                   <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Center your garment in the frame</p>
                  </div>
               </div>
               
@@ -687,7 +324,7 @@ export function MobileScanner() {
                  </div>
               </div>
               
-               <div className="bg-black/60 backdrop-blur-md pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-white/10 relative z-30 shrink-0 flex flex-col items-center justify-center">
+              <div className="bg-black/60 backdrop-blur-md pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] border-t border-white/10 relative z-30 shrink-0 flex flex-col items-center justify-center">
                   <div className="absolute top-[-52px] sm:top-[-65px] landscape:top-[-36px] left-1/2 -translate-x-1/2 bg-black/70 px-3 sm:px-4 py-1 sm:py-2 rounded-full backdrop-blur-md flex items-center gap-2 pointer-events-auto shadow-lg border border-white/10 scale-90 sm:scale-100">
                      <span className="text-white text-xs font-bold">Zoom</span>
                      <input 
@@ -762,8 +399,8 @@ export function MobileScanner() {
            {/* Header Mask */}
            <div className="bg-black/90 backdrop-blur-sm py-2 sm:py-3 px-4 z-30 shrink-0 border-b border-white/10 flex flex-col items-center justify-center">
               <div className="text-center">
-                <h2 className="text-white font-serif text-base sm:text-xl landscape:text-xs font-bold tracking-wide uppercase">Crop {scanSide} of Garment</h2>
-                <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Drag corners or sides freely to frame your garment</p>
+                <h2 className="text-white font-serif text-base sm:text-xl landscape:text-xs font-bold tracking-wide uppercase">Crop Photo</h2>
+                <p className="text-white/80 text-xs sm:text-sm landscape:hidden mt-0.5">Drag corners or sides freely to frame your photo</p>
               </div>
            </div>
 
@@ -793,12 +430,12 @@ export function MobileScanner() {
                  {isUploading ? (
                    <>
                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                     {scanSide === 'front' ? 'Processing...' : 'Sending...'}
+                     Sending...
                    </>
                  ) : (
                    <>
                      <Camera size={16} />
-                     {scanSide === 'front' ? 'Proceed to Back' : 'Finish & Upload'}
+                     Finish & Upload
                    </>
                  )}
                </button>
