@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -195,6 +195,10 @@ export function TechPackEditor() {
 
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [hiddenGalleryImages, setHiddenGalleryImages] = useState<string[]>(() => {
+    const initialPack = (location.state as any)?.techPack;
+    return initialPack?.hiddenGalleryImages || [];
+  });
   const [activeCollaborators, setActiveCollaborators] = useState<UserPresence[]>([]);
   
   const [isExporting, setIsExporting] = useState(false);
@@ -490,6 +494,15 @@ export function TechPackEditor() {
       }
       return updated;
     });
+
+    // If locking and the current active imageUrl is hidden, automatically select the first visible thumbnail
+    if (nextLocked) {
+      const visible = galleryImages.filter(img => !hiddenGalleryImages.includes(img));
+      if (hiddenGalleryImages.includes(imageUrl) && visible.length > 0) {
+        setImageUrl(visible[0]);
+      }
+    }
+
     pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack');
 
     // Update location.state in history so refreshes or back/forward keep updated lock status
@@ -515,6 +528,59 @@ export function TechPackEditor() {
         });
       } catch (err: any) {
         console.error("Failed to update lock status in database:", err);
+      }
+    }
+  };
+
+  const handleToggleHideThumbnail = async (imgUrl: string) => {
+    if (isTechPackLocked || checkReadonly()) return;
+    const isHidden = hiddenGalleryImages.includes(imgUrl);
+
+    // Safety guard: prevent hiding all images
+    if (!isHidden) {
+      const remainingVisible = galleryImages.filter(img => !hiddenGalleryImages.includes(img) && img !== imgUrl);
+      if (remainingVisible.length === 0) {
+        alert("At least one thumbnail image must remain visible.");
+        return;
+      }
+    }
+
+    const newHidden = isHidden
+      ? hiddenGalleryImages.filter(u => u !== imgUrl)
+      : [...hiddenGalleryImages, imgUrl];
+
+    setHiddenGalleryImages(newHidden);
+    setData((d: any) => ({ ...d, hiddenGalleryImages: newHidden }));
+    pushLog(isHidden ? 'Unhid thumbnail image' : 'Hid thumbnail image');
+
+    if (id && id !== 'draft' && !imgUrl.startsWith('data:')) {
+      try {
+        await updateDoc(doc(db, 'techPacks', id), {
+          "techPack.hiddenGalleryImages": newHidden
+        });
+      } catch (err) {
+        console.error("Auto-sync hiddenGalleryImages error:", err);
+      }
+    }
+  };
+
+  const handleToggleHideAll = async () => {
+    if (isTechPackLocked || checkReadonly() || galleryImages.length <= 1) return;
+    const alternates = galleryImages.slice(1);
+    const areAlternatesHidden = alternates.length > 0 && alternates.every(img => hiddenGalleryImages.includes(img));
+    const newHidden = areAlternatesHidden || hiddenGalleryImages.length > 0 ? [] : alternates;
+
+    setHiddenGalleryImages(newHidden);
+    setData((d: any) => ({ ...d, hiddenGalleryImages: newHidden }));
+    pushLog(newHidden.length > 0 ? 'Hid all alternate thumbnails' : 'Unhid all thumbnails');
+
+    if (id && id !== 'draft') {
+      try {
+        await updateDoc(doc(db, 'techPacks', id), {
+          "techPack.hiddenGalleryImages": newHidden
+        });
+      } catch (err) {
+        console.error("Auto-sync hide-all error:", err);
       }
     }
   };
@@ -976,6 +1042,7 @@ export function TechPackEditor() {
         initialGallery.unshift(initialImage);
       }
       setGalleryImages(initialGallery);
+      setHiddenGalleryImages(pack?.hiddenGalleryImages || []);
 
       if (location.state.name) setPackName(location.state.name);
       setIsLoading(false);
@@ -1028,9 +1095,16 @@ export function TechPackEditor() {
             combinedGallery.unshift(initialImage);
           }
 
-          const selImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : (initialImage || packInfo.imageUrl || combinedGallery[0] || '');
+          const packHidden: string[] = pack?.hiddenGalleryImages || (packInfo as any).hiddenGalleryImages || [];
+          setHiddenGalleryImages(packHidden);
+
+          const visibleFromDb = combinedGallery.filter(img => !packHidden.includes(img));
+          const fallbackImg = visibleFromDb[0] || initialImage || packInfo.imageUrl || combinedGallery[0] || '';
+          const initialSelImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : fallbackImg;
+          const selImg = isLockedFromDb && packHidden.includes(initialSelImg) ? fallbackImg : initialSelImg;
 
           setImageUrl((prev) => {
+            if (isLockedFromDb && packHidden.includes(prev)) return fallbackImg;
             if (prev && combinedGallery.includes(prev)) return prev;
             return selImg;
           });
@@ -1044,7 +1118,8 @@ export function TechPackEditor() {
             data: pack,
             packName: pName,
             imageUrl: selImg,
-            galleryImages: combinedGallery
+            galleryImages: combinedGallery,
+            hiddenGalleryImages: packHidden
           });
         }
         setIsLoading(false);
@@ -1074,7 +1149,8 @@ export function TechPackEditor() {
       data,
       packName,
       imageUrl,
-      galleryImages
+      galleryImages,
+      hiddenGalleryImages
     });
 
     // DO NOT SAVE IF NO CHANGES WERE MADE!
@@ -1114,14 +1190,26 @@ export function TechPackEditor() {
            finalGalleryImages.push(finalUrl);
         }
         techPackDataToSave.gallery = finalGalleryImages;
+
+        const finalHiddenGallery = hiddenGalleryImages.map(img => {
+          const gIdx = galleryImages.indexOf(img);
+          return gIdx !== -1 ? finalGalleryImages[gIdx] : img;
+        });
+        techPackDataToSave.hiddenGalleryImages = finalHiddenGallery;
+
         if (!techPackDataToSave.images) techPackDataToSave.images = {};
         techPackDataToSave.images.original = imageUrl;
+
+        const visibleGallery = finalGalleryImages.filter(img => !finalHiddenGallery.includes(img));
+        const mainImageToSave = isTechPackLocked && finalHiddenGallery.includes(imageUrl)
+          ? (visibleGallery[0] || imageUrl || '')
+          : (imageUrl || visibleGallery[0] || '');
 
         await saveTechPack(
           user.uid,
           profile?.companyId || user.uid,
           packName,
-          imageUrl || finalGalleryImages[0] || '',
+          mainImageToSave,
           techPackDataToSave,
           user.email || 'Unknown',
           id,
@@ -1136,7 +1224,7 @@ export function TechPackEditor() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [data, packName, imageUrl, galleryImages, isLoading, id, isTechPackLocked, isTranslated, user]);
+  }, [data, packName, imageUrl, galleryImages, hiddenGalleryImages, isLoading, id, isTechPackLocked, isTranslated, user]);
 
   const handleSyncToWovn = async () => {
     setIsSyncing(true);
@@ -1279,6 +1367,12 @@ export function TechPackEditor() {
       setGalleryImages(finalGalleryImages);
       techPackDataToSave.gallery = finalGalleryImages;
 
+      const finalHiddenGallery = hiddenGalleryImages.map(img => {
+        const gIdx = galleryImages.indexOf(img);
+        return gIdx !== -1 ? finalGalleryImages[gIdx] : img;
+      });
+      techPackDataToSave.hiddenGalleryImages = finalHiddenGallery;
+
       if (techPackDataToSave.patternImage?.startsWith('data:')) {
         techPackDataToSave.patternImage = await uploadBase64Image(techPackDataToSave.patternImage, user.uid);
       }
@@ -1330,14 +1424,19 @@ export function TechPackEditor() {
       // Deeply sanitize data via JSON serialization to completely eliminate 'undefined' properties which critically crash Firestore nested entity validation
       const sanitizedTechPackData = JSON.parse(JSON.stringify(techPackDataToSave));
 
+      const visibleGallery = finalGalleryImages.filter(img => !finalHiddenGallery.includes(img));
+      const mainImageToSave = isTechPackLocked && finalHiddenGallery.includes(imageUrl) 
+        ? (visibleGallery[0] || imageUrl || '') 
+        : (imageUrl || visibleGallery[0] || '');
+
       const existingId = id === 'draft' ? undefined : id;
       const savedId = await saveTechPack(
         user.uid, 
         profile?.companyId || user.uid, 
         packName, 
-        imageUrl || finalGalleryImages[0], 
+        mainImageToSave, 
         sanitizedTechPackData, 
-        user.email || 'Unknown',
+        user.email || 'Unknown', 
         existingId,
         finalActivityLog,
         displayData.isTeamEditable ?? true
@@ -2045,160 +2144,266 @@ export function TechPackEditor() {
                     </div>
                   </div>
 
-                  {/* Photo Gallery Strip */}
-                  <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
-                     {galleryImages.map((gImg, idx) => (
-                       <div 
-                          key={idx} 
-                          draggable={!isTechPackLocked}
-                          onDragStart={(e) => {
-                            if (isTechPackLocked || checkReadonly()) {
-                              e.preventDefault();
-                              return;
-                            }
-                            e.dataTransfer.setData('text/plain', idx.toString());
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}
-                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                          onDrop={async (e) => {
-                            e.preventDefault();
-                            if (isTechPackLocked || checkReadonly()) return;
-                            const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
-                            if (isNaN(fromIdx) || fromIdx === idx) return;
-                            const newGallery = [...galleryImages];
-                            const [moved] = newGallery.splice(fromIdx, 1);
-                            newGallery.splice(idx, 0, moved);
-                            setGalleryImages(newGallery);
-                            
-                            // Reorder finalGalleryImages in dataset as well so saving reflects rearranging
-                            setData((d: any) => ({ ...d, gallery: newGallery }));
-                            
-                            if (idx === 0) setImageUrl(moved);
-                            
-                            // Immediately auto-save the new main thumbnail choice if the file is already in the database
-                            if (idx === 0 && id && id !== 'draft' && !moved.startsWith('data:')) {
-                               try {
-                                 await updateDoc(doc(db, 'techPacks', id), {
-                                    imageUrl: moved,
-                                    "techPack.gallery": newGallery
-                                 });
-                               } catch (err) {
-                                 console.error("Auto-sync image error:", err);
-                               }
-                            }
-                          }}
+                  {/* Photo Gallery Strip Header / Actions */}
+                  {galleryImages.length > 0 && (
+                    <div className="flex items-center justify-between text-xs text-gray-500 mt-4 mb-1 px-0.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-[11px] text-gray-600">
+                        <span>Photos ({isTechPackLocked ? galleryImages.filter(img => !hiddenGalleryImages.includes(img)).length : galleryImages.length})</span>
+                        {!isTechPackLocked && hiddenGalleryImages.length > 0 && (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <EyeOff size={10} /> {hiddenGalleryImages.length} hidden when locked
+                          </span>
+                        )}
+                      </div>
+                      {!isTechPackLocked && galleryImages.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={handleToggleHideAll}
+                          className="text-[11px] text-gray-500 hover:text-black font-medium flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-gray-100 transition-colors"
+                          title={hiddenGalleryImages.length > 0 ? "Unhide all thumbnails" : "Hide all alternate thumbnails"}
+                        >
+                          {hiddenGalleryImages.length > 0 ? (
+                            <>
+                              <Eye size={12} />
+                              <span>Unhide All</span>
+                            </>
+                          ) : (
+                            <>
+                              <EyeOff size={12} />
+                              <span>Hide Alternates</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                          className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${imageUrl === gImg ? 'border-black scale-105 shadow-md z-10' : 'border-transparent opacity-60 hover:opacity-100'}`} 
-                          onClick={() => setImageUrl(gImg)}
-                       >
-                          <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
-                          {idx === 0 && (
-                              <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm">MAIN</div>
-                           )}
-                            {idx !== 0 && !isTechPackLocked && (
-                              <button 
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isTechPackLocked || checkReadonly()) return;
-                                  const newGallery = [...galleryImages];
-                                  const [moved] = newGallery.splice(idx, 1);
-                                  newGallery.unshift(moved);
-                                  setGalleryImages(newGallery);
-                                  setData((d: any) => ({ ...d, gallery: newGallery }));
-                                  setImageUrl(moved);
-                                  
-                                  // Immediately auto-save the new main thumbnail choice if the file is already in the database
-                                  if (id && id !== 'draft' && !moved.startsWith('data:')) {
-                                     try {
-                                       await updateDoc(doc(db, 'techPacks', id), {
-                                          imageUrl: moved,
-                                          "techPack.gallery": newGallery
-                                       });
-                                     } catch (err) {
-                                       console.error("Auto-sync image error:", err);
-                                     }
-                                  }
-                                }}
-                                className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-400 text-[10px] w-5 h-5 flex flex-col items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm"
-                                title="Set as Main Cover Photo"
-                              >
-                                ★
-                              </button>
-                           )}
-                           <button
-                             onClick={async (e) => {
-                               e.stopPropagation();
-                               if (downloadingGalleryIdx !== null) return;
-                               try {
-                                 setDownloadingGalleryIdx(idx);
-                                 await downloadAsLargePng(gImg, `${packName || 'techpack'}_image_${idx + 1}`, { resolution: 'large' });
-                               } catch (err) {
-                                 console.error('Gallery image download failed:', err);
-                                 alert('Download failed. Please try again.');
-                               } finally {
-                                 setDownloadingGalleryIdx(null);
-                               }
-                             }}
-                             disabled={downloadingGalleryIdx === idx}
-                             className="absolute bottom-0.5 right-0.5 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                             title="Download Large Full-Size PNG (2.5K Studio Quality)"
-                           >
-                             {downloadingGalleryIdx === idx ? (
-                               <Loader2 size={10} className="animate-spin" />
-                             ) : (
-                               <Download size={12} />
-                             )}
-                           </button>
-                           {!isTechPackLocked && (
-                             <button
-                               onClick={async (e) => {
-                                 e.stopPropagation();
+                  {/* Photo Gallery Strip */}
+                  {(() => {
+                    const displayedGallery = isTechPackLocked
+                      ? galleryImages.filter(img => !hiddenGalleryImages.includes(img))
+                      : galleryImages;
+
+                    if (isTechPackLocked && displayedGallery.length <= 1) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="flex items-center gap-2 mt-1 overflow-x-auto pb-2 print:hidden scrollbar-hide py-1">
+                        {displayedGallery.map((gImg, idx) => {
+                          const originalIdx = galleryImages.indexOf(gImg);
+                          const isHidden = hiddenGalleryImages.includes(gImg);
+                          const isMain = originalIdx === 0;
+
+                          return (
+                            <div 
+                               key={gImg + idx} 
+                               draggable={!isTechPackLocked}
+                               onDragStart={(e) => {
+                                 if (isTechPackLocked || checkReadonly()) {
+                                   e.preventDefault();
+                                   return;
+                                 }
+                                 e.dataTransfer.setData('text/plain', originalIdx.toString());
+                                 e.dataTransfer.effectAllowed = 'move';
+                               }}
+                               onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                               onDrop={async (e) => {
+                                 e.preventDefault();
                                  if (isTechPackLocked || checkReadonly()) return;
-                                 if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
-                                    const newGallery = [...galleryImages];
-                                    newGallery.splice(idx, 1);
-                                    setGalleryImages(newGallery);
-                                    setData((d: any) => ({ ...d, gallery: newGallery }));
-                                    const newMainImg = imageUrl === gImg ? (newGallery[0] || '') : imageUrl;
-                                    if (imageUrl === gImg) {
-                                       setImageUrl(newMainImg);
-                                    }
-                                    if (id && id !== 'draft') {
-                                       try {
-                                         await updateDoc(doc(db, 'techPacks', id), {
-                                            imageUrl: newMainImg,
-                                            "techPack.gallery": newGallery
-                                         });
-                                       } catch (err) {
-                                         console.error("Auto-sync image deletion error:", err);
-                                       }
+                                 const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+                                 if (isNaN(fromIdx) || fromIdx === originalIdx) return;
+                                 const newGallery = [...galleryImages];
+                                 const [moved] = newGallery.splice(fromIdx, 1);
+                                 newGallery.splice(originalIdx, 0, moved);
+                                 setGalleryImages(newGallery);
+                                 
+                                 // Reorder finalGalleryImages in dataset as well so saving reflects rearranging
+                                 setData((d: any) => ({ ...d, gallery: newGallery }));
+                                 
+                                 if (originalIdx === 0) setImageUrl(moved);
+                                 
+                                 // Immediately auto-save the new main thumbnail choice if the file is already in the database
+                                 if (originalIdx === 0 && id && id !== 'draft' && !moved.startsWith('data:')) {
+                                    try {
+                                      await updateDoc(doc(db, 'techPacks', id), {
+                                         imageUrl: moved,
+                                         "techPack.gallery": newGallery
+                                      });
+                                    } catch (err) {
+                                      console.error("Auto-sync image error:", err);
                                     }
                                  }
                                }}
-                               className="absolute bottom-0.5 left-0.5 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                               title="Delete Image"
-                             >
-                               <X size={12} />
-                             </button>
-                           )}
-                       </div>
-                      ))}
-                      {!isTechPackLocked && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (checkReadonly()) return;
-                            const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
-                            setGalleryScanSessionId(session);
-                            setShowAddPhotoModal(true);
-                          }}
-                          className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
-                          title="Add Image or Scan with Phone"
-                        >
-                           <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
-                        </button>
-                      )}
-                   </div>
+
+                               className={`group relative w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg shrink-0 cursor-pointer overflow-hidden border-2 transition-all ${
+                                 imageUrl === gImg 
+                                   ? 'border-black scale-105 shadow-md z-10' 
+                                   : isHidden && !isTechPackLocked
+                                     ? 'border-amber-300 opacity-60 hover:opacity-100'
+                                     : 'border-transparent opacity-70 hover:opacity-100'
+                               }`} 
+                               onClick={() => setImageUrl(gImg)}
+                            >
+                               <img src={gImg} className="w-full h-full object-cover pointer-events-none" alt="Gallery thumbnail" />
+
+                               {/* Hidden Dim Overlay in Unlocked Edit Mode */}
+                               {isHidden && !isTechPackLocked && (
+                                 <div className="absolute inset-0 bg-black/40 backdrop-blur-[0.5px] pointer-events-none flex flex-col items-center justify-center">
+                                   <div className="bg-amber-500/90 text-white text-[7px] font-bold px-1 py-0.5 rounded shadow-xs flex items-center gap-0.5">
+                                     <EyeOff size={8} />
+                                     <span>HIDDEN</span>
+                                   </div>
+                                 </div>
+                               )}
+
+                               {/* MAIN Badge */}
+                               {isMain && (
+                                   <div className="absolute top-0 left-0 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded-br-lg shadow-sm z-10">MAIN</div>
+                                )}
+
+                                {/* Hide / Unhide Button */}
+                                {!isTechPackLocked && (
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (isTechPackLocked || checkReadonly()) return;
+                                      await handleToggleHideThumbnail(gImg);
+                                    }}
+                                    className={`absolute ${isMain ? 'top-0.5 right-0.5' : 'top-0.5 left-0.5'} z-10 w-5 h-5 flex items-center justify-center rounded-sm transition-all shadow-sm ${
+                                      isHidden
+                                        ? 'bg-amber-500 text-white hover:bg-amber-600 opacity-100'
+                                        : 'bg-white/90 hover:bg-black hover:text-white text-gray-500 opacity-0 group-hover:opacity-100'
+                                    }`}
+                                    title={isHidden ? "Hidden when locked (Click to unhide)" : "Hide image when locked"}
+                                  >
+                                    {isHidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                                  </button>
+                                )}
+
+                                {/* Set as Main Cover Photo */}
+                                {!isMain && !isTechPackLocked && (
+                                   <button 
+                                     onClick={async (e) => {
+                                       e.stopPropagation();
+                                       if (isTechPackLocked || checkReadonly()) return;
+                                       const newGallery = [...galleryImages];
+                                       const [moved] = newGallery.splice(originalIdx, 1);
+                                       newGallery.unshift(moved);
+                                       setGalleryImages(newGallery);
+
+                                       // Automatically unhide if set as MAIN
+                                       const newHidden = hiddenGalleryImages.filter(u => u !== moved);
+                                       if (newHidden.length !== hiddenGalleryImages.length) {
+                                         setHiddenGalleryImages(newHidden);
+                                       }
+                                       setData((d: any) => ({ ...d, gallery: newGallery, hiddenGalleryImages: newHidden }));
+                                       setImageUrl(moved);
+                                       
+                                       // Immediately auto-save the new main thumbnail choice if the file is already in the database
+                                       if (id && id !== 'draft' && !moved.startsWith('data:')) {
+                                          try {
+                                            await updateDoc(doc(db, 'techPacks', id), {
+                                               imageUrl: moved,
+                                               "techPack.gallery": newGallery,
+                                               "techPack.hiddenGalleryImages": newHidden
+                                            });
+                                          } catch (err) {
+                                            console.error("Auto-sync image error:", err);
+                                          }
+                                       }
+                                     }}
+                                     className="absolute top-0.5 right-0.5 z-10 bg-white/90 hover:bg-black hover:text-white text-gray-400 text-[10px] w-5 h-5 flex flex-col items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all font-bold shadow-sm"
+                                     title="Set as Main Cover Photo"
+                                   >
+                                     ★
+                                   </button>
+                                )}
+
+                                {/* Download Button */}
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (downloadingGalleryIdx !== null) return;
+                                    try {
+                                      setDownloadingGalleryIdx(originalIdx);
+                                      await downloadAsLargePng(gImg, `${packName || 'techpack'}_image_${originalIdx + 1}`, { resolution: 'large' });
+                                    } catch (err) {
+                                      console.error('Gallery image download failed:', err);
+                                      alert('Download failed. Please try again.');
+                                    } finally {
+                                      setDownloadingGalleryIdx(null);
+                                    }
+                                  }}
+                                  disabled={downloadingGalleryIdx === originalIdx}
+                                  className="absolute bottom-0.5 right-0.5 z-10 bg-white/90 hover:bg-black hover:text-white text-gray-600 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                                  title="Download Large Full-Size PNG (2.5K Studio Quality)"
+                                >
+                                  {downloadingGalleryIdx === originalIdx ? (
+                                    <Loader2 size={10} className="animate-spin" />
+                                  ) : (
+                                    <Download size={12} />
+                                  )}
+                                </button>
+
+                                {/* Delete Button */}
+                                {!isTechPackLocked && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (isTechPackLocked || checkReadonly()) return;
+                                      if (window.confirm('Are you sure you want to delete this image? This cannot be undone.')) {
+                                         const newGallery = [...galleryImages];
+                                         newGallery.splice(originalIdx, 1);
+                                         setGalleryImages(newGallery);
+                                         const newHidden = hiddenGalleryImages.filter(u => u !== gImg);
+                                         setHiddenGalleryImages(newHidden);
+                                         setData((d: any) => ({ ...d, gallery: newGallery, hiddenGalleryImages: newHidden }));
+                                         const newMainImg = imageUrl === gImg ? (newGallery[0] || '') : imageUrl;
+                                         if (imageUrl === gImg) {
+                                            setImageUrl(newMainImg);
+                                         }
+                                         if (id && id !== 'draft') {
+                                            try {
+                                              await updateDoc(doc(db, 'techPacks', id), {
+                                                 imageUrl: newMainImg,
+                                                 "techPack.gallery": newGallery,
+                                                 "techPack.hiddenGalleryImages": newHidden
+                                              });
+                                            } catch (err) {
+                                              console.error("Auto-sync image deletion error:", err);
+                                            }
+                                         }
+                                      }
+                                    }}
+                                    className="absolute bottom-0.5 left-0.5 z-10 bg-white/90 hover:bg-red-500 hover:text-white text-red-500 w-5 h-5 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                                    title="Delete Image"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                )}
+                            </div>
+                          );
+                        })}
+                        {!isTechPackLocked && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (checkReadonly()) return;
+                              const session = `${user?.uid || 'guest'}_${id || 'draft'}_gallery_${Date.now()}`;
+                              setGalleryScanSessionId(session);
+                              setShowAddPhotoModal(true);
+                            }}
+                            className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center shrink-0 cursor-pointer hover:bg-gray-50 hover:border-gray-400 group transition-all"
+                            title="Add Image or Scan with Phone"
+                          >
+                             <span className="text-gray-400 group-hover:text-black font-bold text-xl leading-none transition-colors">+</span>
+                          </button>
+                        )}
+                     </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
@@ -2229,18 +2434,26 @@ export function TechPackEditor() {
                     </div>
 
                     {/* Print-Only 2x2 Gallery Grid */}
-                    <div className="hidden print:flex print:w-[45%] flex-col">
-                       <h3 className="text-[10px] uppercase font-bold text-gray-500 mt-2 mb-3 border-t border-gray-200 pt-2 w-full text-center tracking-wider shrink-0">Secondary Views</h3>
-                       {galleryImages.length > 1 && (
-                          <div className="grid grid-cols-2 gap-3 flex-1 auto-rows-[1fr]">
-                             {galleryImages.slice(1, 5).map((img, i) => (
-                                <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border border-gray-100">
-                                   <img src={img} className="max-w-full max-h-[1.7in] w-full object-contain pointer-events-none" />
-                                </div>
-                             ))}
-                          </div>
-                       )}
-                    </div>
+                    {(() => {
+                      const printGallery = (isTechPackLocked 
+                        ? galleryImages.filter(img => !hiddenGalleryImages.includes(img)) 
+                        : galleryImages).slice(1, 5);
+
+                      if (printGallery.length === 0) return null;
+
+                      return (
+                        <div className="hidden print:flex print:w-[45%] flex-col">
+                           <h3 className="text-[10px] uppercase font-bold text-gray-500 mt-2 mb-3 border-t border-gray-200 pt-2 w-full text-center tracking-wider shrink-0">Secondary Views</h3>
+                           <div className="grid grid-cols-2 gap-3 flex-1 auto-rows-[1fr]">
+                              {printGallery.map((img, i) => (
+                                 <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border border-gray-100">
+                                    <img src={img} className="max-w-full max-h-[1.7in] w-full object-contain pointer-events-none" />
+                                 </div>
+                              ))}
+                           </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="print-force-new-page">
