@@ -414,3 +414,51 @@ export const subscribeToTechPackPresence = (
   });
 };
 
+export const duplicateTechPack = async (
+  packId: string,
+  userId: string,
+  companyId: string,
+  userEmail: string,
+  targetFolderId?: string | null
+): Promise<string> => {
+  const packRef = doc(db, 'techPacks', packId);
+  const packSnap = await getDoc(packRef);
+  if (!packSnap.exists()) {
+    throw new Error('Tech Pack not found');
+  }
+
+  const sourceData = packSnap.data();
+  const sourceName = sourceData.name || 'Untitled Garment';
+  const copyName = `${sourceName} (Copy)`;
+
+  const clonedTechPack = JSON.parse(JSON.stringify(sourceData.techPack || {}));
+  clonedTechPack.isLocked = false;
+
+  const newLog = [
+    {
+      timestamp: new Date().toISOString(),
+      message: `Duplicated from "${sourceName}"`,
+      user: userEmail || 'Unknown'
+    }
+  ];
+
+  const payload = {
+    userId,
+    companyId: companyId || userId,
+    creatorEmail: userEmail || 'Unknown',
+    name: copyName,
+    imageUrl: sourceData.imageUrl || '',
+    techPack: clonedTechPack,
+    activityLog: newLog,
+    isTeamEditable: sourceData.isTeamEditable ?? true,
+    isLocked: false,
+    folderId: targetFolderId !== undefined ? targetFolderId : (sourceData.folderId || null),
+    sortOrder: sourceData.sortOrder !== undefined ? sourceData.sortOrder + 0.1 : Date.now(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+
+  const newDocRef = await addDoc(collection(db, 'techPacks'), payload);
+  return newDocRef.id;
+};
+

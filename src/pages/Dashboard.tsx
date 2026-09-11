@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Home,
   FolderOpen,
-  Lock
+  Lock,
+  Copy,
+  Loader2
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,7 +33,8 @@ import {
   updateFolderOrders,
   updateTechPackOrders,
   subscribeToUserAndCompanyTechPacks,
-  subscribeToCompanyFolders
+  subscribeToCompanyFolders,
+  duplicateTechPack
 } from '../services/dbService';
 import { db } from '../services/firebase';
 import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -54,6 +57,8 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [isDuplicatingBatch, setIsDuplicatingBatch] = useState(false);
   
   // Folders State - synced with URL search query ?folder=
   const [folders, setFolders] = useState<FolderData[]>([]);
@@ -231,6 +236,54 @@ export function Dashboard() {
         console.error("Error deleting tech pack:", err);
         alert("Failed to delete. You might not be authorized.");
       }
+    }
+  };
+
+  const handleDuplicate = async (e: React.MouseEvent, pack: TechPackData) => {
+    e.stopPropagation(); // prevent card click
+    if (!pack.id || !user) return;
+
+    try {
+      setDuplicatingId(pack.id);
+      const companyId = profile?.companyId || user.uid;
+      const targetFolder = pack.folderId || (activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null);
+      await duplicateTechPack(
+        pack.id,
+        user.uid,
+        companyId,
+        user.email || 'Unknown',
+        targetFolder
+      );
+    } catch (err: any) {
+      console.error("Error duplicating tech pack:", err);
+      alert("Failed to duplicate Tech Pack: " + (err.message || "Unknown error"));
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
+
+  const handleDuplicateSelected = async () => {
+    if (selectedPacks.length === 0 || !user) return;
+    try {
+      setIsDuplicatingBatch(true);
+      const companyId = profile?.companyId || user.uid;
+      const targetFolder = activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null;
+      for (const packId of selectedPacks) {
+        await duplicateTechPack(
+          packId,
+          user.uid,
+          companyId,
+          user.email || 'Unknown',
+          targetFolder
+        );
+      }
+      setIsSelectMode(false);
+      setSelectedPacks([]);
+    } catch (err: any) {
+      console.error("Error batch duplicating tech packs:", err);
+      alert("Failed to duplicate selected Tech Packs: " + (err.message || "Unknown error"));
+    } finally {
+      setIsDuplicatingBatch(false);
     }
   };
 
@@ -566,6 +619,17 @@ export function Dashboard() {
               >
                 <FolderInput size={16} />
                 <span>Move ({selectedPacks.length})</span>
+              </Button>
+              <Button
+                onClick={handleDuplicateSelected}
+                disabled={selectedPacks.length === 0 || isDuplicatingBatch}
+                isLoading={isDuplicatingBatch}
+                variant="secondary"
+                className="shrink-0 rounded-full px-4 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-gray-300 hover:bg-gray-100"
+                title="Duplicate selected Tech Packs"
+              >
+                <Copy size={15} />
+                <span>Duplicate ({selectedPacks.length})</span>
               </Button>
               <Button 
                 onClick={() => {
@@ -969,25 +1033,45 @@ export function Dashboard() {
                     </div>
                   )}
 
-                  {/* Lock Indicator Badge */}
-                  {!isSelectMode && (pack.isLocked || pack.techPack?.isLocked) && (
-                    <div className="absolute top-3 right-3 z-10 bg-black/85 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shadow-sm border border-white/20" title="Tech Pack is Locked">
-                      <Lock size={10} className="text-white" />
-                      <span>Locked</span>
+                  {!isSelectMode && (
+                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+                      {/* Duplicate Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDuplicate(e, pack)}
+                        disabled={duplicatingId === pack.id}
+                        className="opacity-0 group-hover:opacity-100 transition-all bg-white/95 backdrop-blur-sm shadow-sm hover:bg-black hover:text-white text-gray-700 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 border border-gray-200 hover:border-black cursor-pointer"
+                        title="Duplicate this Tech Pack"
+                      >
+                        {duplicatingId === pack.id ? (
+                          <Loader2 size={11} className="animate-spin" />
+                        ) : (
+                          <Copy size={11} />
+                        )}
+                        <span>Duplicate</span>
+                      </button>
+
+                      {/* Lock Indicator Badge */}
+                      {(pack.isLocked || pack.techPack?.isLocked) && (
+                        <div className="bg-black/85 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shadow-sm border border-white/20" title="Tech Pack is Locked">
+                          <Lock size={10} className="text-white" />
+                          <span>Locked</span>
+                        </div>
+                      )}
+
+                      {/* Delete Button */}
+                      {!(pack.isLocked || pack.techPack?.isLocked) && (profile?.role === 'admin' || pack.userId === user?.uid) && (
+                        <button 
+                          type="button"
+                          onClick={(e) => handleDelete(e, pack.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm shadow-sm hover:bg-red-50 text-gray-400 hover:text-red-500 p-1.5 rounded-full border border-gray-100 hover:border-red-200 cursor-pointer"
+                          title="Delete Tech Pack"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   )}
-
-                  {(!isSelectMode && !(pack.isLocked || pack.techPack?.isLocked) && (profile?.role === 'admin' || pack.userId === user?.uid)) && (
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                     <button 
-                       onClick={(e) => handleDelete(e, pack.id)}
-                       className="bg-white/90 backdrop-blur-sm shadow-sm hover:bg-red-50 text-gray-400 hover:text-red-500 p-2 rounded-xl transition-colors border border-gray-100 hover:border-red-200"
-                       title="Delete Tech Pack"
-                     >
-                       <Trash2 size={16} />
-                     </button>
-                  </div>
-                )}
                 {pack.imageUrl ? (
                   <img src={pack.imageUrl} alt={pack.name} className="w-full h-full object-contain" />
                 ) : (
