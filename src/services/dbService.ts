@@ -452,6 +452,7 @@ export const duplicateTechPack = async (
     activityLog: newLog,
     isTeamEditable: sourceData.isTeamEditable ?? true,
     isLocked: false,
+    hiddenGalleryImages: sourceData.hiddenGalleryImages || clonedTechPack.hiddenGalleryImages || [],
     folderId: targetFolderId !== undefined ? targetFolderId : (sourceData.folderId || null),
     sortOrder: sourceData.sortOrder !== undefined ? sourceData.sortOrder + 0.1 : Date.now(),
     createdAt: serverTimestamp(),

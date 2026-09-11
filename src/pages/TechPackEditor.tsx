@@ -475,7 +475,7 @@ export function TechPackEditor() {
   };
 
   const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
-  const isTechPackLocked = Boolean(data?.isLocked);
+  const isTechPackLocked = Boolean(data?.isLocked || (data as any)?.techPack?.isLocked);
   const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
@@ -1735,6 +1735,18 @@ export function TechPackEditor() {
     }
   };
 
+  const isImgHidden = (url: string) => {
+    if (!url) return false;
+    return hiddenGalleryImages.includes(url) || hiddenGalleryImages.some(h => h && (h === url || decodeURIComponent(h) === decodeURIComponent(url)));
+  };
+  const unhiddenGalleryImages = galleryImages.filter(img => !isImgHidden(img));
+  const coverMainImage = (imageUrl && !isImgHidden(imageUrl))
+    ? imageUrl
+    : (unhiddenGalleryImages[0] || imageUrl);
+  const secondaryPrintImages = unhiddenGalleryImages
+    .filter(img => img !== coverMainImage)
+    .slice(0, 4);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-hidden">
       {/* Top Header Navigation & Controls */}
@@ -2048,14 +2060,14 @@ export function TechPackEditor() {
                 {/* Left Column (Digital) / Top Grid (Print) */}
                 <div className="col-span-12 lg:col-span-5 print:w-full space-y-4">
                   <div className="print:flex print:flex-row print:w-full print:gap-6 print:mb-4 print:pb-4 print:border-b print:border-gray-200">
-                    <div className="w-full print:w-[55%] flex flex-col space-y-4">
-                      {imageUrl ? (
+                    <div className={`w-full ${secondaryPrintImages.length > 0 ? 'print:w-[55%]' : 'print:w-full'} flex flex-col space-y-4`}>
+                      {coverMainImage ? (
                 <div>
                   <div className={`bg-white rounded-2xl print-image-wrapper relative group/mainimg`}>
                     {/* Interactive UI and Annotated Print */}
                     <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
-                        imageUrl={imageUrl} 
+                        imageUrl={coverMainImage} 
                         measurements={displayData.measurements}
                         isLocked={isTechPackLocked}
                         onVectorize={handleVectorize}
@@ -2188,7 +2200,7 @@ export function TechPackEditor() {
 
                   {/* Photo Gallery Strip Header / Actions */}
                   {galleryImages.length > 0 && (
-                    <div className="flex items-center justify-between text-xs text-gray-500 mt-4 mb-1 px-0.5">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mt-4 mb-1 px-0.5 print:hidden">
                       <div className="flex items-center gap-1.5 font-semibold text-[11px] text-gray-600">
                         <span>Photos ({isTechPackLocked ? galleryImages.filter(img => !hiddenGalleryImages.includes(img)).length : galleryImages.length})</span>
                         {!isTechPackLocked && hiddenGalleryImages.length > 0 && (
@@ -2475,27 +2487,19 @@ export function TechPackEditor() {
               )}
                     </div>
 
-                    {/* Print-Only 2x2 Gallery Grid */}
-                    {(() => {
-                      const printGallery = (isTechPackLocked 
-                        ? galleryImages.filter(img => !hiddenGalleryImages.includes(img)) 
-                        : galleryImages).slice(1, 5);
-
-                      if (printGallery.length === 0) return null;
-
-                      return (
-                        <div className="hidden print:flex print:w-[45%] flex-col">
-                           <h3 className="text-[10px] uppercase font-bold text-gray-500 mt-2 mb-3 border-t border-gray-200 pt-2 w-full text-center tracking-wider shrink-0">Secondary Views</h3>
-                           <div className="grid grid-cols-2 gap-3 flex-1 auto-rows-[1fr]">
-                              {printGallery.map((img, i) => (
-                                 <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border border-gray-100">
-                                    <img src={img} className="max-w-full max-h-[1.7in] w-full object-contain pointer-events-none" />
-                                 </div>
-                              ))}
-                           </div>
-                        </div>
-                      );
-                    })()}
+                    {/* Print-Only Secondary Views Grid */}
+                    {secondaryPrintImages.length > 0 && (
+                      <div className="hidden print:flex print:w-[45%] flex-col">
+                         <h3 className="text-[10px] uppercase font-bold text-gray-500 mt-2 mb-3 border-t border-gray-200 pt-2 w-full text-center tracking-wider shrink-0">Secondary Views</h3>
+                         <div className={`grid ${secondaryPrintImages.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-3 flex-1 auto-rows-[1fr]`}>
+                            {secondaryPrintImages.map((img, i) => (
+                               <div key={i} className="bg-gray-50 rounded-2xl overflow-hidden shadow-none flex items-center justify-center p-2 border border-gray-100">
+                                  <img src={img} className="max-w-full max-h-[1.7in] w-full object-contain pointer-events-none" />
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="print-force-new-page">
