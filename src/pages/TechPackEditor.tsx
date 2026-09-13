@@ -1987,12 +1987,19 @@ export function TechPackEditor() {
                  value={displayData?.properties?.occasion || ''}
                  onChange={(e) => updateProperty('occasion', e.target.value)}
                >
-                 <option value="" disabled>Select Occasion</option>
-                 <option value="Corporate">Corporate</option>
-                 <option value="Wedding">Wedding</option>
-                 <option value="Night Out">Night Out</option>
-                 <option value="Gym">Gym</option>
-                 <option value="Mixer">Mixer</option>
+                  <option value="" disabled>Select Occasion</option>
+                  <option value="Daily">Daily</option>
+                  <option value="Work">Work</option>
+                  <option value="Weekend">Weekend</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Corporate">Corporate</option>
+                  <option value="Wedding">Wedding</option>
+                  <option value="Night Out">Night Out</option>
+                  <option value="Gym">Gym</option>
+                  <option value="Mixer">Mixer</option>
+                  {displayData?.properties?.occasion === 'Everyday' && (
+                    <option value="Everyday">Everyday</option>
+                  )}
                </select>
              </div>
              <div className="space-y-0.5 relative group">
