@@ -1306,7 +1306,8 @@ export function TechPackEditor() {
         sleeveMatrix: finalSleeve,
         stretchCoefficient: 1.0,
         garmentType: displayData?.properties?.category || 'Top',
-        audience: displayData?.properties?.audience || 'Unisex',
+        gender: displayData?.properties?.gender || displayData?.properties?.audience || 'Unisex',
+        audience: displayData?.properties?.gender || displayData?.properties?.audience || 'Unisex',
         occasion: displayData?.properties?.occasion || 'General',
         dominantColorways: finalColorways,
         renderUrl: safeRenderUrl
@@ -2042,12 +2043,19 @@ export function TechPackEditor() {
              </div>
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.gender || ''}
-                 placeholder="N/A"
-                 onChange={(e) => updateProperty('gender', e.target.value)}
-               />
+               <select 
+                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                 value={displayData?.properties?.gender || ""}
+                 onChange={(e) => updateProperty("gender", e.target.value)}
+               >
+                 <option value="" disabled>Select Gender</option>
+                 <option value="Men">Men</option>
+                 <option value="Women">Women</option>
+                 <option value="Unisex">Unisex</option>
+                 {displayData?.properties?.gender && !["Men", "Women", "Unisex"].includes(displayData.properties.gender) && (
+                   <option value={displayData.properties.gender}>{displayData.properties.gender}</option>
+                 )}
+               </select>
              </div>
              <div className="space-y-0.5">
                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
