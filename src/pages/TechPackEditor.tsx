@@ -222,6 +222,34 @@ export function TechPackEditor() {
   const annotatorRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
   const lastSavedJsonRef = useRef<string>('');
+  const isSavingRef = useRef(false);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const isUploadingPhotosRef = useRef(false);
+
+  const getNormalizedStateHash = (
+    packData: any,
+    pName: string,
+    imgUrl: string,
+    gallery: string[],
+    hiddenGallery: string[]
+  ) => {
+    if (!packData) return '';
+    const clean = { ...packData };
+    delete clean.userId;
+    delete clean.isTeamEditable;
+    delete clean.activityLog;
+    delete clean.updatedAt;
+    delete clean.createdAt;
+    delete clean.lastUpdatedBy;
+
+    return JSON.stringify({
+      data: clean,
+      packName: pName || '',
+      imageUrl: imgUrl || '',
+      galleryImages: gallery || [],
+      hiddenGalleryImages: hiddenGallery || []
+    });
+  };
 
   const [isDownloadingMain, setIsDownloadingMain] = useState(false);
   const [downloadingGalleryIdx, setDownloadingGalleryIdx] = useState<number | null>(null);
@@ -558,6 +586,13 @@ export function TechPackEditor() {
         await updateDoc(doc(db, 'techPacks', id), {
           "techPack.hiddenGalleryImages": newHidden
         });
+        lastSavedJsonRef.current = getNormalizedStateHash(
+          { ...data, hiddenGalleryImages: newHidden },
+          packName,
+          imageUrl,
+          galleryImages,
+          newHidden
+        );
       } catch (err) {
         console.error("Auto-sync hiddenGalleryImages error:", err);
       }
@@ -579,6 +614,13 @@ export function TechPackEditor() {
         await updateDoc(doc(db, 'techPacks', id), {
           "techPack.hiddenGalleryImages": newHidden
         });
+        lastSavedJsonRef.current = getNormalizedStateHash(
+          { ...data, hiddenGalleryImages: newHidden },
+          packName,
+          imageUrl,
+          galleryImages,
+          newHidden
+        );
       } catch (err) {
         console.error("Auto-sync hide-all error:", err);
       }
@@ -1044,13 +1086,32 @@ export function TechPackEditor() {
       setGalleryImages(initialGallery);
       setHiddenGalleryImages(pack?.hiddenGalleryImages || []);
 
-      if (location.state.name) setPackName(location.state.name);
+      const pName = location.state.name || pack?.name || 'Untitled Garment';
+      setPackName(pName);
+      lastSavedJsonRef.current = getNormalizedStateHash(
+        pack,
+        pName,
+        initialImage,
+        initialGallery,
+        pack?.hiddenGalleryImages || []
+      );
       setIsLoading(false);
     }
 
     if (id && id !== 'draft') {
-      const unsub = subscribeToTechPack(id, (packInfo) => {
+      const unsub = subscribeToTechPack(id, (packInfo, metadata) => {
         if (packInfo) {
+          // 1. Ignore snapshots from local pending writes
+          if (metadata?.hasPendingWrites) {
+            return;
+          }
+
+          // 2. Ignore if local client is actively saving or uploading photos
+          if (isSavingRef.current || isUploadingPhotosRef.current) {
+            return;
+          }
+
+          // 3. Ignore if user is actively typing in an input
           const isInputFocused = () => {
             if (typeof document === 'undefined') return false;
             const activeEl = document.activeElement;
@@ -1069,6 +1130,31 @@ export function TechPackEditor() {
             : !!pack?.isLocked;
 
           const loadedUnit = detectInitialUnit(pack);
+          const pName = packInfo.name || 'Untitled Garment';
+          const initialImage = pack?.images?.original || packInfo.imageUrl || '';
+          
+          const docGallery: string[] = pack?.gallery || [];
+          const combinedGallery = [...docGallery];
+          if (packInfo.imageUrl && !combinedGallery.includes(packInfo.imageUrl)) {
+            combinedGallery.unshift(packInfo.imageUrl);
+          }
+          if (initialImage && !combinedGallery.includes(initialImage)) {
+            combinedGallery.unshift(initialImage);
+          }
+
+          const packHidden: string[] = pack?.hiddenGalleryImages || (packInfo as any).hiddenGalleryImages || [];
+
+          const visibleFromDb = combinedGallery.filter(img => !packHidden.includes(img));
+          const fallbackImg = visibleFromDb[0] || initialImage || packInfo.imageUrl || combinedGallery[0] || '';
+          const initialSelImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : fallbackImg;
+          const selImg = isLockedFromDb && packHidden.includes(initialSelImg) ? fallbackImg : initialSelImg;
+
+          // Check if incoming snapshot matches what we already saved locally
+          const incomingHash = getNormalizedStateHash(pack, pName, selImg, combinedGallery, packHidden);
+          if (incomingHash === lastSavedJsonRef.current) {
+            setIsLoading(false);
+            return;
+          }
 
           setData((prev: any) => ({
             ...pack,
@@ -1084,24 +1170,8 @@ export function TechPackEditor() {
             setGlobalUnit(loadedUnit);
             localStorage.setItem(MEASUREMENT_UNIT_KEY, loadedUnit);
           }
-          const initialImage = pack?.images?.original || packInfo.imageUrl || '';
-          
-          const docGallery: string[] = pack?.gallery || [];
-          const combinedGallery = [...docGallery];
-          if (packInfo.imageUrl && !combinedGallery.includes(packInfo.imageUrl)) {
-            combinedGallery.unshift(packInfo.imageUrl);
-          }
-          if (initialImage && !combinedGallery.includes(initialImage)) {
-            combinedGallery.unshift(initialImage);
-          }
 
-          const packHidden: string[] = pack?.hiddenGalleryImages || (packInfo as any).hiddenGalleryImages || [];
           setHiddenGalleryImages(packHidden);
-
-          const visibleFromDb = combinedGallery.filter(img => !packHidden.includes(img));
-          const fallbackImg = visibleFromDb[0] || initialImage || packInfo.imageUrl || combinedGallery[0] || '';
-          const initialSelImg = imageUrl && combinedGallery.includes(imageUrl) ? imageUrl : fallbackImg;
-          const selImg = isLockedFromDb && packHidden.includes(initialSelImg) ? fallbackImg : initialSelImg;
 
           setImageUrl((prev) => {
             if (isLockedFromDb && packHidden.includes(prev)) return fallbackImg;
@@ -1110,17 +1180,10 @@ export function TechPackEditor() {
           });
 
           setGalleryImages(combinedGallery);
-          const pName = packInfo.name || 'Untitled Garment';
           setPackName(pName);
 
           // Record current state hash to prevent echoing incoming Firestore updates back into save loop
-          lastSavedJsonRef.current = JSON.stringify({
-            data: pack,
-            packName: pName,
-            imageUrl: selImg,
-            galleryImages: combinedGallery,
-            hiddenGalleryImages: packHidden
-          });
+          lastSavedJsonRef.current = incomingHash;
         }
         setIsLoading(false);
       });
@@ -1145,16 +1208,16 @@ export function TechPackEditor() {
       return;
     }
 
-    const currentJson = JSON.stringify({
+    const currentHash = getNormalizedStateHash(
       data,
       packName,
       imageUrl,
       galleryImages,
       hiddenGalleryImages
-    });
+    );
 
     // DO NOT SAVE IF NO CHANGES WERE MADE!
-    if (currentJson === lastSavedJsonRef.current) {
+    if (currentHash === lastSavedJsonRef.current) {
       return;
     }
 
@@ -1168,13 +1231,14 @@ export function TechPackEditor() {
         return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
       };
 
-      if (isInputFocused()) {
+      if (isInputFocused() || isUploadingPhotosRef.current) {
         return;
       }
 
       try {
         setIsSaving(true);
-        lastSavedJsonRef.current = currentJson;
+        isSavingRef.current = true;
+        lastSavedJsonRef.current = currentHash;
 
         const techPackDataToSave = JSON.parse(JSON.stringify(data));
         delete techPackDataToSave.userId;
@@ -1182,14 +1246,20 @@ export function TechPackEditor() {
         delete techPackDataToSave.activityLog;
 
         let finalGalleryImages = [];
+        let hasBase64InGallery = false;
         for (const gImg of galleryImages) {
            let finalUrl = gImg;
            if (gImg.startsWith('data:')) {
+              hasBase64InGallery = true;
               finalUrl = await uploadBase64Image(gImg, user.uid);
            }
            finalGalleryImages.push(finalUrl);
         }
         techPackDataToSave.gallery = finalGalleryImages;
+        if (hasBase64InGallery) {
+          setGalleryImages(finalGalleryImages);
+          setData((prev: any) => ({ ...prev, gallery: finalGalleryImages }));
+        }
 
         const finalHiddenGallery = hiddenGalleryImages.map(img => {
           const gIdx = galleryImages.indexOf(img);
@@ -1204,6 +1274,14 @@ export function TechPackEditor() {
         const mainImageToSave = isTechPackLocked && finalHiddenGallery.includes(imageUrl)
           ? (visibleGallery[0] || imageUrl || '')
           : (imageUrl || visibleGallery[0] || '');
+
+        lastSavedJsonRef.current = getNormalizedStateHash(
+          techPackDataToSave,
+          packName,
+          mainImageToSave,
+          finalGalleryImages,
+          finalHiddenGallery
+        );
 
         await saveTechPack(
           user.uid,
@@ -1220,6 +1298,7 @@ export function TechPackEditor() {
         console.error("Debounced auto-save error:", err);
       } finally {
         setIsSaving(false);
+        isSavingRef.current = false;
       }
     }, 2500);
 
@@ -1335,6 +1414,7 @@ export function TechPackEditor() {
   const handleSave = async () => {
     if (!user) return alert("Must be logged in to save.");
     setIsSaving(true);
+    isSavingRef.current = true;
     try {
       const saveLog = {
         timestamp: new Date().toISOString(),
@@ -1443,6 +1523,14 @@ export function TechPackEditor() {
         displayData.isTeamEditable ?? true
       );
       
+      lastSavedJsonRef.current = getNormalizedStateHash(
+        sanitizedTechPackData,
+        packName,
+        mainImageToSave,
+        finalGalleryImages,
+        finalHiddenGallery
+      );
+
       const currentFromFolder = (location.state as any)?.fromFolderId || displayData?.folderId || data?.folderId || sessionStorage.getItem('activeFolderId');
 
       // Update browser history state to ensure page refreshes display the saved values
@@ -1463,6 +1551,7 @@ export function TechPackEditor() {
       alert("Failed to save tech pack: \n\n" + (e.message || String(e)));
     } finally {
       setIsSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -2299,6 +2388,13 @@ export function TechPackEditor() {
                                          imageUrl: moved,
                                          "techPack.gallery": newGallery
                                       });
+                                      lastSavedJsonRef.current = getNormalizedStateHash(
+                                        { ...data, gallery: newGallery },
+                                        packName,
+                                        moved,
+                                        newGallery,
+                                        hiddenGalleryImages
+                                      );
                                     } catch (err) {
                                       console.error("Auto-sync image error:", err);
                                     }
@@ -2378,6 +2474,13 @@ export function TechPackEditor() {
                                                "techPack.gallery": newGallery,
                                                "techPack.hiddenGalleryImages": newHidden
                                             });
+                                            lastSavedJsonRef.current = getNormalizedStateHash(
+                                              { ...data, gallery: newGallery, hiddenGalleryImages: newHidden },
+                                              packName,
+                                              moved,
+                                              newGallery,
+                                              newHidden
+                                            );
                                           } catch (err) {
                                             console.error("Auto-sync image error:", err);
                                           }
@@ -2440,6 +2543,13 @@ export function TechPackEditor() {
                                                  "techPack.gallery": newGallery,
                                                  "techPack.hiddenGalleryImages": newHidden
                                               });
+                                              lastSavedJsonRef.current = getNormalizedStateHash(
+                                                { ...data, gallery: newGallery, hiddenGalleryImages: newHidden },
+                                                packName,
+                                                newMainImg,
+                                                newGallery,
+                                                newHidden
+                                              );
                                             } catch (err) {
                                               console.error("Auto-sync image deletion error:", err);
                                             }
@@ -3454,27 +3564,71 @@ export function TechPackEditor() {
           <div className="space-y-6 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Option 1: Computer Upload */}
-              <label className="p-6 border-2 border-gray-200 hover:border-black rounded-2xl cursor-pointer flex flex-col items-center justify-center text-center transition-all group bg-gray-50/50 hover:bg-gray-50">
-                <Upload size={36} className="text-gray-400 group-hover:text-black mb-3 transition-colors" />
-                <span className="font-bold text-gray-900 text-sm">Upload from Computer</span>
-                <span className="text-xs text-gray-500 mt-1">Select files from your device</span>
+              <label className={`p-6 border-2 border-gray-200 rounded-2xl flex flex-col items-center justify-center text-center transition-all group ${isUploadingPhotos ? 'opacity-70 cursor-not-allowed bg-gray-100' : 'hover:border-black cursor-pointer bg-gray-50/50 hover:bg-gray-50'}`}>
+                {isUploadingPhotos ? (
+                  <Loader2 size={36} className="text-blue-600 animate-spin mb-3" />
+                ) : (
+                  <Upload size={36} className="text-gray-400 group-hover:text-black mb-3 transition-colors" />
+                )}
+                <span className="font-bold text-gray-900 text-sm">
+                  {isUploadingPhotos ? 'Uploading Photos...' : 'Upload from Computer'}
+                </span>
+                <span className="text-xs text-gray-500 mt-1">
+                  {isUploadingPhotos ? 'Compressing & saving to cloud...' : 'Select files from your device'}
+                </span>
                 <input
                   type="file"
                   multiple
                   accept="image/*"
                   className="hidden"
+                  disabled={isUploadingPhotos}
                   onChange={async (e) => {
                     if (e.target.files && e.target.files.length > 0) {
-                      const files = Array.from(e.target.files);
-                      const promises = files.map(file => compressImageFile(file, 2048));
-                      const newImages = await Promise.all(promises);
-                      const newGallery = [...galleryImages, ...newImages];
-                      setGalleryImages(newGallery);
-                      setData((d: any) => ({ ...d, gallery: newGallery }));
-                      if (!imageUrl && newImages.length > 0) {
-                        setImageUrl(newImages[0]);
+                      if (!user) {
+                        alert("Please log in to upload images.");
+                        return;
                       }
-                      setShowAddPhotoModal(false);
+                      const files = Array.from(e.target.files);
+                      setIsUploadingPhotos(true);
+                      isUploadingPhotosRef.current = true;
+                      try {
+                        const uploadPromises = files.map(async (file) => {
+                          const compressedBase64 = await compressImageFile(file, 2048);
+                          return await uploadBase64Image(compressedBase64, user.uid);
+                        });
+                        const uploadedUrls = await Promise.all(uploadPromises);
+
+                        const newGallery = [...galleryImages, ...uploadedUrls];
+                        setGalleryImages(newGallery);
+                        setData((d: any) => ({ ...d, gallery: newGallery }));
+
+                        let newMain = imageUrl;
+                        if (!imageUrl && uploadedUrls.length > 0) {
+                          newMain = uploadedUrls[0];
+                          setImageUrl(newMain);
+                        }
+
+                        if (id && id !== 'draft') {
+                          await updateDoc(doc(db, 'techPacks', id), {
+                            imageUrl: newMain || uploadedUrls[0] || '',
+                            "techPack.gallery": newGallery
+                          });
+                          lastSavedJsonRef.current = getNormalizedStateHash(
+                            { ...data, gallery: newGallery },
+                            packName,
+                            newMain || uploadedUrls[0] || '',
+                            newGallery,
+                            hiddenGalleryImages
+                          );
+                        }
+                        setShowAddPhotoModal(false);
+                      } catch (err) {
+                        console.error("Failed to upload image(s):", err);
+                        alert("Failed to upload image. Please check your internet connection and try again.");
+                      } finally {
+                        setIsUploadingPhotos(false);
+                        isUploadingPhotosRef.current = false;
+                      }
                     }
                   }}
                 />

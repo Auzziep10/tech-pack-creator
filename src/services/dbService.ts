@@ -317,12 +317,15 @@ export const updateTechPackOrders = async (orders: { id: string; sortOrder: numb
 
 export const subscribeToTechPack = (
   id: string, 
-  callback: (pack: TechPackData | null) => void
+  callback: (pack: TechPackData | null, metadata?: { hasPendingWrites: boolean }) => void
 ) => {
   const packRef = doc(db, 'techPacks', id);
   return onSnapshot(packRef, (snap) => {
     if (snap.exists()) {
-      callback({ id: snap.id, ...snap.data() } as TechPackData);
+      callback(
+        { id: snap.id, ...snap.data() } as TechPackData,
+        { hasPendingWrites: snap.metadata.hasPendingWrites }
+      );
     } else {
       callback(null);
     }
