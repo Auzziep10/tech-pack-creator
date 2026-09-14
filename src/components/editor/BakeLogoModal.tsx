@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, UploadCloud, RotateCw, CheckCircle2, Download, Loader2, ArrowLeftRight, Trash2, Sliders, Layers } from 'lucide-react';
+import { X, Sparkles, UploadCloud, RotateCw, CheckCircle2, Download, Loader2, ArrowLeftRight, Trash2, Sliders, Layers, Scissors, Crop } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { bakeGarmentLogo } from '../../services/nanobananaService';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
+import { GraphicEditorModal } from './GraphicEditorModal';
 
 interface BakeLogoModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ type PrintStyle = 'Screenprint' | 'Embroidered' | 'Vintage Distressed' | 'Direct
 export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLogoModalProps) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [logoName, setLogoName] = useState<string>('');
+  const [showGraphicEditor, setShowGraphicEditor] = useState<boolean>(false);
   
   // Placement & Transform States (relative to garment center in percentage)
   const [posX, setPosX] = useState(0); // -45 to 45%
@@ -435,8 +437,17 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
+                          onClick={() => setShowGraphicEditor(true)}
+                          className="text-[11px] font-bold text-amber-700 hover:text-amber-800 px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Remove background colors or crop graphic"
+                        >
+                          <Scissors size={12} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="text-[11px] text-slate-500 hover:text-slate-800 px-2 py-1 rounded hover:bg-slate-200/50 transition-colors"
+                          className="text-[11px] text-slate-500 hover:text-slate-800 px-2 py-1 rounded hover:bg-slate-200/50 transition-colors cursor-pointer"
                         >
                           Change
                         </button>
@@ -446,13 +457,25 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
                             setLogoSrc(null);
                             setLogoName('');
                           }}
-                          className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors"
+                          className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* Crop & Color Removal Quick Action Button */}
+                {logoSrc && !resultImage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowGraphicEditor(true)}
+                    className="w-full mt-2 py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 text-amber-900 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer group"
+                  >
+                    <Scissors size={13} className="text-amber-600 group-hover:rotate-12 transition-transform" />
+                    <span>Crop & Remove Background Colors</span>
+                  </button>
                 )}
               </div>
 
@@ -589,6 +612,18 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
           </div>
         </div>
       </div>
+
+      {showGraphicEditor && logoSrc && (
+        <GraphicEditorModal
+          isOpen={showGraphicEditor}
+          onClose={() => setShowGraphicEditor(false)}
+          imageSrc={logoSrc}
+          onApply={(editedSrc) => {
+            setLogoSrc(editedSrc);
+            setResultImage(null);
+          }}
+        />
+      )}
     </div>
   );
 
