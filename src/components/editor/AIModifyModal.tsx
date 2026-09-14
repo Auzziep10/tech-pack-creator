@@ -1,6 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, Wand2, Undo, Trash2, Download, CheckCircle2, Loader2, ArrowLeftRight, Paintbrush } from 'lucide-react';
+import { 
+  X, 
+  Sparkles, 
+  Wand2, 
+  Undo, 
+  Undo2, 
+  Redo2, 
+  RotateCcw, 
+  Trash2, 
+  Download, 
+  CheckCircle2, 
+  Loader2, 
+  ArrowLeftRight, 
+  Paintbrush,
+  History,
+  Check
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { modifyGarmentRegion } from '../../services/nanobananaService';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
@@ -29,18 +45,25 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
-  const [history, setHistory] = useState<ImageData[]>([]);
+  const [strokeHistory, setStrokeHistory] = useState<ImageData[]>([]);
   
+  // Multi-step modification history stack
+  const [historyStack, setHistoryStack] = useState<string[]>([imageUrl]);
+  const [historyIndex, setHistoryIndex] = useState<number>(0);
+  const [showOriginalPreview, setShowOriginalPreview] = useState(false);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [resultImage, setResultImage] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<'result' | 'original'>('result');
   const [error, setError] = useState<string | null>(null);
 
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  const currentGarmentImage = showOriginalPreview 
+    ? imageUrl 
+    : (historyStack[historyIndex] || imageUrl);
 
   // Initialize canvas coordinates directly to match image natural resolution
   const handleImageLoaded = () => {
@@ -58,13 +81,18 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
   useEffect(() => {
     if (!isOpen) {
-      setResultImage(null);
+      setHistoryStack([imageUrl]);
+      setHistoryIndex(0);
+      setShowOriginalPreview(false);
       setPrompt('');
       setError(null);
       setStrokeCount(0);
-      setHistory([]);
+      setStrokeHistory([]);
       setIsCanvasReady(false);
     } else {
+      setHistoryStack([imageUrl]);
+      setHistoryIndex(0);
+      setShowOriginalPreview(false);
       // Check if image is already cached/complete
       if (imageRef.current && imageRef.current.complete) {
         handleImageLoaded();
@@ -84,26 +112,26 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const currentData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory(prev => [...prev.slice(-15), currentData]);
+    setStrokeHistory(prev => [...prev.slice(-15), currentData]);
   };
 
-  const handleUndo = () => {
+  const handleUndoStroke = () => {
     const canvas = canvasRef.current;
-    if (!canvas || history.length === 0) return;
+    if (!canvas || strokeHistory.length === 0) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const newHistory = [...history];
+    const newHistory = [...strokeHistory];
     newHistory.pop();
     const previousState = newHistory[newHistory.length - 1];
     
     if (previousState) {
       ctx.putImageData(previousState, 0, 0);
-      setHistory(newHistory);
+      setStrokeHistory(newHistory);
       setStrokeCount(prev => Math.max(1, prev - 1));
     } else {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setHistory([]);
+      setStrokeHistory([]);
       setStrokeCount(0);
     }
   };
@@ -114,8 +142,31 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHistory([]);
+    setStrokeHistory([]);
     setStrokeCount(0);
+  };
+
+  // Step Management: Take away or redo modifications
+  const handleUndoStep = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      clearCanvas();
+      setError(null);
+    }
+  };
+
+  const handleRedoStep = () => {
+    if (historyIndex < historyStack.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      clearCanvas();
+      setError(null);
+    }
+  };
+
+  const handleRevertAll = () => {
+    setHistoryIndex(0);
+    clearCanvas();
+    setError(null);
   };
 
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -131,7 +182,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   };
 
   const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (resultImage) return;
+    if (isGenerating || showOriginalPreview) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -154,7 +205,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   };
 
   const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !lastPointRef.current || resultImage) return;
+    if (!isDrawing || !lastPointRef.current || isGenerating || showOriginalPreview) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -230,9 +281,15 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
       maskCtx.drawImage(tempStrokes, 0, 0);
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
-      const result = await modifyGarmentRegion(imageUrl, maskBase64, prompt);
-      setResultImage(result);
-      setPreviewMode('result');
+      const currentBaseImage = historyStack[historyIndex] || imageUrl;
+      const result = await modifyGarmentRegion(currentBaseImage, maskBase64, prompt);
+
+      const nextStack = [...historyStack.slice(0, historyIndex + 1), result];
+      setHistoryStack(nextStack);
+      setHistoryIndex(nextStack.length - 1);
+      setShowOriginalPreview(false);
+      clearCanvas();
+      setPrompt('');
     } catch (err: any) {
       console.error('Modify Error:', err);
       setError(err?.message || 'Failed to modify garment area. Please try again.');
@@ -242,10 +299,14 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   };
 
   const handleSave = async () => {
-    if (!resultImage) return;
+    const finalImage = historyStack[historyIndex];
+    if (!finalImage || historyIndex === 0) {
+      onClose();
+      return;
+    }
     setIsSaving(true);
     try {
-      await onSaveImage(resultImage);
+      await onSaveImage(finalImage);
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Failed to save modified garment.');
@@ -272,8 +333,13 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
               <div className="flex items-center gap-2">
                 <h3 className="font-serif text-base sm:text-lg text-slate-900 font-bold tracking-wide">Draw on Garment to Modify</h3>
                 <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">Studio</span>
+                {historyIndex > 0 && (
+                  <span className="text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    {historyIndex} Change{historyIndex > 1 ? 's' : ''} Applied
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-slate-500">Paint over any part of the garment above, then type your request underneath</p>
+              <p className="text-[11px] text-slate-500">Paint over any part of the garment to make changes. Add or take away modifications anytime.</p>
             </div>
           </div>
           <button 
@@ -291,20 +357,26 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
           <div className="flex-1 relative flex flex-col items-center justify-center p-3 sm:p-4 min-h-[300px] overflow-hidden bg-slate-50 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px]">
             
             {/* Top helper notification banner */}
-            {!resultImage && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-3.5 py-1 rounded-full text-slate-700 text-xs flex items-center gap-2 shadow-md">
-                  <Paintbrush size={13} className="text-purple-600" />
-                  <span>{strokeCount > 0 ? `${strokeCount} area${strokeCount > 1 ? 's' : ''} marked` : "Click & drag on garment to highlight target area"}</span>
-                </div>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-3.5 py-1 rounded-full text-slate-700 text-xs flex items-center gap-2 shadow-md">
+                <Paintbrush size={13} className="text-purple-600" />
+                <span>
+                  {showOriginalPreview
+                    ? 'Comparing against original untouched photo'
+                    : strokeCount > 0
+                    ? `${strokeCount} area${strokeCount > 1 ? 's' : ''} marked on garment`
+                    : historyIndex > 0
+                    ? 'Brush another area to add more changes, or undo below to take away'
+                    : 'Click & drag on garment to highlight target area'}
+                </span>
               </div>
-            )}
+            </div>
 
             {/* Canvas Container with Garment Image and Drawing Layer */}
             <div className="relative inline-block select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white max-h-[50vh] max-w-full">
               <img 
                 ref={imageRef}
-                src={previewMode === 'result' && resultImage ? resultImage : imageUrl} 
+                src={currentGarmentImage} 
                 alt="Garment Artboard"
                 onLoad={handleImageLoaded}
                 draggable={false}
@@ -312,7 +384,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
               />
 
               {/* Mask Drawing Canvas Layer */}
-              {!resultImage && (
+              {!showOriginalPreview && !isGenerating && (
                 <canvas 
                   ref={canvasRef}
                   onPointerDown={startDrawing}
@@ -339,74 +411,83 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
               )}
             </div>
 
-            {/* Floating Brush / Canvas Controls */}
-            {!resultImage ? (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full shadow-lg z-20 text-slate-700">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Brush</span>
-                  <input 
-                    type="range" 
-                    min="12" 
-                    max="90" 
-                    value={brushSize} 
-                    onChange={e => setBrushSize(Number(e.target.value))}
-                    className="w-20 sm:w-28 accent-purple-600 cursor-pointer"
-                  />
-                  <span className="text-[11px] text-slate-700 font-mono w-6 text-right">{brushSize}px</span>
-                </div>
-
-                <div className="h-4 w-px bg-slate-200" />
-
-                <button 
-                  onClick={handleUndo} 
-                  disabled={history.length === 0}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-30"
-                  title="Undo last stroke"
-                >
-                  <Undo size={15} />
-                </button>
-
-                <button 
-                  onClick={clearCanvas} 
-                  disabled={strokeCount === 0}
-                  className="p-1 hover:bg-red-50 rounded-lg text-slate-500 hover:text-red-600 transition-colors disabled:opacity-30"
-                  title="Clear drawing"
-                >
-                  <Trash2 size={15} />
-                </button>
+            {/* Floating Action Controls on Artboard */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2.5 bg-white/95 backdrop-blur-md border border-slate-200 px-3.5 py-1.5 rounded-full shadow-lg z-20 text-slate-700">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Brush</span>
+                <input 
+                  type="range" 
+                  min="12" 
+                  max="90" 
+                  value={brushSize} 
+                  onChange={e => setBrushSize(Number(e.target.value))}
+                  disabled={showOriginalPreview}
+                  className="w-16 sm:w-24 accent-purple-600 cursor-pointer disabled:opacity-40"
+                />
+                <span className="text-[11px] text-slate-700 font-mono w-5 text-right">{brushSize}px</span>
               </div>
-            ) : (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full shadow-lg z-20">
-                <button
-                  onClick={() => setPreviewMode(m => m === 'result' ? 'original' : 'result')}
-                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-medium px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
-                >
-                  <ArrowLeftRight size={13} />
-                  <span>{previewMode === 'result' ? 'Show Original' : 'Show Result'}</span>
-                </button>
-                <div className="h-4 w-px bg-slate-200" />
-                <button
-                  onClick={async () => {
-                    if (isDownloading) return;
-                    setIsDownloading(true);
-                    try {
-                      await downloadAsLargePng(resultImage, 'modified_garment', { resolution: 'large' });
-                    } catch (e) {
-                      alert('Download failed');
-                    } finally {
-                      setIsDownloading(false);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-medium px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
-                >
-                  {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                  <span>Download PNG</span>
-                </button>
-              </div>
-            )}
+
+              <div className="h-4 w-px bg-slate-200" />
+
+              <button 
+                onClick={handleUndoStroke} 
+                disabled={strokeHistory.length === 0 || showOriginalPreview}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-30 cursor-pointer"
+                title="Undo last stroke"
+              >
+                <Undo size={14} />
+              </button>
+
+              <button 
+                onClick={clearCanvas} 
+                disabled={strokeCount === 0 || showOriginalPreview}
+                className="p-1 hover:bg-red-50 rounded-lg text-slate-500 hover:text-red-600 transition-colors disabled:opacity-30 cursor-pointer"
+                title="Clear current brush strokes"
+              >
+                <Trash2 size={14} />
+              </button>
+
+              {historyIndex > 0 && (
+                <>
+                  <div className="h-4 w-px bg-slate-200" />
+                  <button
+                    onClick={() => setShowOriginalPreview(prev => !prev)}
+                    className={`flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                      showOriginalPreview 
+                        ? 'bg-purple-100 text-purple-800' 
+                        : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                    title="Toggle comparison with original photo"
+                  >
+                    <ArrowLeftRight size={13} />
+                    <span>{showOriginalPreview ? 'Show Current' : 'Original'}</span>
+                  </button>
+                </>
+              )}
+
+              <div className="h-4 w-px bg-slate-200" />
+              <button
+                onClick={async () => {
+                  if (isDownloading) return;
+                  setIsDownloading(true);
+                  try {
+                    await downloadAsLargePng(currentGarmentImage, `modified_garment_step_${historyIndex}`, { resolution: 'large' });
+                  } catch (e) {
+                    alert('Download failed');
+                  } finally {
+                    setIsDownloading(false);
+                  }
+                }}
+                className="flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 font-medium px-1.5 py-0.5 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Download PNG of current garment"
+              >
+                {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                <span className="hidden sm:inline">PNG</span>
+              </button>
+            </div>
           </div>
 
-          {/* Underneath Controls Section (Prompt Input & Suggestions) */}
+          {/* Underneath Controls Section (Prompt Input, Revision Toolbar & Actions) */}
           <div className="border-t border-slate-200 p-4 sm:p-5 bg-white shrink-0 space-y-3">
             {error && (
               <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs">
@@ -414,91 +495,120 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
               </div>
             )}
 
-            {resultImage && (
-              <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl text-purple-700 text-xs flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0 text-purple-600" />
-                <span>Modification complete! Review the result above and click Save to update your tech pack.</span>
-              </div>
-            )}
+            {/* Step Revision Toolbar (add / take away changes) */}
+            {historyIndex > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-purple-50/70 border border-purple-200/80 rounded-xl text-xs text-purple-900 animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold flex items-center gap-1.5 text-purple-700">
+                    <CheckCircle2 size={15} className="text-purple-600" />
+                    <span>Revision {historyIndex} of {historyStack.length - 1} applied</span>
+                  </span>
+                  <span className="text-purple-300">•</span>
+                  <span className="text-purple-600/80 text-[11px] hidden sm:inline">
+                    {strokeCount > 0 ? "Brush strokes ready — type prompt below" : "Draw on garment above to add another modification"}
+                  </span>
+                </div>
 
-            {!resultImage ? (
-              <div className="space-y-2.5">
-                {/* Prompt Row with Generate Button */}
-                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={prompt}
-                      onChange={e => setPrompt(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && strokeCount > 0 && prompt.trim() && !isGenerating) {
-                          handleGenerate();
-                        }
-                      }}
-                      placeholder={strokeCount > 0 ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."}
-                      disabled={isGenerating}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all disabled:opacity-50"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={handleGenerate}
-                    disabled={isGenerating || strokeCount === 0 || !prompt.trim()}
-                    isLoading={isGenerating}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50"
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleUndoStep}
+                    disabled={historyIndex === 0 || isGenerating}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-purple-100/70 border border-purple-200 text-purple-800 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                    title="Take away the last modification"
                   >
-                    <Sparkles size={15} />
-                    {isGenerating ? 'Applying...' : 'Apply Changes'}
-                  </Button>
-                </div>
+                    <Undo2 size={13} />
+                    <span>Undo Step</span>
+                  </button>
 
-                {/* Quick Suggestions Chips underneath */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Suggestions:</span>
-                  {INSPIRATION_PROMPTS.map((item, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setPrompt(item)}
-                      className="whitespace-nowrap text-[11px] bg-slate-100 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 border border-slate-200/80 rounded-lg px-2.5 py-1 transition-all shrink-0"
-                    >
-                      + {item}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={handleRedoStep}
+                    disabled={historyIndex >= historyStack.length - 1 || isGenerating}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-purple-100/70 border border-purple-200 text-purple-800 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                    title="Redo next modification"
+                  >
+                    <Redo2 size={13} />
+                    <span>Redo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRevertAll}
+                    disabled={historyIndex === 0 || isGenerating}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-600 hover:text-red-600 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                    title="Revert all changes and restore original photo"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Revert All</span>
+                  </button>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-end gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResultImage(null);
-                    clearCanvas();
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
-                >
-                  Redraw Mask
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
-                  className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
-                >
-                  <Sparkles size={13} />
-                  Regenerate
-                </button>
-                <Button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  isLoading={isSaving}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-7 py-2.5 rounded-full text-xs uppercase tracking-widest font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 border-0"
-                >
-                  <CheckCircle2 size={15} />
-                  {isSaving ? 'Saving...' : 'Save to Tech Pack'}
-                </Button>
               </div>
             )}
+
+            <div className="space-y-2.5">
+              {/* Prompt Row with Generate Button & Save to Tech Pack */}
+              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={e => setPrompt(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && strokeCount > 0 && prompt.trim() && !isGenerating) {
+                        handleGenerate();
+                      }
+                    }}
+                    placeholder={
+                      strokeCount > 0 
+                        ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." 
+                        : historyIndex > 0
+                        ? "Draw another area on the garment above to add another modification..."
+                        : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."
+                    }
+                    disabled={isGenerating || showOriginalPreview}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all disabled:opacity-50"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating || strokeCount === 0 || !prompt.trim()}
+                  isLoading={isGenerating}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50 cursor-pointer"
+                >
+                  <Sparkles size={15} />
+                  {isGenerating ? 'Applying...' : historyIndex > 0 ? 'Apply Another Change' : 'Apply Modification'}
+                </Button>
+
+                {historyIndex > 0 && (
+                  <Button
+                    onClick={handleSave}
+                    disabled={isSaving || isGenerating}
+                    isLoading={isSaving}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 cursor-pointer"
+                  >
+                    <CheckCircle2 size={15} />
+                    {isSaving ? 'Saving...' : `Save to Tech Pack (${historyIndex})`}
+                  </Button>
+                )}
+              </div>
+
+              {/* Quick Suggestions Chips underneath */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Suggestions:</span>
+                {INSPIRATION_PROMPTS.map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setPrompt(item)}
+                    className="whitespace-nowrap text-[11px] bg-slate-100 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 border border-slate-200/80 rounded-lg px-2.5 py-1 transition-all shrink-0 cursor-pointer"
+                  >
+                    + {item}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
