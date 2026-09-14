@@ -147,18 +147,85 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
     const centerPxX = canvas.width / 2 + (canvas.width * posX) / 100;
     const centerPxY = canvas.height / 2 + (canvas.height * posY) / 100;
 
-    // Draw rotated and scaled logo
-    ctx.save();
-    ctx.translate(centerPxX, centerPxY);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.drawImage(
-      logo,
-      -logoTargetWidth / 2,
-      -logoTargetHeight / 2,
-      logoTargetWidth,
-      logoTargetHeight
-    );
-    ctx.restore();
+    // Clip logo strictly to garment silhouette so it never bleeds into the white background
+    try {
+      const gCanvas = document.createElement('canvas');
+      gCanvas.width = canvas.width;
+      gCanvas.height = canvas.height;
+      const gCtx = gCanvas.getContext('2d', { willReadFrequently: true });
+      if (gCtx) {
+        gCtx.drawImage(garment, 0, 0);
+        const imgData = gCtx.getImageData(0, 0, gCanvas.width, gCanvas.height);
+        const data = imgData.data;
+        const maskImgData = gCtx.createImageData(gCanvas.width, gCanvas.height);
+        const md = maskImgData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const a = data[i + 3];
+
+          // Check if pixel is white/near-white background or transparent
+          const isBackground = (r > 248 && g > 248 && b > 248) || a < 20;
+          if (!isBackground) {
+            md[i] = 0;
+            md[i + 1] = 0;
+            md[i + 2] = 0;
+            md[i + 3] = 255; // Opaque garment pixel
+          } else {
+            md[i + 3] = 0; // Transparent background pixel
+          }
+        }
+
+        // Draw placed logo onto an isolated layer
+        const logoLayer = document.createElement('canvas');
+        logoLayer.width = canvas.width;
+        logoLayer.height = canvas.height;
+        const lCtx = logoLayer.getContext('2d');
+        if (lCtx) {
+          lCtx.save();
+          lCtx.translate(centerPxX, centerPxY);
+          lCtx.rotate((rotation * Math.PI) / 180);
+          lCtx.drawImage(
+            logo,
+            -logoTargetWidth / 2,
+            -logoTargetHeight / 2,
+            logoTargetWidth,
+            logoTargetHeight
+          );
+          lCtx.restore();
+
+          // Mask the logo layer with the garment silhouette using destination-in
+          const maskCanvas = document.createElement('canvas');
+          maskCanvas.width = canvas.width;
+          maskCanvas.height = canvas.height;
+          const mCtx = maskCanvas.getContext('2d');
+          if (mCtx) {
+            mCtx.putImageData(maskImgData, 0, 0);
+            lCtx.globalCompositeOperation = 'destination-in';
+            lCtx.drawImage(maskCanvas, 0, 0);
+          }
+
+          // Draw the cleanly silhouette-masked logo on top of the garment
+          ctx.drawImage(logoLayer, 0, 0);
+          return canvas.toDataURL('image/jpeg', 0.95);
+        }
+      }
+    } catch (clipErr) {
+      // Fallback to direct draw if getImageData is restricted
+      ctx.save();
+      ctx.translate(centerPxX, centerPxY);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.drawImage(
+        logo,
+        -logoTargetWidth / 2,
+        -logoTargetHeight / 2,
+        logoTargetWidth,
+        logoTargetHeight
+      );
+      ctx.restore();
+    }
 
     return canvas.toDataURL('image/jpeg', 0.95);
   };

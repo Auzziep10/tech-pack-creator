@@ -102,20 +102,25 @@ CRITICAL INSTRUCTIONS & CONSTRAINTS:
 
       const styleInstruction = STYLE_DIRECTIVES[styleOption] || STYLE_DIRECTIVES['Screenprint'];
 
-      const bakePrompt = `TASK: Realistic Apparel Logo & Graphic Baking (Ultra-Realistic Fabric Integration)
+      const bakePrompt = `TASK: Realistic Apparel Logo & Graphic Baking (Ultra-Realistic Fabric Integration & 3D Contour Wrapping)
 PRINT / EMBROIDERY FINISH: ${styleInstruction}
 
-CRITICAL FABRIC INTEGRATION DIRECTIVES (HIGHEST PRIORITY):
+CRITICAL FABRIC INTEGRATION & 3D WRAPPING DIRECTIVES (HIGHEST PRIORITY):
 1. BAKE THE LOGO REALISTICALLY INTO THE GARMENT:
    - The graphic/logo overlaid on the garment in the input image MUST be rendered as a physical, realistic part of the actual textile.
    - DRAPE & FOLD CONFORMITY: Deform and conform the logo naturally along all cloth wrinkles, fabric ripples, surface curvature, and folds underneath it. It must NOT look like a flat 2D sticker or digital graphic.
    - LIGHTING & SHADOWING: Cast realistic highlights, ambient shadows, and crease shadows across the logo matching the exact 3D lighting of the garment.
    - TEXTILE TEXTURE INTERACTION: Embed the subtle texture of the garment fabric (knit, fleece, twill, or rib) through the graphic finish.
-2. PRESERVE THE LOGO SHAPE & DETAILS:
-   - Maintain the logo's intended graphic proportions, lettering, typography, colors, and placement while integrating it physically into the fabric.
-3. PRESERVE THE REST OF THE GARMENT:
+2. 3D TORSO WRAPPING & EDGE CONTOUR (ULTRA-CRITICAL):
+   - When any part of the graphic/logo extends towards the side edge, side seam, sleeve, or outer silhouette of the garment, it MUST wrap naturally around the 3D cylindrical curve of the torso/body.
+   - Letters and graphic elements near the silhouette edge MUST be perspective-foreshortened and curved around the body fold as if continuing around the back/side.
+3. ZERO LOGO SPILLOVER ONTO BACKGROUND (STRICT ABSOLUTE ZERO):
+   - The graphic/logo belongs EXCLUSIVELY on the garment fabric.
+   - Under NO circumstances should any part of the logo, text, letters, or graphic ink float, bleed, or appear on the white background outside the garment outline.
+   - Any portion of the graphic that wraps past the visible silhouette into empty space MUST be completely hidden behind the garment body.
+4. PRESERVE THE REST OF THE GARMENT:
    - Keep the garment color, silhouette, collar, sleeves, hems, and details identical to the input image.
-4. ISOLATE ON PURE WHITE BACKGROUND (ULTRA-CRITICAL):
+5. ISOLATE ON PURE WHITE BACKGROUND (ULTRA-CRITICAL):
    - The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF).
    - Absolutely NO floor shadows, no grey halos, and no background objects. Every background pixel outside the garment MUST be exactly #FFFFFF.`;
 
