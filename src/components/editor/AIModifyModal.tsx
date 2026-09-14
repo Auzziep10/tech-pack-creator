@@ -257,51 +257,51 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div 
-        className="bg-neutral-900 border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-full sm:max-h-[94vh] overflow-hidden" 
+        className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-full sm:max-h-[94vh] overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
         {/* Top Header */}
-        <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-black/70 shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md">
+            <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 border border-purple-200 flex items-center justify-center shadow-xs">
               <Wand2 size={16} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-serif text-base sm:text-lg text-white font-bold tracking-wide">Draw on Garment to Modify</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full">Studio</span>
+                <h3 className="font-serif text-base sm:text-lg text-slate-900 font-bold tracking-wide">Draw on Garment to Modify</h3>
+                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">Studio</span>
               </div>
-              <p className="text-[11px] text-white/50">Paint over any part of the garment above, then type your request underneath</p>
+              <p className="text-[11px] text-slate-500">Paint over any part of the garment above, then type your request underneath</p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-1.5 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Modal Main Body: Vertical Layout (Garment Canvas on Top, Prompt Underneath) */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50">
           
           {/* Garment Drawing Artboard */}
-          <div className="flex-1 relative flex flex-col items-center justify-center p-3 sm:p-4 min-h-[300px] overflow-hidden bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
+          <div className="flex-1 relative flex flex-col items-center justify-center p-3 sm:p-4 min-h-[300px] overflow-hidden bg-slate-50 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px]">
             
             {/* Top helper notification banner */}
             {!resultImage && (
               <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="bg-black/75 backdrop-blur-md border border-white/10 px-3.5 py-1 rounded-full text-white/80 text-xs flex items-center gap-2 shadow-lg">
-                  <Paintbrush size={13} className="text-purple-400" />
+                <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-3.5 py-1 rounded-full text-slate-700 text-xs flex items-center gap-2 shadow-md">
+                  <Paintbrush size={13} className="text-purple-600" />
                   <span>{strokeCount > 0 ? `${strokeCount} area${strokeCount > 1 ? 's' : ''} marked` : "Click & drag on garment to highlight target area"}</span>
                 </div>
               </div>
             )}
 
             {/* Canvas Container with Garment Image and Drawing Layer */}
-            <div className="relative inline-block select-none shadow-2xl rounded-2xl overflow-hidden bg-white max-h-[50vh] max-w-full">
+            <div className="relative inline-block select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white max-h-[50vh] max-w-full">
               <img 
                 ref={imageRef}
                 src={previewMode === 'result' && resultImage ? resultImage : imageUrl} 
@@ -326,13 +326,13 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
               {/* Generating Loading Overlay */}
               {isGenerating && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
+                <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
                   <div className="relative mb-3">
-                    <div className="w-14 h-14 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-                    <Sparkles className="w-5 h-5 text-purple-400 absolute inset-0 m-auto animate-pulse" />
+                    <div className="w-14 h-14 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
+                    <Sparkles className="w-5 h-5 text-purple-600 absolute inset-0 m-auto animate-pulse" />
                   </div>
-                  <h4 className="text-white font-bold text-base mb-1">Applying Modification...</h4>
-                  <p className="text-white/60 text-xs max-w-xs">
+                  <h4 className="text-slate-900 font-bold text-base mb-1">Applying Modification...</h4>
+                  <p className="text-slate-500 text-xs max-w-xs">
                     Weaving requested changes into fabric weave, folds, and lighting
                   </p>
                 </div>
@@ -341,26 +341,26 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
             {/* Floating Brush / Canvas Controls */}
             {!resultImage ? (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-neutral-900/95 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full shadow-2xl z-20">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full shadow-lg z-20 text-slate-700">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Brush</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Brush</span>
                   <input 
                     type="range" 
                     min="12" 
                     max="90" 
                     value={brushSize} 
                     onChange={e => setBrushSize(Number(e.target.value))}
-                    className="w-20 sm:w-28 accent-purple-500 cursor-pointer"
+                    className="w-20 sm:w-28 accent-purple-600 cursor-pointer"
                   />
-                  <span className="text-[11px] text-white/90 font-mono w-6 text-right">{brushSize}px</span>
+                  <span className="text-[11px] text-slate-700 font-mono w-6 text-right">{brushSize}px</span>
                 </div>
 
-                <div className="h-4 w-px bg-white/20" />
+                <div className="h-4 w-px bg-slate-200" />
 
                 <button 
                   onClick={handleUndo} 
                   disabled={history.length === 0}
-                  className="p-1 hover:bg-white/10 rounded-lg text-white/70 hover:text-white transition-colors disabled:opacity-30"
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-30"
                   title="Undo last stroke"
                 >
                   <Undo size={15} />
@@ -369,22 +369,22 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                 <button 
                   onClick={clearCanvas} 
                   disabled={strokeCount === 0}
-                  className="p-1 hover:bg-red-500/20 rounded-lg text-white/70 hover:text-red-400 transition-colors disabled:opacity-30"
+                  className="p-1 hover:bg-red-50 rounded-lg text-slate-500 hover:text-red-600 transition-colors disabled:opacity-30"
                   title="Clear drawing"
                 >
                   <Trash2 size={15} />
                 </button>
               </div>
             ) : (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-neutral-900/95 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full shadow-2xl z-20">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full shadow-lg z-20">
                 <button
                   onClick={() => setPreviewMode(m => m === 'result' ? 'original' : 'result')}
-                  className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white font-medium px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-medium px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
                 >
                   <ArrowLeftRight size={13} />
                   <span>{previewMode === 'result' ? 'Show Original' : 'Show Result'}</span>
                 </button>
-                <div className="h-4 w-px bg-white/20" />
+                <div className="h-4 w-px bg-slate-200" />
                 <button
                   onClick={async () => {
                     if (isDownloading) return;
@@ -397,7 +397,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                       setIsDownloading(false);
                     }
                   }}
-                  className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white font-medium px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-medium px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
                 >
                   {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                   <span>Download PNG</span>
@@ -407,16 +407,16 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
           </div>
 
           {/* Underneath Controls Section (Prompt Input & Suggestions) */}
-          <div className="border-t border-white/10 p-4 sm:p-5 bg-neutral-900 shrink-0 space-y-3">
+          <div className="border-t border-slate-200 p-4 sm:p-5 bg-white shrink-0 space-y-3">
             {error && (
-              <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs">
                 {error}
               </div>
             )}
 
             {resultImage && (
-              <div className="p-2.5 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-300 text-xs flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0 text-purple-400" />
+              <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl text-purple-700 text-xs flex items-center gap-2">
+                <CheckCircle2 size={15} className="shrink-0 text-purple-600" />
                 <span>Modification complete! Review the result above and click Save to update your tech pack.</span>
               </div>
             )}
@@ -437,7 +437,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                       }}
                       placeholder={strokeCount > 0 ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."}
                       disabled={isGenerating}
-                      className="w-full bg-neutral-950 border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-50 shadow-inner"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all disabled:opacity-50"
                     />
                   </div>
 
@@ -445,7 +445,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                     onClick={handleGenerate}
                     disabled={isGenerating || strokeCount === 0 || !prompt.trim()}
                     isLoading={isGenerating}
-                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50"
                   >
                     <Sparkles size={15} />
                     {isGenerating ? 'Applying...' : 'Apply Changes'}
@@ -454,13 +454,13 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
                 {/* Quick Suggestions Chips underneath */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                  <span className="text-[10px] uppercase font-bold text-white/40 shrink-0">Suggestions:</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Suggestions:</span>
                   {INSPIRATION_PROMPTS.map((item, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => setPrompt(item)}
-                      className="whitespace-nowrap text-[11px] bg-white/5 hover:bg-purple-500/20 hover:border-purple-500/40 text-white/70 hover:text-white border border-white/10 rounded-lg px-2.5 py-1 transition-all shrink-0"
+                      className="whitespace-nowrap text-[11px] bg-slate-100 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 border border-slate-200/80 rounded-lg px-2.5 py-1 transition-all shrink-0"
                     >
                       + {item}
                     </button>
@@ -475,7 +475,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                     setResultImage(null);
                     clearCanvas();
                   }}
-                  className="bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
                 >
                   Redraw Mask
                 </button>
@@ -483,7 +483,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   type="button"
                   onClick={handleGenerate}
                   disabled={isGenerating}
-                  className="bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                  className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
                 >
                   <Sparkles size={13} />
                   Regenerate
@@ -492,7 +492,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   onClick={handleSave}
                   disabled={isSaving}
                   isLoading={isSaving}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-7 py-2.5 rounded-full text-xs uppercase tracking-widest font-bold shadow-lg shadow-emerald-600/25 transition-all flex items-center gap-2 border-0"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-7 py-2.5 rounded-full text-xs uppercase tracking-widest font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 border-0"
                 >
                   <CheckCircle2 size={15} />
                   {isSaving ? 'Saving...' : 'Save to Tech Pack'}
