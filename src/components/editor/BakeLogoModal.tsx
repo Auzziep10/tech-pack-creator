@@ -323,7 +323,7 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
           </div>
 
           {/* Right Control Sidebar */}
-          <div className="w-full md:w-88 border-t md:border-t-0 md:border-l border-white/10 p-5 flex flex-col justify-between bg-neutral-900 overflow-y-auto space-y-4">
+          <div className="w-full md:w-96 shrink-0 border-t md:border-t-0 md:border-l border-white/10 p-5 flex flex-col justify-between bg-neutral-900 overflow-y-auto space-y-4">
             <div className="space-y-4">
               {/* Logo File Selector */}
               <div>

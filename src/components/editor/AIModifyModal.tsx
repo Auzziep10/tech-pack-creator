@@ -24,7 +24,7 @@ const INSPIRATION_PROMPTS = [
 
 export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModifyModalProps) {
   const [prompt, setPrompt] = useState('');
-  const [brushSize, setBrushSize] = useState(35);
+  const [brushSize, setBrushSize] = useState(32);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawnMask, setHasDrawnMask] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -41,7 +41,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Initialize and synchronize canvas dimensions with the rendered image
+  // Synchronize canvas coordinate dimensions with the rendered garment image
   const syncCanvas = () => {
     const canvas = canvasRef.current;
     const img = imageRef.current;
@@ -49,10 +49,11 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
     const rect = img.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
-      // Set canvas coordinate space to match image display size
-      if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
-        canvas.width = Math.round(rect.width);
-        canvas.height = Math.round(rect.height);
+      const targetW = Math.round(rect.width);
+      const targetH = Math.round(rect.height);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
         clearCanvas();
       }
     }
@@ -65,8 +66,18 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
       setError(null);
       setHasDrawnMask(false);
       setHistory([]);
+    } else {
+      // Multiple attempts to ensure the canvas matches image bounds after DOM render
+      const t1 = setTimeout(syncCanvas, 50);
+      const t2 = setTimeout(syncCanvas, 200);
+      const t3 = setTimeout(syncCanvas, 500);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }
-  }, [isOpen]);
+  }, [isOpen, imageUrl]);
 
   useEffect(() => {
     window.addEventListener('resize', syncCanvas);
@@ -79,7 +90,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const currentData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory(prev => [...prev.slice(-15), currentData]); // Keep last 15 states
+    setHistory(prev => [...prev.slice(-15), currentData]);
   };
 
   const handleUndo = () => {
@@ -89,7 +100,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     if (!ctx) return;
 
     const newHistory = [...history];
-    newHistory.pop(); // Remove current
+    newHistory.pop();
     const previousState = newHistory[newHistory.length - 1];
     
     if (previousState) {
@@ -126,7 +137,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   };
 
   const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (resultImage) return; // Don't draw over result until reset
+    if (resultImage) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -141,10 +152,10 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     const pos = getCanvasCoords(e);
     lastPointRef.current = pos;
 
-    // Draw single dot on tap
+    // Draw initial contact point
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.55)'; // Semi-transparent vibrant red for clear visual feedback
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.6)'; // Translucent red brush marker
     ctx.fill();
   };
 
@@ -160,7 +171,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
     ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -181,14 +192,13 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     lastPointRef.current = null;
   };
 
-  // Generate inpainting mask mapped to original garment image dimensions
   const handleGenerate = async () => {
     if (!hasDrawnMask) {
-      setError('Please brush over the area of the garment you would like to modify.');
+      setError('Please draw directly on the garment above to mark the area you want to change.');
       return;
     }
     if (!prompt.trim()) {
-      setError('Please enter a prompt describing what to change.');
+      setError('Please enter a prompt underneath describing what to change.');
       return;
     }
 
@@ -197,9 +207,9 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
     try {
       const displayCanvas = canvasRef.current;
-      if (!displayCanvas) throw new Error('Canvas not initialized');
+      if (!displayCanvas) throw new Error('Canvas not ready');
 
-      // Load original image to obtain true natural dimensions
+      // Load natural image to obtain full true dimensions
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.src = imageUrl;
@@ -215,33 +225,25 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
       const maskCtx = maskCanvas.getContext('2d');
       if (!maskCtx) throw new Error('Could not create mask context');
 
-      // Step 1: Fill with pure white (#FFFFFF)
+      // Fill pure white background (#FFFFFF)
       maskCtx.fillStyle = '#FFFFFF';
       maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
 
-      // Step 2: Draw the user strokes in pure solid black (#000000)
-      // We read the alpha channel from displayCanvas to map drawn pixels
-      const displayCtx = displayCanvas.getContext('2d');
-      if (!displayCtx) throw new Error('Display context not found');
-
-      const tempStrokesCanvas = document.createElement('canvas');
-      tempStrokesCanvas.width = displayCanvas.width;
-      tempStrokesCanvas.height = displayCanvas.height;
-      const tempCtx = tempStrokesCanvas.getContext('2d');
+      // Extract drawn user strokes and paint pure solid black (#000000)
+      const tempStrokes = document.createElement('canvas');
+      tempStrokes.width = displayCanvas.width;
+      tempStrokes.height = displayCanvas.height;
+      const tempCtx = tempStrokes.getContext('2d');
       if (tempCtx) {
         tempCtx.drawImage(displayCanvas, 0, 0);
-        // Replace any drawn non-transparent pixels with pure solid black
         tempCtx.globalCompositeOperation = 'source-in';
         tempCtx.fillStyle = '#000000';
-        tempCtx.fillRect(0, 0, tempStrokesCanvas.width, tempStrokesCanvas.height);
+        tempCtx.fillRect(0, 0, tempStrokes.width, tempStrokes.height);
       }
 
-      // Draw onto the full-resolution mask canvas
-      maskCtx.drawImage(tempStrokesCanvas, 0, 0, maskCanvas.width, maskCanvas.height);
-
+      maskCtx.drawImage(tempStrokes, 0, 0, maskCanvas.width, maskCanvas.height);
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
-      // Call inpaint endpoint
       const result = await modifyGarmentRegion(imageUrl, maskBase64, prompt);
       setResultImage(result);
       setPreviewMode('result');
@@ -269,48 +271,45 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[260] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[260] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div 
-        className="bg-neutral-900 border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-6xl mx-auto flex flex-col h-full sm:max-h-[92vh] overflow-hidden" 
+        className="bg-neutral-900 border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-full sm:max-h-[94vh] overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
         {/* Top Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-black/60 shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-black/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
-              <Wand2 size={18} />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md">
+              <Wand2 size={16} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg sm:text-xl text-white font-bold tracking-wide">Area Inpainting & Modification</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full">Studio</span>
-              </div>
-              <p className="text-xs text-white/50">Brush over any garment area to alter and restyle it seamlessly</p>
+              <h3 className="font-serif text-base sm:text-lg text-white font-bold tracking-wide">Draw on Garment to Modify</h3>
+              <p className="text-[11px] text-white/50">Draw on the garment to mark where you want changes, then type your request underneath</p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+            className="p-1.5 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Modal Main Body */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden bg-neutral-950">
-          {/* Canvas Area */}
-          <div className="flex-1 relative flex flex-col items-center justify-center p-4 min-h-[350px] overflow-hidden bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
+        {/* Modal Main Body - Vertical Layout (Canvas on top, Prompt underneath) */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
+          {/* Garment Drawing Artboard */}
+          <div className="flex-1 relative flex flex-col items-center justify-center p-3 sm:p-4 min-h-[300px] overflow-hidden bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
             <div 
               ref={containerRef}
-              className="relative max-w-full max-h-full flex items-center justify-center select-none shadow-2xl rounded-2xl overflow-hidden bg-white"
+              className="relative inline-block select-none shadow-2xl rounded-2xl overflow-hidden bg-white max-h-[48vh] max-w-full"
             >
               <img 
                 ref={imageRef}
                 src={previewMode === 'result' && resultImage ? resultImage : imageUrl} 
-                alt="Garment Target"
+                alt="Garment Artboard"
                 onLoad={syncCanvas}
                 draggable={false}
-                className="max-h-[60vh] max-w-full object-contain pointer-events-none"
+                className="block max-h-[48vh] w-auto max-w-full object-contain pointer-events-none"
               />
 
               {/* Mask Drawing Canvas Layer */}
@@ -329,32 +328,32 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
               {/* Generating Loading Overlay */}
               {isGenerating && (
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
-                  <div className="relative mb-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
-                    <Sparkles className="w-6 h-6 text-purple-400 absolute inset-0 m-auto animate-pulse" />
+                  <div className="relative mb-3">
+                    <div className="w-14 h-14 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
+                    <Sparkles className="w-5 h-5 text-purple-400 absolute inset-0 m-auto animate-pulse" />
                   </div>
-                  <h4 className="text-white font-bold text-lg mb-1">Applying Modification...</h4>
+                  <h4 className="text-white font-bold text-base mb-1">Applying Modification...</h4>
                   <p className="text-white/60 text-xs max-w-xs">
-                    Weaving your requested changes into the fabric texture, seams, and lighting
+                    Weaving requested changes into the fabric texture, seams, and lighting
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Floating Canvas Controls */}
+            {/* Floating Brush / Canvas Controls */}
             {!resultImage ? (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-neutral-900/90 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full shadow-2xl z-20">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-neutral-900/95 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full shadow-2xl z-20">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">Brush</span>
+                  <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Brush</span>
                   <input 
                     type="range" 
                     min="10" 
                     max="90" 
                     value={brushSize} 
                     onChange={e => setBrushSize(Number(e.target.value))}
-                    className="w-24 sm:w-32 accent-purple-500 cursor-pointer"
+                    className="w-20 sm:w-28 accent-purple-500 cursor-pointer"
                   />
-                  <span className="text-xs text-white/80 font-mono w-6 text-right">{brushSize}px</span>
+                  <span className="text-[11px] text-white/90 font-mono w-6 text-right">{brushSize}px</span>
                 </div>
 
                 <div className="h-4 w-px bg-white/20" />
@@ -362,28 +361,28 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                 <button 
                   onClick={handleUndo} 
                   disabled={history.length === 0}
-                  className="p-1.5 hover:bg-white/10 rounded-lg text-white/70 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                  className="p-1 hover:bg-white/10 rounded-lg text-white/70 hover:text-white transition-colors disabled:opacity-30"
                   title="Undo last stroke"
                 >
-                  <Undo size={16} />
+                  <Undo size={15} />
                 </button>
 
                 <button 
                   onClick={clearCanvas} 
                   disabled={!hasDrawnMask}
-                  className="p-1.5 hover:bg-red-500/20 rounded-lg text-white/70 hover:text-red-400 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                  title="Clear mask"
+                  className="p-1 hover:bg-red-500/20 rounded-lg text-white/70 hover:text-red-400 transition-colors disabled:opacity-30"
+                  title="Clear drawing"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={15} />
                 </button>
               </div>
             ) : (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-neutral-900/90 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full shadow-2xl z-20">
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-neutral-900/95 backdrop-blur-md border border-white/10 px-4 py-1.5 rounded-full shadow-2xl z-20">
                 <button
                   onClick={() => setPreviewMode(m => m === 'result' ? 'original' : 'result')}
                   className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white font-medium px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
                 >
-                  <ArrowLeftRight size={14} />
+                  <ArrowLeftRight size={13} />
                   <span>{previewMode === 'result' ? 'Show Original' : 'Show Result'}</span>
                 </button>
                 <div className="h-4 w-px bg-white/20" />
@@ -401,112 +400,106 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   }}
                   className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white font-medium px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
                 >
-                  {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                   <span>Download PNG</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Right Control Sidebar */}
-          <div className="w-full md:w-88 border-t md:border-t-0 md:border-l border-white/10 p-5 flex flex-col justify-between bg-neutral-900 overflow-y-auto space-y-4">
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs uppercase tracking-widest font-bold text-white/60 mb-1.5 block">
-                  Modification Prompt
-                </label>
-                <textarea
-                  rows={3}
-                  value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                  placeholder="e.g. Change collar to ribbed knit crewneck, or add a zippered pocket..."
-                  disabled={isGenerating || !!resultImage}
-                  className="w-full bg-neutral-950 border border-white/10 rounded-xl p-3 text-sm text-white placeholder-white/30 focus:border-purple-500 focus:outline-none transition-all resize-none disabled:opacity-50"
-                />
+          {/* Underneath Controls Section */}
+          <div className="border-t border-white/10 p-4 sm:p-5 bg-neutral-900 shrink-0 space-y-3">
+            {error && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
+                {error}
               </div>
+            )}
 
-              {!resultImage && (
-                <div className="space-y-2">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-white/40 block">
-                    Quick Suggestions
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 max-h-48 overflow-y-auto pr-1">
-                    {INSPIRATION_PROMPTS.map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setPrompt(item)}
-                        className="text-left text-[11px] bg-white/5 hover:bg-purple-500/20 hover:border-purple-500/40 text-white/70 hover:text-white border border-white/5 rounded-lg px-2.5 py-1.5 transition-all"
-                      >
-                        + {item}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            {resultImage && (
+              <div className="p-2.5 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-300 text-xs flex items-center gap-2">
+                <CheckCircle2 size={15} className="shrink-0 text-purple-400" />
+                <span>Modification complete! Review the result above and click Save to update your tech pack.</span>
+              </div>
+            )}
 
-              {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
-                  {error}
-                </div>
-              )}
-
-              {resultImage && (
-                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-300 text-xs flex items-center gap-2">
-                  <CheckCircle2 size={16} className="shrink-0 text-purple-400" />
-                  <span>Garment modified successfully! Review the result and save to your tech pack.</span>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="space-y-2 pt-4 border-t border-white/10">
-              {!resultImage ? (
-                <Button
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !hasDrawnMask || !prompt.trim()}
-                  isLoading={isGenerating}
-                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2 border-0"
-                >
-                  <Sparkles size={15} />
-                  {isGenerating ? 'Applying Changes...' : 'Apply Changes'}
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <Button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    isLoading={isSaving}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 border-0"
-                  >
-                    <CheckCircle2 size={15} />
-                    {isSaving ? 'Saving...' : 'Save to Tech Pack'}
-                  </Button>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setResultImage(null);
-                        clearCanvas();
+            {!resultImage ? (
+              <div className="space-y-2.5">
+                {/* Prompt Row with Generate Button */}
+                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={prompt}
+                      onChange={e => setPrompt(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && hasDrawnMask && prompt.trim() && !isGenerating) {
+                          handleGenerate();
+                        }
                       }}
-                      className="flex-1 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
-                    >
-                      Redraw Mask
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleGenerate}
+                      placeholder={hasDrawnMask ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."}
                       disabled={isGenerating}
-                      className="flex-1 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <Sparkles size={13} />
-                      Regenerate
-                    </button>
+                      className="w-full bg-neutral-950 border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-50 shadow-inner"
+                    />
                   </div>
+
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !hasDrawnMask || !prompt.trim()}
+                    isLoading={isGenerating}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50"
+                  >
+                    <Sparkles size={15} />
+                    {isGenerating ? 'Applying...' : 'Apply Changes'}
+                  </Button>
                 </div>
-              )}
-            </div>
+
+                {/* Quick Suggestions Chips underneath */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                  <span className="text-[10px] uppercase font-bold text-white/40 shrink-0">Suggestions:</span>
+                  {INSPIRATION_PROMPTS.map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setPrompt(item)}
+                      className="whitespace-nowrap text-[11px] bg-white/5 hover:bg-purple-500/20 hover:border-purple-500/40 text-white/70 hover:text-white border border-white/10 rounded-lg px-2.5 py-1 transition-all shrink-0"
+                    >
+                      + {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResultImage(null);
+                    clearCanvas();
+                  }}
+                  className="bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors"
+                >
+                  Redraw Mask
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                >
+                  <Sparkles size={13} />
+                  Regenerate
+                </button>
+                <Button
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  isLoading={isSaving}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-7 py-2.5 rounded-full text-xs uppercase tracking-widest font-bold shadow-lg shadow-emerald-600/25 transition-all flex items-center gap-2 border-0"
+                >
+                  <CheckCircle2 size={15} />
+                  {isSaving ? 'Saving...' : 'Save to Tech Pack'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
