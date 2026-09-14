@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -225,6 +225,8 @@ export function TechPackEditor() {
   const isSavingRef = useRef(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const isUploadingPhotosRef = useRef(false);
+  const [draggedMeasurementIdx, setDraggedMeasurementIdx] = useState<number | null>(null);
+  const [dragOverMeasurementIdx, setDragOverMeasurementIdx] = useState<number | null>(null);
 
   const getNormalizedStateHash = (
     packData: any,
@@ -1695,6 +1697,29 @@ export function TechPackEditor() {
     }
   };
 
+  const moveMeasurement = (fromIndex: number, toIndex: number) => {
+    if (checkReadonly() || isTechPackLocked) return;
+    const currentMeasurements = [...(displayData.measurements || data.measurements || [])];
+    if (
+      fromIndex < 0 || 
+      fromIndex >= currentMeasurements.length || 
+      toIndex < 0 || 
+      toIndex >= currentMeasurements.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+
+    const [moved] = currentMeasurements.splice(fromIndex, 1);
+    currentMeasurements.splice(toIndex, 0, moved);
+
+    setData((prev: any) => ({
+      ...prev,
+      measurements: currentMeasurements
+    }));
+    pushLog(`Reordered measurement: ${moved.point || moved.id || 'measurement'}`);
+  };
+
   const ensureDetailModules = () => {
     let mods = displayData.detailModules;
     if (!mods) {
@@ -2695,51 +2720,140 @@ export function TechPackEditor() {
                   <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
                       <tr>
+                        {!isTechPackLocked && <th className="w-7 px-1 py-1 text-center font-medium text-gray-400 print:hidden" title="Drag to reorder"></th>}
                         <th className="px-2 py-1 font-medium w-24">DIM (ID)</th>
                         <th className="px-2 py-1 font-medium">Point of Measure</th>
                         <th className="px-2 py-1 font-medium w-20">Spec</th>
                         <th className="px-1 py-1 font-medium w-12 text-center">Tol (-)</th>
                         <th className="px-1 py-1 font-medium w-12 text-center">Tol (+)</th>
-                        {!isTechPackLocked && <th className="w-10 px-2 py-1 text-center font-medium text-gray-400 print:hidden">Del</th>}
+                        {!isTechPackLocked && <th className="w-20 px-1 py-1 text-center font-medium text-gray-400 print:hidden">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {(displayData.measurements || []).map((m: any, i: number) => (
-                        <tr key={i} className="group/row border-b border-gray-100 hover:bg-gray-50 transition-colors relative" style={{ pageBreakInside: 'avoid' }}>
-                          <td className="px-2 py-2 align-top font-mono text-xs print:text-[10px] text-gray-500">
-                             <AutoTextarea className="w-full bg-transparent outline-none uppercase leading-tight" placeholder="ID" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
-                          </td>
-                          <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-semibold text-gray-900 leading-tight" placeholder="Point of measure..." value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" placeholder="Description / how to measure..." value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
-                          </td>
-                          <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" placeholder="0.0" value={activeSizeTab === (displayData?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
-                          </td>
-                          <td className="px-1 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
-                          </td>
-                          <td className="px-1 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
-                          </td>
-                          {!isTechPackLocked && (
-                            <td className="px-1 py-2 align-middle text-center print:hidden w-10">
-                              <button
-                                type="button"
-                                onClick={() => removeMeasurement(i)}
-                                className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center justify-center group-hover/row:text-red-500"
-                                title={`Delete measurement ${m.id ? `(${m.id})` : ''} ${m.point || ''}`}
-                                aria-label="Delete measurement point"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                      {(displayData.measurements || []).map((m: any, i: number) => {
+                        const isDragging = draggedMeasurementIdx === i;
+                        const isDragOver = dragOverMeasurementIdx === i && draggedMeasurementIdx !== i;
+
+                        return (
+                          <tr 
+                            key={m.id ? `${m.id}-${i}` : i} 
+                            draggable={!isTechPackLocked}
+                            onDragStart={(e) => {
+                              if (isTechPackLocked || checkReadonly()) {
+                                e.preventDefault();
+                                return;
+                              }
+                              const target = e.target as HTMLElement;
+                              if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+                                e.preventDefault();
+                                return;
+                              }
+                              e.dataTransfer.setData('text/plain', i.toString());
+                              e.dataTransfer.effectAllowed = 'move';
+                              setDraggedMeasurementIdx(i);
+                            }}
+                            onDragOver={(e) => {
+                              if (isTechPackLocked || checkReadonly()) return;
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (dragOverMeasurementIdx !== i) {
+                                setDragOverMeasurementIdx(i);
+                              }
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverMeasurementIdx === i) {
+                                setDragOverMeasurementIdx(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (isTechPackLocked || checkReadonly()) return;
+                              const fromStr = e.dataTransfer.getData('text/plain');
+                              const fromIdx = fromStr !== '' ? parseInt(fromStr, 10) : draggedMeasurementIdx;
+                              setDragOverMeasurementIdx(null);
+                              setDraggedMeasurementIdx(null);
+                              if (fromIdx !== null && !isNaN(fromIdx) && fromIdx !== i) {
+                                moveMeasurement(fromIdx, i);
+                              }
+                            }}
+                            onDragEnd={() => {
+                              setDragOverMeasurementIdx(null);
+                              setDraggedMeasurementIdx(null);
+                            }}
+                            className={`group/row border-b border-gray-100 hover:bg-gray-50 transition-colors relative ${
+                              isDragging ? 'opacity-30 bg-gray-100' : ''
+                            } ${
+                              isDragOver ? 'border-t-2 border-t-blue-500 bg-blue-50/50' : ''
+                            }`} 
+                            style={{ pageBreakInside: 'avoid' }}
+                          >
+                            {!isTechPackLocked && (
+                              <td className="px-1 py-2 align-middle text-center print:hidden w-7 cursor-grab active:cursor-grabbing">
+                                <div 
+                                  className="flex items-center justify-center text-gray-300 group-hover/row:text-gray-600 hover:bg-gray-200/60 p-0.5 rounded transition-colors"
+                                  title="Drag to reorder measurement"
+                                >
+                                  <GripVertical size={14} />
+                                </div>
+                              </td>
+                            )}
+                            <td className="px-2 py-2 align-top font-mono text-xs print:text-[10px] text-gray-500">
+                               <AutoTextarea className="w-full bg-transparent outline-none uppercase leading-tight" placeholder="ID" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
                             </td>
-                          )}
-                        </tr>
-                      ))}
+                            <td className="px-2 py-2 align-top">
+                               <AutoTextarea className="w-full bg-transparent outline-none font-semibold text-gray-900 leading-tight" placeholder="Point of measure..." value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
+                               <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" placeholder="Description / how to measure..." value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
+                            </td>
+                            <td className="px-2 py-2 align-top">
+                               <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" placeholder="0.0" value={activeSizeTab === (displayData?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                            </td>
+                            <td className="px-1 py-2 align-top">
+                               <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
+                            </td>
+                            <td className="px-1 py-2 align-top">
+                               <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
+                            </td>
+                            {!isTechPackLocked && (
+                              <td className="px-1 py-2 align-middle text-center print:hidden w-20">
+                                <div className="flex items-center justify-center gap-0.5 opacity-60 group-hover/row:opacity-100 transition-opacity">
+                                  <button
+                                    type="button"
+                                    disabled={i === 0}
+                                    onClick={() => moveMeasurement(i, i - 1)}
+                                    className="text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400 p-1 rounded hover:bg-gray-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                    title="Move up"
+                                    aria-label="Move measurement up"
+                                  >
+                                    <ArrowUp size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={i === (displayData.measurements || []).length - 1}
+                                    onClick={() => moveMeasurement(i, i + 1)}
+                                    className="text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400 p-1 rounded hover:bg-gray-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                    title="Move down"
+                                    aria-label="Move measurement down"
+                                  >
+                                    <ArrowDown size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMeasurement(i)}
+                                    className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-all cursor-pointer inline-flex items-center justify-center group-hover/row:text-red-500 ml-0.5"
+                                    title={`Delete measurement ${m.id ? `(${m.id})` : ''} ${m.point || ''}`}
+                                    aria-label="Delete measurement point"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                       {(displayData.measurements || []).length === 0 && (
                         <tr>
-                          <td colSpan={!isTechPackLocked ? 6 : 5} className="py-8 text-center text-gray-400 italic text-xs">
+                          <td colSpan={!isTechPackLocked ? 7 : 5} className="py-8 text-center text-gray-400 italic text-xs">
                             No measurements added yet. Click &quot;+ Add Measurement&quot; to begin.
                           </td>
                         </tr>
