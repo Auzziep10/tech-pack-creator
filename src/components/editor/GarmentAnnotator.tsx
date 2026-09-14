@@ -775,58 +775,13 @@ export function GarmentAnnotator({
 
       {!isFullscreen && !isLocked && (
           <div 
-            className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center gap-2.5 opacity-0 hover:opacity-100 cursor-pointer" 
+            className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer" 
             onClick={() => setIsFullscreen(true)}
           >
              <Button variant="secondary" onClick={() => setIsFullscreen(true)} className="shadow-xl gap-2 pointer-events-none">
                 <Maximize size={16} />
                 Edit & Annotate
              </Button>
-             <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAIModifyModal(true);
-                }}
-                className="px-3.5 py-2 bg-purple-600 text-white font-bold rounded-xl shadow-xl hover:bg-purple-700 transition-all text-xs flex items-center gap-1.5 border border-purple-600"
-                title="Brush and modify any part of the garment"
-             >
-                <Wand2 size={14} />
-                Modify Area
-             </button>
-             <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBakeLogoModal(true);
-                }}
-                className="px-3.5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow-xl hover:bg-amber-700 transition-all text-xs flex items-center gap-1.5 border border-amber-600"
-                title="Upload brand logo and bake it realistically into fabric"
-             >
-                <Layers size={14} />
-                Bake Logo
-             </button>
-             <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRotateImage('cw');
-                }}
-                disabled={isRotating}
-                className="px-3.5 py-2 bg-black text-white font-bold rounded-xl shadow-xl hover:bg-gray-800 transition-all text-xs flex items-center gap-1.5 border border-black disabled:opacity-50"
-                title="Rotate image 90° clockwise"
-             >
-                <RotateCw size={14} />
-                Rotate 90°
-             </button>
-             <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowManualCropModal(true);
-                }}
-                className="px-3.5 py-2 bg-black text-white font-bold rounded-xl shadow-xl hover:bg-gray-800 transition-all text-xs flex items-center gap-1.5 border border-black"
-                title="Crop photo to fit full size"
-             >
-                <Crop size={14} />
-                Crop Photo
-             </button>
           </div>
         )}
 
