@@ -435,3 +435,74 @@ export async function eraseBrandingRegion(imageUrl: string, maskBase64: string):
     throw err;
   }
 }
+
+export async function modifyGarmentRegion(imageUrl: string, maskBase64: string, prompt: string): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(imageUrl);
+
+    const res = await fetch('/api/modify-garment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'inpaint',
+        base64Data,
+        mimeType,
+        maskBase64,
+        maskMimeType: 'image/png',
+        prompt
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!data.data || typeof data.data !== 'string' || !data.data.startsWith('data:image/')) {
+      throw new Error("Server did not return valid modified image data.");
+    }
+    return await autoTrimWhitePadding(data.data);
+
+  } catch (err) {
+    console.error("Modify Garment Region Error:", err);
+    throw err;
+  }
+}
+
+export async function bakeGarmentLogo(compositeImageUrl: string, styleOption: string = 'Screenprint'): Promise<string> {
+  try {
+    const { base64Data, mimeType } = await resizeImage(compositeImageUrl);
+
+    const res = await fetch('/api/modify-garment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'bake-logo',
+        base64Data,
+        mimeType,
+        styleOption
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!data.data || typeof data.data !== 'string' || !data.data.startsWith('data:image/')) {
+      throw new Error("Server did not return valid baked image data.");
+    }
+    return await autoTrimWhitePadding(data.data);
+
+  } catch (err) {
+    console.error("Bake Garment Logo Error:", err);
+    throw err;
+  }
+}
+

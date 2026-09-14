@@ -6,6 +6,8 @@ import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { FreeCropper } from '../../pages/MobileScanner';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
+import { AIModifyModal } from './AIModifyModal';
+import { BakeLogoModal } from './BakeLogoModal';
 
 // Helper function to rotate an image 90 degrees clockwise or counter-clockwise
 const rotateImage90Degrees = async (imageSrc: string, direction: 'cw' | 'ccw' = 'cw'): Promise<string> => {
@@ -177,6 +179,10 @@ export function GarmentAnnotator({
   const [showManualCropModal, setShowManualCropModal] = useState(false);
   const [manualCropPixels, setManualCropPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [isSavingManualCrop, setIsSavingManualCrop] = useState(false);
+
+  // AI Modification & Logo Studio States
+  const [showAIModifyModal, setShowAIModifyModal] = useState(false);
+  const [showBakeLogoModal, setShowBakeLogoModal] = useState(false);
 
   // Branding Eraser States
   const [isEraserMode, setIsEraserMode] = useState(false);
@@ -496,6 +502,28 @@ export function GarmentAnnotator({
               Rotate 90°
             </Button>
 
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowAIModifyModal(true)}
+              className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+              title="Brush over any garment area and prompt Gemini to alter it"
+            >
+              <Wand2 size={14} />
+              AI Modify
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowBakeLogoModal(true)}
+              className="gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+              title="Upload brand logo and bake it realistically into fabric weave & folds"
+            >
+              <Layers size={14} />
+              Bake Logo
+            </Button>
+
             {/* Branding Eraser / Save / Reset Controls in Toolbar */}
             {!erasedResultImage && (
               <Button 
@@ -752,8 +780,30 @@ export function GarmentAnnotator({
           >
              <Button variant="secondary" onClick={() => setIsFullscreen(true)} className="shadow-xl gap-2 pointer-events-none">
                 <Maximize size={16} />
-                Edit & Annotate Image
+                Edit & Annotate
              </Button>
+             <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAIModifyModal(true);
+                }}
+                className="px-3.5 py-2 bg-purple-600 text-white font-bold rounded-xl shadow-xl hover:bg-purple-700 transition-all text-xs flex items-center gap-1.5 border border-purple-600"
+                title="Brush and modify any part of garment with Gemini"
+             >
+                <Wand2 size={14} />
+                AI Modify
+             </button>
+             <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBakeLogoModal(true);
+                }}
+                className="px-3.5 py-2 bg-amber-600 text-white font-bold rounded-xl shadow-xl hover:bg-amber-700 transition-all text-xs flex items-center gap-1.5 border border-amber-600"
+                title="Upload brand logo and bake it realistically into fabric"
+             >
+                <Layers size={14} />
+                Bake Logo
+             </button>
              <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1152,6 +1202,32 @@ export function GarmentAnnotator({
           </div>
         </div>
       )}
+
+      {/* AI Area Modification Modal */}
+      <AIModifyModal
+        isOpen={showAIModifyModal}
+        onClose={() => setShowAIModifyModal(false)}
+        imageUrl={erasedResultImage || imageUrl}
+        onSaveImage={async (newUrl) => {
+          setErasedResultImage(newUrl);
+          if (onSaveErasedImage) {
+            await onSaveErasedImage(newUrl);
+          }
+        }}
+      />
+
+      {/* Realistic Logo Baking Modal */}
+      <BakeLogoModal
+        isOpen={showBakeLogoModal}
+        onClose={() => setShowBakeLogoModal(false)}
+        imageUrl={erasedResultImage || imageUrl}
+        onSaveImage={async (newUrl) => {
+          setErasedResultImage(newUrl);
+          if (onSaveErasedImage) {
+            await onSaveErasedImage(newUrl);
+          }
+        }}
+      />
       </div>
     );
   };
