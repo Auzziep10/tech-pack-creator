@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, UploadCloud, RotateCw, CheckCircle2, Download, Loader2, ArrowLeftRight, Trash2, Sliders, Layers } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { bakeGarmentLogo } from '../../services/nanobananaService';
@@ -199,8 +200,8 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[260] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div 
         className="bg-neutral-900 border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-6xl mx-auto flex flex-col h-full sm:max-h-[92vh] overflow-hidden" 
         onClick={e => e.stopPropagation()}
@@ -523,4 +524,6 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

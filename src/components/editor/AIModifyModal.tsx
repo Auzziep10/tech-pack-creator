@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Sparkles, Wand2, Undo, Trash2, Download, CheckCircle2, Loader2, ArrowLeftRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { X, Sparkles, Wand2, Undo, Trash2, Download, CheckCircle2, Loader2, ArrowLeftRight, Paintbrush } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { modifyGarmentRegion } from '../../services/nanobananaService';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
@@ -24,9 +25,10 @@ const INSPIRATION_PROMPTS = [
 
 export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModifyModalProps) {
   const [prompt, setPrompt] = useState('');
-  const [brushSize, setBrushSize] = useState(32);
+  const [brushSize, setBrushSize] = useState(36);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [hasDrawnMask, setHasDrawnMask] = useState(false);
+  const [strokeCount, setStrokeCount] = useState(0);
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -36,27 +38,22 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   const [previewMode, setPreviewMode] = useState<'result' | 'original'>('result');
   const [error, setError] = useState<string | null>(null);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Synchronize canvas coordinate dimensions with the rendered garment image
-  const syncCanvas = () => {
-    const canvas = canvasRef.current;
+  // Initialize canvas coordinates directly to match image natural resolution
+  const handleImageLoaded = () => {
     const img = imageRef.current;
-    if (!canvas || !img) return;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
 
-    const rect = img.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      const targetW = Math.round(rect.width);
-      const targetH = Math.round(rect.height);
-      if (canvas.width !== targetW || canvas.height !== targetH) {
-        canvas.width = targetW;
-        canvas.height = targetH;
-        clearCanvas();
-      }
-    }
+    const natW = img.naturalWidth || 1000;
+    const natH = img.naturalHeight || 1000;
+
+    canvas.width = natW;
+    canvas.height = natH;
+    setIsCanvasReady(true);
   };
 
   useEffect(() => {
@@ -64,25 +61,22 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
       setResultImage(null);
       setPrompt('');
       setError(null);
-      setHasDrawnMask(false);
+      setStrokeCount(0);
       setHistory([]);
+      setIsCanvasReady(false);
     } else {
-      // Multiple attempts to ensure the canvas matches image bounds after DOM render
-      const t1 = setTimeout(syncCanvas, 50);
-      const t2 = setTimeout(syncCanvas, 200);
-      const t3 = setTimeout(syncCanvas, 500);
+      // Check if image is already cached/complete
+      if (imageRef.current && imageRef.current.complete) {
+        handleImageLoaded();
+      }
+      const t1 = setTimeout(handleImageLoaded, 100);
+      const t2 = setTimeout(handleImageLoaded, 300);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
-        clearTimeout(t3);
       };
     }
   }, [isOpen, imageUrl]);
-
-  useEffect(() => {
-    window.addEventListener('resize', syncCanvas);
-    return () => window.removeEventListener('resize', syncCanvas);
-  }, []);
 
   const saveStateToHistory = () => {
     const canvas = canvasRef.current;
@@ -106,11 +100,11 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     if (previousState) {
       ctx.putImageData(previousState, 0, 0);
       setHistory(newHistory);
-      setHasDrawnMask(true);
+      setStrokeCount(prev => Math.max(1, prev - 1));
     } else {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       setHistory([]);
-      setHasDrawnMask(false);
+      setStrokeCount(0);
     }
   };
 
@@ -121,18 +115,18 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHistory([]);
-    setHasDrawnMask(false);
+    setStrokeCount(0);
   };
 
   const getCanvasCoords = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    if (!canvas) return { x: 0, y: 0, scale: 1 };
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scale = canvas.width / rect.width;
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
+      x: (e.clientX - rect.left) * scale,
+      y: (e.clientY - rect.top) * scale,
+      scale
     };
   };
 
@@ -147,15 +141,15 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
     canvas.setPointerCapture(e.pointerId);
     setIsDrawing(true);
-    setHasDrawnMask(true);
+    setStrokeCount(prev => prev + 1);
 
     const pos = getCanvasCoords(e);
-    lastPointRef.current = pos;
+    lastPointRef.current = { x: pos.x, y: pos.y };
 
-    // Draw initial contact point
+    const effectiveBrush = brushSize * pos.scale;
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.6)'; // Translucent red brush marker
+    ctx.arc(pos.x, pos.y, effectiveBrush / 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.65)'; // High-visibility translucent red
     ctx.fill();
   };
 
@@ -167,17 +161,18 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     if (!ctx) return;
 
     const pos = getCanvasCoords(e);
+    const effectiveBrush = brushSize * pos.scale;
 
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
-    ctx.lineWidth = brushSize;
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.65)';
+    ctx.lineWidth = effectiveBrush;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
 
-    lastPointRef.current = pos;
+    lastPointRef.current = { x: pos.x, y: pos.y };
   };
 
   const stopDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -193,12 +188,12 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
   };
 
   const handleGenerate = async () => {
-    if (!hasDrawnMask) {
-      setError('Please draw directly on the garment above to mark the area you want to change.');
+    if (strokeCount === 0) {
+      setError('Please draw directly on the garment above to highlight the area you want to change.');
       return;
     }
     if (!prompt.trim()) {
-      setError('Please enter a prompt underneath describing what to change.');
+      setError('Please enter instructions underneath describing what to change in the highlighted area.');
       return;
     }
 
@@ -206,42 +201,33 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
     setError(null);
 
     try {
-      const displayCanvas = canvasRef.current;
-      if (!displayCanvas) throw new Error('Canvas not ready');
+      const drawnCanvas = canvasRef.current;
+      if (!drawnCanvas) throw new Error('Canvas not ready');
 
-      // Load natural image to obtain full true dimensions
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = imageUrl;
-      await new Promise((res, rej) => {
-        img.onload = res;
-        img.onerror = rej;
-      });
-
-      // Create full-resolution mask canvas
+      // Create full-resolution mask: pure white background (#FFFFFF) with solid black strokes (#000000)
       const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = img.naturalWidth;
-      maskCanvas.height = img.naturalHeight;
+      maskCanvas.width = drawnCanvas.width;
+      maskCanvas.height = drawnCanvas.height;
       const maskCtx = maskCanvas.getContext('2d');
       if (!maskCtx) throw new Error('Could not create mask context');
 
-      // Fill pure white background (#FFFFFF)
+      // 1. Fill solid white
       maskCtx.fillStyle = '#FFFFFF';
       maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
 
-      // Extract drawn user strokes and paint pure solid black (#000000)
+      // 2. Draw user strokes in solid black
       const tempStrokes = document.createElement('canvas');
-      tempStrokes.width = displayCanvas.width;
-      tempStrokes.height = displayCanvas.height;
+      tempStrokes.width = drawnCanvas.width;
+      tempStrokes.height = drawnCanvas.height;
       const tempCtx = tempStrokes.getContext('2d');
       if (tempCtx) {
-        tempCtx.drawImage(displayCanvas, 0, 0);
+        tempCtx.drawImage(drawnCanvas, 0, 0);
         tempCtx.globalCompositeOperation = 'source-in';
         tempCtx.fillStyle = '#000000';
         tempCtx.fillRect(0, 0, tempStrokes.width, tempStrokes.height);
       }
 
-      maskCtx.drawImage(tempStrokes, 0, 0, maskCanvas.width, maskCanvas.height);
+      maskCtx.drawImage(tempStrokes, 0, 0);
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
       const result = await modifyGarmentRegion(imageUrl, maskBase64, prompt);
@@ -270,21 +256,24 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[260] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div 
         className="bg-neutral-900 border-0 sm:border border-white/10 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-5xl mx-auto flex flex-col h-full sm:max-h-[94vh] overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
         {/* Top Header */}
-        <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-black/60 shrink-0">
+        <div className="p-3.5 sm:p-4 border-b border-white/10 flex items-center justify-between bg-black/70 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md">
               <Wand2 size={16} />
             </div>
             <div>
-              <h3 className="font-serif text-base sm:text-lg text-white font-bold tracking-wide">Draw on Garment to Modify</h3>
-              <p className="text-[11px] text-white/50">Draw on the garment to mark where you want changes, then type your request underneath</p>
+              <div className="flex items-center gap-2">
+                <h3 className="font-serif text-base sm:text-lg text-white font-bold tracking-wide">Draw on Garment to Modify</h3>
+                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full">Studio</span>
+              </div>
+              <p className="text-[11px] text-white/50">Paint over any part of the garment above, then type your request underneath</p>
             </div>
           </div>
           <button 
@@ -295,21 +284,31 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
           </button>
         </div>
 
-        {/* Modal Main Body - Vertical Layout (Canvas on top, Prompt underneath) */}
+        {/* Modal Main Body: Vertical Layout (Garment Canvas on Top, Prompt Underneath) */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-neutral-950">
+          
           {/* Garment Drawing Artboard */}
           <div className="flex-1 relative flex flex-col items-center justify-center p-3 sm:p-4 min-h-[300px] overflow-hidden bg-[radial-gradient(#262626_1px,transparent_1px)] [background-size:16px_16px]">
-            <div 
-              ref={containerRef}
-              className="relative inline-block select-none shadow-2xl rounded-2xl overflow-hidden bg-white max-h-[48vh] max-w-full"
-            >
+            
+            {/* Top helper notification banner */}
+            {!resultImage && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+                <div className="bg-black/75 backdrop-blur-md border border-white/10 px-3.5 py-1 rounded-full text-white/80 text-xs flex items-center gap-2 shadow-lg">
+                  <Paintbrush size={13} className="text-purple-400" />
+                  <span>{strokeCount > 0 ? `${strokeCount} area${strokeCount > 1 ? 's' : ''} marked` : "Click & drag on garment to highlight target area"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Canvas Container with Garment Image and Drawing Layer */}
+            <div className="relative inline-block select-none shadow-2xl rounded-2xl overflow-hidden bg-white max-h-[50vh] max-w-full">
               <img 
                 ref={imageRef}
                 src={previewMode === 'result' && resultImage ? resultImage : imageUrl} 
                 alt="Garment Artboard"
-                onLoad={syncCanvas}
+                onLoad={handleImageLoaded}
                 draggable={false}
-                className="block max-h-[48vh] w-auto max-w-full object-contain pointer-events-none"
+                className="block max-h-[50vh] w-auto max-w-full object-contain pointer-events-none"
               />
 
               {/* Mask Drawing Canvas Layer */}
@@ -334,7 +333,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   </div>
                   <h4 className="text-white font-bold text-base mb-1">Applying Modification...</h4>
                   <p className="text-white/60 text-xs max-w-xs">
-                    Weaving requested changes into the fabric texture, seams, and lighting
+                    Weaving requested changes into fabric weave, folds, and lighting
                   </p>
                 </div>
               )}
@@ -347,7 +346,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Brush</span>
                   <input 
                     type="range" 
-                    min="10" 
+                    min="12" 
                     max="90" 
                     value={brushSize} 
                     onChange={e => setBrushSize(Number(e.target.value))}
@@ -369,7 +368,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
                 <button 
                   onClick={clearCanvas} 
-                  disabled={!hasDrawnMask}
+                  disabled={strokeCount === 0}
                   className="p-1 hover:bg-red-500/20 rounded-lg text-white/70 hover:text-red-400 transition-colors disabled:opacity-30"
                   title="Clear drawing"
                 >
@@ -407,7 +406,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
             )}
           </div>
 
-          {/* Underneath Controls Section */}
+          {/* Underneath Controls Section (Prompt Input & Suggestions) */}
           <div className="border-t border-white/10 p-4 sm:p-5 bg-neutral-900 shrink-0 space-y-3">
             {error && (
               <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs">
@@ -432,11 +431,11 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                       value={prompt}
                       onChange={e => setPrompt(e.target.value)}
                       onKeyDown={e => {
-                        if (e.key === 'Enter' && hasDrawnMask && prompt.trim() && !isGenerating) {
+                        if (e.key === 'Enter' && strokeCount > 0 && prompt.trim() && !isGenerating) {
                           handleGenerate();
                         }
                       }}
-                      placeholder={hasDrawnMask ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."}
+                      placeholder={strokeCount > 0 ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."}
                       disabled={isGenerating}
                       className="w-full bg-neutral-950 border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-50 shadow-inner"
                     />
@@ -444,7 +443,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
                   <Button
                     onClick={handleGenerate}
-                    disabled={isGenerating || !hasDrawnMask || !prompt.trim()}
+                    disabled={isGenerating || strokeCount === 0 || !prompt.trim()}
                     isLoading={isGenerating}
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50"
                   >
@@ -505,4 +504,6 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
