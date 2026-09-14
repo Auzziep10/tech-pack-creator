@@ -241,12 +241,12 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
 
       const maskBase64 = maskCanvas.toDataURL('image/png');
 
-      // Call Gemini 3.1 inpaint endpoint
+      // Call inpaint endpoint
       const result = await modifyGarmentRegion(imageUrl, maskBase64, prompt);
       setResultImage(result);
       setPreviewMode('result');
     } catch (err: any) {
-      console.error('AI Modify Error:', err);
+      console.error('Modify Error:', err);
       setError(err?.message || 'Failed to modify garment area. Please try again.');
     } finally {
       setIsGenerating(false);
@@ -282,10 +282,10 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg sm:text-xl text-white font-bold tracking-wide">AI Area Inpainting & Modification</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full">Gemini 3.1</span>
+                <h3 className="font-serif text-lg sm:text-xl text-white font-bold tracking-wide">Area Inpainting & Modification</h3>
+                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full">Studio</span>
               </div>
-              <p className="text-xs text-white/50">Brush over any garment area and prompt Gemini to alter it seamlessly</p>
+              <p className="text-xs text-white/50">Brush over any garment area to alter and restyle it seamlessly</p>
             </div>
           </div>
           <button 
@@ -333,9 +333,9 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                     <div className="w-16 h-16 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
                     <Sparkles className="w-6 h-6 text-purple-400 absolute inset-0 m-auto animate-pulse" />
                   </div>
-                  <h4 className="text-white font-bold text-lg mb-1">Applying AI Modification...</h4>
+                  <h4 className="text-white font-bold text-lg mb-1">Applying Modification...</h4>
                   <p className="text-white/60 text-xs max-w-xs">
-                    Gemini is weaving your requested changes into the fabric texture, seams, and lighting
+                    Weaving your requested changes into the fabric texture, seams, and lighting
                   </p>
                 </div>
               )}
@@ -384,7 +384,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white font-medium px-2 py-1 rounded-md hover:bg-white/10 transition-colors"
                 >
                   <ArrowLeftRight size={14} />
-                  <span>{previewMode === 'result' ? 'Show Original' : 'Show AI Result'}</span>
+                  <span>{previewMode === 'result' ? 'Show Original' : 'Show Result'}</span>
                 </button>
                 <div className="h-4 w-px bg-white/20" />
                 <button
@@ -392,7 +392,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                     if (isDownloading) return;
                     setIsDownloading(true);
                     try {
-                      await downloadAsLargePng(resultImage, 'gemini_modified_garment', { resolution: 'large' });
+                      await downloadAsLargePng(resultImage, 'modified_garment', { resolution: 'large' });
                     } catch (e) {
                       alert('Download failed');
                     } finally {
@@ -469,7 +469,7 @@ export function AIModifyModal({ isOpen, onClose, imageUrl, onSaveImage }: AIModi
                   className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-3 rounded-full text-xs uppercase tracking-widest font-bold shadow-lg shadow-purple-500/25 transition-all flex items-center justify-center gap-2 border-0"
                 >
                   <Sparkles size={15} />
-                  {isGenerating ? 'Generating Modification...' : 'Generate AI Changes'}
+                  {isGenerating ? 'Applying Changes...' : 'Apply Changes'}
                 </Button>
               ) : (
                 <div className="space-y-2">

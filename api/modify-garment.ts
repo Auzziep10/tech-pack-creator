@@ -131,7 +131,7 @@ CRITICAL FABRIC INTEGRATION DIRECTIVES (HIGHEST PRIORITY):
       return res.status(400).json({ error: 'Invalid action parameter. Must be "inpaint" or "bake-logo".' });
     }
 
-    // Execute generation with automated retries for transient Google AI service errors
+    // Execute generation with automated retries for transient service errors
     let result: any = null;
     const maxRetries = 2;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -179,13 +179,13 @@ CRITICAL FABRIC INTEGRATION DIRECTIVES (HIGHEST PRIORITY):
       return res.status(200).json({ data: `data:image/png;base64,${text}` });
     }
 
-    return res.status(500).json({ error: "AI model did not return image data. Please try again." });
+    return res.status(500).json({ error: "Service did not return image data. Please try again." });
 
   } catch (err: any) {
     console.error("Modify Garment API Error:", err);
     let errMsg = err.message || 'Internal Server Error';
     if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
-      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please try again in a few moments.';
+      errMsg = 'The image generation service is temporarily busy (503 Service Unavailable). Please try again in a few moments.';
     }
     return res.status(500).json({ error: errMsg });
   }

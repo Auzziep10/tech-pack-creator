@@ -837,7 +837,7 @@ export function TechPackEditor() {
           return { ...prev, measurements: updated };
         });
       } else {
-        alert("Gemini did not return any new measurements for this garment type.");
+        alert("Could not generate new measurements for this garment type.");
       }
     } catch (e: any) {
       alert("Failed to generate additional measurements: " + e.message);
@@ -905,7 +905,7 @@ export function TechPackEditor() {
           return { ...prev, measurements: currentMs };
         });
       } else {
-        alert("Gemini did not return any core measurements.");
+        alert("Could not generate core measurements.");
       }
     } catch (e: any) {
       alert("Failed to generate core measurements: " + e.message);
@@ -3537,7 +3537,7 @@ export function TechPackEditor() {
                         <Scan className="text-blue-500" size={24} />
                     </div>
                     <span className="text-base font-bold text-gray-700 mb-1">Upload Mockup Image</span>
-                    <span className="text-xs font-medium text-gray-500">AI will automatically detect the primary garment color</span>
+                    <span className="text-xs font-medium text-gray-500">Automatically detects the primary garment color</span>
                     <input type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
                        if (e.target.files && e.target.files.length > 0) {
                           const files = Array.from(e.target.files);

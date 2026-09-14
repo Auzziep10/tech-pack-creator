@@ -101,7 +101,7 @@ CRITICAL CONSTRAINTS:
     console.error("Recoloring Error:", err);
     let errMsg = err.message || 'Internal Server Error';
     if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
-      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click Recoloring again in a few moments to retry.';
+      errMsg = 'The image generation service is temporarily busy (503 Service Unavailable). Please click Recoloring again in a few moments to retry.';
     }
     return res.status(500).json({ error: errMsg });
   }

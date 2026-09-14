@@ -295,7 +295,7 @@ export async function generateFlatlayMockup(imageUrl: string, gender: string, ga
 
 export async function recolorGarmentImage(imageUrl: string, colorHex: string): Promise<string> {
   try {
-    // Resize down to 1024px max dimension for faster AI recoloring turnaround
+    // Resize down to 1024px max dimension for faster recoloring turnaround
     const { base64Data, mimeType } = await resizeImage(imageUrl, 1024);
 
     const res = await fetch('/api/recolor', {

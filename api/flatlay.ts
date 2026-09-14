@@ -190,13 +190,13 @@ CRITICAL FLAT-LAY STYLING & POSE DIRECTIVES:
       return res.status(200).json({ data: `data:image/png;base64,${text}` });
     }
 
-    return res.status(500).json({ error: "AI model did not return image data. Please click Regenerate again." });
+    return res.status(500).json({ error: "Service did not return image data. Please click Regenerate again." });
 
   } catch (err: any) {
-    console.error("Flat-Lay Generation Error:", err);
+    console.error("Flatlay Generation Error:", err);
     let errMsg = err.message || 'Internal Server Error';
     if (errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('Deadline expired')) {
-      errMsg = 'The Google AI image generation service is temporarily busy (503 Service Unavailable). Please click "Create Flat Lay Garment" again in a few moments to retry.';
+      errMsg = 'The image generation service is temporarily busy (503 Service Unavailable). Please click "Create Flat Lay Garment" again in a few moments to retry.';
     }
     return res.status(500).json({ error: errMsg });
   }

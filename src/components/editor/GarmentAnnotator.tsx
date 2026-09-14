@@ -180,7 +180,7 @@ export function GarmentAnnotator({
   const [manualCropPixels, setManualCropPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [isSavingManualCrop, setIsSavingManualCrop] = useState(false);
 
-  // AI Modification & Logo Studio States
+  // Area Modification & Logo Studio States
   const [showAIModifyModal, setShowAIModifyModal] = useState(false);
   const [showBakeLogoModal, setShowBakeLogoModal] = useState(false);
 
@@ -507,10 +507,10 @@ export function GarmentAnnotator({
               size="sm"
               onClick={() => setShowAIModifyModal(true)}
               className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs shrink-0 font-bold"
-              title="Brush over any garment area and prompt Gemini to alter it"
+              title="Brush over any garment area to modify it"
             >
               <Wand2 size={14} />
-              AI Modify
+              Modify Area
             </Button>
 
             <Button
@@ -788,10 +788,10 @@ export function GarmentAnnotator({
                   setShowAIModifyModal(true);
                 }}
                 className="px-3.5 py-2 bg-purple-600 text-white font-bold rounded-xl shadow-xl hover:bg-purple-700 transition-all text-xs flex items-center gap-1.5 border border-purple-600"
-                title="Brush and modify any part of garment with Gemini"
+                title="Brush and modify any part of the garment"
              >
                 <Wand2 size={14} />
-                AI Modify
+                Modify Area
              </button>
              <button
                 onClick={(e) => {
@@ -1203,7 +1203,7 @@ export function GarmentAnnotator({
         </div>
       )}
 
-      {/* AI Area Modification Modal */}
+      {/* Area Modification Modal */}
       <AIModifyModal
         isOpen={showAIModifyModal}
         onClose={() => setShowAIModifyModal(false)}

@@ -214,7 +214,7 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-serif text-lg sm:text-xl text-white font-bold tracking-wide">Logo Studio & Realistic Fabric Baking</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">Gemini 3.1</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">Studio</span>
               </div>
               <p className="text-xs text-white/50">Position brand graphics and bake them realistically into garment cloth folds, creases & weave</p>
             </div>
@@ -306,7 +306,7 @@ export function BakeLogoModal({ isOpen, onClose, imageUrl, onSaveImage }: BakeLo
                     if (isDownloading) return;
                     setIsDownloading(true);
                     try {
-                      await downloadAsLargePng(resultImage, 'gemini_baked_logo_garment', { resolution: 'large' });
+                      await downloadAsLargePng(resultImage, 'baked_logo_garment', { resolution: 'large' });
                     } catch (e) {
                       alert('Download failed');
                     } finally {
