@@ -15,7 +15,6 @@ import {
   Paintbrush,
   Layers,
   UploadCloud,
-  RotateCw,
   Scissors,
   Check
 } from 'lucide-react';
@@ -94,7 +93,7 @@ export function GarmentStudioModal({
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // ----------------------------------------------------
-  // BAKE TAB STATES
+  // BAKE TAB STATES & PHOTOSHOP TRANSFORM
   // ----------------------------------------------------
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [logoName, setLogoName] = useState<string>('');
@@ -104,12 +103,23 @@ export function GarmentStudioModal({
   const [scale, setScale] = useState<number>(26); // 5 to 75%
   const [rotation, setRotation] = useState<number>(0);
   const [printStyle, setPrintStyle] = useState<PrintStyle>('Screenprint');
-  const [isDraggingLogo, setIsDraggingLogo] = useState<boolean>(false);
-  const [bakePreviewMode, setBakePreviewMode] = useState<'flat' | 'baked'>('flat');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const logoDragStartRef = useRef<{ clientX: number; clientY: number; initX: number; initY: number } | null>(null);
   const artboardContainerRef = useRef<HTMLDivElement>(null);
+  const logoTransformRef = useRef<HTMLDivElement>(null);
+  const transformStartRef = useRef<{
+    action: string;
+    clientX: number;
+    clientY: number;
+    initPosX: number;
+    initPosY: number;
+    initScale: number;
+    initRotation: number;
+    centerX: number;
+    centerY: number;
+    initDistance: number;
+    initAngle: number;
+  } | null>(null);
 
   // Sync initial tab and reset when opened
   useEffect(() => {
@@ -123,7 +133,6 @@ export function GarmentStudioModal({
       setStrokeCount(0);
       setStrokeHistory([]);
       setIsCanvasReady(false);
-      setBakePreviewMode('flat');
     }
   }, [isOpen, imageUrl, initialTab]);
 
@@ -219,7 +228,7 @@ export function GarmentStudioModal({
     const currentScale = canvas.width / (rect.width || 1);
     const actualRadius = (brushSize * currentScale) / 2;
 
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.45)';
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.45)';
     ctx.beginPath();
     ctx.arc(coords.x, coords.y, actualRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -242,7 +251,7 @@ export function GarmentStudioModal({
     const currentScale = canvas.width / (rect.width || 1);
     const actualLineWidth = brushSize * currentScale;
 
-    ctx.strokeStyle = 'rgba(168, 85, 247, 0.45)';
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
     ctx.lineWidth = actualLineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -322,7 +331,7 @@ export function GarmentStudioModal({
   };
 
   // ----------------------------------------------------
-  // BAKE LOGO LOGIC
+  // PHOTOSHOP-STYLE INTERACTIVE LOGO TRANSFORM
   // ----------------------------------------------------
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -343,37 +352,109 @@ export function GarmentStudioModal({
     reader.readAsDataURL(file);
   };
 
-  // Dragging logo on artboard
-  const handleLogoPointerDown = (e: React.PointerEvent) => {
+  // 1. Move logo by dragging body
+  const handleLogoMoveDown = (e: React.PointerEvent) => {
     if (!logoSrc || isProcessing) return;
-    setIsDraggingLogo(true);
-    logoDragStartRef.current = {
+    e.stopPropagation();
+    transformStartRef.current = {
+      action: 'move',
       clientX: e.clientX,
       clientY: e.clientY,
-      initX: posX,
-      initY: posY
+      initPosX: posX,
+      initPosY: posY,
+      initScale: scale,
+      initRotation: rotation,
+      centerX: 0,
+      centerY: 0,
+      initDistance: 0,
+      initAngle: 0
     };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
-  const handleLogoPointerMove = (e: React.PointerEvent) => {
-    if (!isDraggingLogo || !logoDragStartRef.current || !artboardContainerRef.current) return;
-    const rect = artboardContainerRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+  // 2. Proportional scale by dragging any corner handle
+  const handleCornerResizeDown = (corner: string, e: React.PointerEvent) => {
+    if (!logoSrc || isProcessing || !logoTransformRef.current) return;
+    e.stopPropagation();
+    const rect = logoTransformRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const initDistance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
 
-    const deltaX = ((e.clientX - logoDragStartRef.current.clientX) / rect.width) * 100;
-    const deltaY = ((e.clientY - logoDragStartRef.current.clientY) / rect.height) * 100;
-
-    const newX = Math.max(-45, Math.min(45, logoDragStartRef.current.initX + deltaX));
-    const newY = Math.max(-45, Math.min(45, logoDragStartRef.current.initY + deltaY));
-
-    setPosX(Math.round(newX * 10) / 10);
-    setPosY(Math.round(newY * 10) / 10);
+    transformStartRef.current = {
+      action: corner,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      initPosX: posX,
+      initPosY: posY,
+      initScale: scale,
+      initRotation: rotation,
+      centerX,
+      centerY,
+      initDistance,
+      initAngle: 0
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
-  const handleLogoPointerUp = () => {
-    setIsDraggingLogo(false);
-    logoDragStartRef.current = null;
+  // 3. Rotate logo by dragging top stem handle
+  const handleRotateDown = (e: React.PointerEvent) => {
+    if (!logoSrc || isProcessing || !logoTransformRef.current) return;
+    e.stopPropagation();
+    const rect = logoTransformRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const initAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+
+    transformStartRef.current = {
+      action: 'rotate',
+      clientX: e.clientX,
+      clientY: e.clientY,
+      initPosX: posX,
+      initPosY: posY,
+      initScale: scale,
+      initRotation: rotation,
+      centerX,
+      centerY,
+      initDistance: 0,
+      initAngle
+    };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  // 4. Combined pointer move for move / scale / rotate
+  const handleTransformPointerMove = (e: React.PointerEvent) => {
+    if (!transformStartRef.current) return;
+    const { action, clientX, clientY, initPosX, initPosY, initScale, initRotation, centerX, centerY, initDistance, initAngle } = transformStartRef.current;
+
+    if (action === 'move') {
+      if (!artboardContainerRef.current) return;
+      const rect = artboardContainerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const deltaX = ((e.clientX - clientX) / rect.width) * 100;
+      const deltaY = ((e.clientY - clientY) / rect.height) * 100;
+      const newX = Math.max(-45, Math.min(45, initPosX + deltaX));
+      const newY = Math.max(-45, Math.min(45, initPosY + deltaY));
+      setPosX(Math.round(newX * 10) / 10);
+      setPosY(Math.round(newY * 10) / 10);
+    } else if (action === 'rotate') {
+      const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
+      const deltaAngle = currentAngle - initAngle;
+      let newRot = Math.round((initRotation + deltaAngle) % 360);
+      if (newRot > 180) newRot -= 360;
+      if (newRot < -180) newRot += 360;
+      if (e.shiftKey) newRot = Math.round(newRot / 15) * 15; // Shift to snap to 15 degrees
+      setRotation(newRot);
+    } else if (action.startsWith('scale')) {
+      const currentDistance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+      const ratio = currentDistance / (initDistance || 1);
+      const newScale = Math.max(5, Math.min(80, Math.round(initScale * ratio * 10) / 10));
+      setScale(newScale);
+    }
+  };
+
+  const handleTransformPointerUp = () => {
+    transformStartRef.current = null;
   };
 
   // Create high-res composite and bake realistically
@@ -482,7 +563,6 @@ export function GarmentStudioModal({
       const nextStack = [...historyStack.slice(0, historyIndex + 1), bakedResultUrl];
       setHistoryStack(nextStack);
       setHistoryIndex(nextStack.length - 1);
-      setBakePreviewMode('baked');
     } catch (err: any) {
       setError(err?.message || 'Failed to bake logo into fabric. Please try again.');
     } finally {
@@ -536,29 +616,29 @@ export function GarmentStudioModal({
         className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-3xl shadow-2xl w-full h-full max-w-7xl max-h-[96vh] mx-auto flex flex-col overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
-        {/* Top Header */}
+        {/* Top Header - Monochrome & Clean */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 border border-purple-200 flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 border border-slate-200 flex items-center justify-center shadow-xs">
               <Wand2 size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-serif text-lg sm:text-xl text-slate-900 font-bold tracking-tight">Garment Studio</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">Studio</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full">Studio</span>
               </div>
               <p className="text-xs text-slate-500">Modify garment details or position brand graphics and bake them realistically into fabric</p>
             </div>
           </div>
 
-          {/* Center Mode Switcher Tabs */}
+          {/* Center Mode Switcher Tabs - Monochrome Grayscale */}
           <div className="flex items-center p-1 bg-slate-100 border border-slate-200 rounded-xl">
             <button
               type="button"
               onClick={() => setActiveTab('modify')}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'modify'
-                  ? 'bg-white text-purple-700 shadow-xs'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -571,7 +651,7 @@ export function GarmentStudioModal({
               onClick={() => setActiveTab('bake')}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'bake'
-                  ? 'bg-white text-amber-700 shadow-xs'
+                  ? 'bg-slate-900 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -588,7 +668,7 @@ export function GarmentStudioModal({
                 onMouseDown={() => setShowOriginalPreview(true)}
                 onMouseUp={() => setShowOriginalPreview(false)}
                 onMouseLeave={() => setShowOriginalPreview(false)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-xs text-slate-600 font-semibold transition-colors cursor-pointer"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-xs text-slate-700 font-semibold transition-colors cursor-pointer"
                 title="Hold to preview original untouched garment"
               >
                 <ArrowLeftRight size={13} />
@@ -598,7 +678,7 @@ export function GarmentStudioModal({
 
             <button 
               onClick={onClose} 
-              className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -607,9 +687,9 @@ export function GarmentStudioModal({
 
         {/* Error Notification */}
         {error && (
-          <div className="px-6 py-2 bg-red-50 border-b border-red-200 text-red-700 text-xs flex items-center justify-between shrink-0">
+          <div className="px-6 py-2 bg-slate-100 border-b border-slate-300 text-slate-800 text-xs flex items-center justify-between shrink-0">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 font-bold ml-2">✕</button>
+            <button onClick={() => setError(null)} className="text-slate-500 hover:text-slate-900 font-bold ml-2">✕</button>
           </div>
         )}
 
@@ -621,16 +701,16 @@ export function GarmentStudioModal({
             
             {/* Top helper notification */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-700 text-xs flex items-center gap-2 shadow-md">
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-800 text-xs flex items-center gap-2 shadow-md">
                 {activeTab === 'modify' ? (
                   <>
-                    <Sparkles size={13} className="text-purple-600" />
+                    <Sparkles size={13} className="text-slate-800" />
                     <span>Click & drag on garment to highlight target area, then describe changes below</span>
                   </>
                 ) : (
                   <>
-                    <Layers size={13} className="text-amber-600" />
-                    <span>Drag logo directly on garment to position, then choose print style & bake</span>
+                    <Layers size={13} className="text-slate-800" />
+                    <span>Drag body to move, drag corners to scale, drag top handle to rotate</span>
                   </>
                 )}
               </div>
@@ -639,14 +719,11 @@ export function GarmentStudioModal({
             {/* Artboard Container */}
             <div 
               ref={artboardContainerRef}
-              onPointerDown={activeTab === 'bake' ? handleLogoPointerDown : undefined}
-              onPointerMove={activeTab === 'bake' ? handleLogoPointerMove : undefined}
-              onPointerUp={activeTab === 'bake' ? handleLogoPointerUp : undefined}
-              onPointerLeave={activeTab === 'bake' ? handleLogoPointerUp : undefined}
+              onPointerMove={activeTab === 'bake' ? handleTransformPointerMove : undefined}
+              onPointerUp={activeTab === 'bake' ? handleTransformPointerUp : undefined}
+              onPointerLeave={activeTab === 'bake' ? handleTransformPointerUp : undefined}
               style={{ touchAction: 'none' }}
-              className={`relative max-w-full max-h-full flex items-center justify-center select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white ${
-                activeTab === 'bake' && logoSrc ? 'cursor-grab active:cursor-grabbing' : ''
-              }`}
+              className="relative max-w-full max-h-full flex items-center justify-center select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white"
             >
               {/* Garment Image */}
               <img 
@@ -671,39 +748,77 @@ export function GarmentStudioModal({
                 />
               )}
 
-              {/* Mode 2: Placed Logo Overlay */}
+              {/* Mode 2: Photoshop-Style Interactive Transform Box */}
               {activeTab === 'bake' && logoSrc && (
                 <div
+                  ref={logoTransformRef}
                   style={{
                     position: 'absolute',
                     left: `${50 + posX}%`,
                     top: `${50 + posY}%`,
                     width: `${scale}%`,
                     transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                    pointerEvents: 'none'
+                    transformOrigin: 'center center'
                   }}
-                  className="z-20 transition-transform duration-75"
+                  className="z-20 select-none group/transform"
                 >
-                  <div className="relative group/logo">
+                  <div 
+                    onPointerDown={handleLogoMoveDown}
+                    className="relative cursor-move select-none"
+                  >
                     <img 
                       src={logoSrc} 
                       alt="Logo Overlay" 
                       draggable={false}
-                      className="w-full h-auto object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.15)] select-none" 
+                      className="w-full h-auto object-contain drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)] select-none pointer-events-none block" 
                     />
-                    <div className="absolute inset-0 border-2 border-dashed border-amber-500/80 rounded pointer-events-none opacity-80" />
+
+                    {/* Photoshop Selection Border */}
+                    <div className="absolute inset-0 border border-slate-900/60 border-dashed pointer-events-none" />
+
+                    {/* Rotation Stem & Handle (Top Center) */}
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto">
+                      <div
+                        onPointerDown={handleRotateDown}
+                        className="w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-900 shadow-sm cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
+                        title="Drag to rotate (Hold Shift to snap to 15°)"
+                      />
+                      <div className="w-px h-3.5 bg-slate-900/60" />
+                    </div>
+
+                    {/* 4 Corner Resize Handles */}
+                    <div
+                      onPointerDown={e => handleCornerResizeDown('scale-tl', e)}
+                      className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
+                      title="Drag corner to scale"
+                    />
+                    <div
+                      onPointerDown={e => handleCornerResizeDown('scale-tr', e)}
+                      className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
+                      title="Drag corner to scale"
+                    />
+                    <div
+                      onPointerDown={e => handleCornerResizeDown('scale-bl', e)}
+                      className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
+                      title="Drag corner to scale"
+                    />
+                    <div
+                      onPointerDown={e => handleCornerResizeDown('scale-br', e)}
+                      className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
+                      title="Drag corner to scale"
+                    />
                   </div>
                 </div>
               )}
 
-              {/* Baking/Processing Loading Overlay */}
+              {/* Processing Loading Overlay */}
               {isProcessing && (
-                <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
                   <div className="relative mb-4">
-                    <div className="w-16 h-16 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin" />
-                    <Sparkles className="w-6 h-6 text-purple-600 absolute inset-0 m-auto animate-pulse" />
+                    <div className="w-14 h-14 rounded-full border-3 border-slate-200 border-t-slate-900 animate-spin" />
+                    <Sparkles className="w-5 h-5 text-slate-800 absolute inset-0 m-auto animate-pulse" />
                   </div>
-                  <h4 className="text-slate-900 font-bold text-lg mb-1">
+                  <h4 className="text-slate-900 font-bold text-base mb-1">
                     {activeTab === 'modify' ? 'Applying Garment Modifications...' : 'Baking Logo Realistically...'}
                   </h4>
                   <p className="text-slate-500 text-xs max-w-xs">
@@ -726,9 +841,9 @@ export function GarmentStudioModal({
                     max="100"
                     value={brushSize}
                     onChange={e => setBrushSize(Number(e.target.value))}
-                    className="w-24 accent-purple-600 cursor-pointer"
+                    className="w-24 accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
                   />
-                  <span className="w-9 text-right font-mono text-purple-700 text-xs">{brushSize}px</span>
+                  <span className="w-9 text-right font-mono text-slate-900 text-xs">{brushSize}px</span>
                 </div>
 
                 <div className="h-4 w-px bg-slate-200" />
@@ -747,7 +862,7 @@ export function GarmentStudioModal({
                   type="button"
                   onClick={clearModifyCanvas}
                   disabled={strokeCount === 0 || isProcessing}
-                  className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                   title="Clear all strokes"
                 >
                   <Trash2 size={14} />
@@ -800,7 +915,7 @@ export function GarmentStudioModal({
             )}
           </div>
 
-          {/* Mode 2 Sidebar: Place & Bake Logo Controls */}
+          {/* Mode 2 Sidebar: Place & Bake Logo Controls - Grayscale */}
           {activeTab === 'bake' && (
             <div className="w-full md:w-[380px] lg:w-[420px] shrink-0 border-t md:border-t-0 md:border-l border-slate-200 p-5 flex flex-col justify-between bg-white overflow-y-auto space-y-5">
               <div className="space-y-4">
@@ -821,9 +936,9 @@ export function GarmentStudioModal({
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full p-4 border-2 border-dashed border-slate-300 hover:border-amber-500 hover:bg-amber-50/40 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer bg-slate-50/50 group"
+                      className="w-full p-4 border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer bg-slate-50/50 group"
                     >
-                      <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
                         <UploadCloud size={20} />
                       </div>
                       <div className="text-center">
@@ -839,14 +954,14 @@ export function GarmentStudioModal({
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate">{logoName || 'Custom Graphic'}</p>
-                          <p className="text-[10px] text-emerald-600 font-semibold">Ready to place</p>
+                          <p className="text-[10px] text-slate-500 font-semibold">Ready to place</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => setShowGraphicEditor(true)}
-                          className="text-[11px] font-bold text-amber-700 hover:text-amber-800 px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                          className="text-[11px] font-bold text-slate-800 hover:text-black px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
                           title="Remove background colors or crop graphic"
                         >
                           <Scissors size={12} />
@@ -855,7 +970,7 @@ export function GarmentStudioModal({
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="text-[11px] text-slate-500 hover:text-slate-800 px-2 py-1 rounded hover:bg-slate-200/50 transition-colors cursor-pointer"
+                          className="text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded hover:bg-slate-200/50 transition-colors cursor-pointer"
                         >
                           Change
                         </button>
@@ -865,7 +980,7 @@ export function GarmentStudioModal({
                             setLogoSrc(null);
                             setLogoName('');
                           }}
-                          className="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-slate-800 rounded hover:bg-slate-100 transition-colors cursor-pointer"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -878,20 +993,20 @@ export function GarmentStudioModal({
                     <button
                       type="button"
                       onClick={() => setShowGraphicEditor(true)}
-                      className="w-full mt-2 py-2.5 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 text-amber-900 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer group"
+                      className="w-full mt-2 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer group"
                     >
-                      <Scissors size={14} className="text-amber-600 group-hover:rotate-12 transition-transform" />
+                      <Scissors size={14} className="text-slate-700 group-hover:rotate-12 transition-transform" />
                       <span>Crop & Remove Background Colors</span>
                     </button>
                   )}
                 </div>
 
-                {/* Placement Controls */}
+                {/* Placement Controls (Can also drag corners/body directly on the garment) */}
                 {logoSrc && (
                   <div className="space-y-3.5 pt-2 border-t border-slate-100">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Scale</span>
-                      <span className="text-slate-700 font-mono font-medium">{scale}%</span>
+                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Scale (or drag corners)</span>
+                      <span className="text-slate-900 font-mono font-medium">{scale}%</span>
                     </div>
                     <input 
                       type="range" 
@@ -899,12 +1014,12 @@ export function GarmentStudioModal({
                       max="75" 
                       value={scale} 
                       onChange={e => setScale(Number(e.target.value))}
-                      className="w-full accent-amber-500 cursor-pointer"
+                      className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
                     />
 
                     <div className="flex justify-between items-center text-xs pt-1">
-                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Rotation</span>
-                      <span className="text-slate-700 font-mono font-medium">{rotation}°</span>
+                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Rotation (or drag top dot)</span>
+                      <span className="text-slate-900 font-mono font-medium">{rotation}°</span>
                     </div>
                     <input 
                       type="range" 
@@ -912,7 +1027,7 @@ export function GarmentStudioModal({
                       max="180" 
                       value={rotation} 
                       onChange={e => setRotation(Number(e.target.value))}
-                      className="w-full accent-amber-500 cursor-pointer"
+                      className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
                     />
 
                     {/* Quick placement presets */}
@@ -921,29 +1036,29 @@ export function GarmentStudioModal({
                       <div className="grid grid-cols-4 gap-1.5">
                         <button
                           type="button"
-                          onClick={() => { setPosX(-18); setPosY(-14); setScale(16); }}
-                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 rounded-md transition-colors"
+                          onClick={() => { setPosX(-18); setPosY(-14); setScale(16); setRotation(0); }}
+                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Left Chest
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-8); setScale(26); }}
-                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 rounded-md transition-colors"
+                          onClick={() => { setPosX(0); setPosY(-8); setScale(26); setRotation(0); }}
+                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Center
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-2); setScale(40); }}
-                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 rounded-md transition-colors"
+                          onClick={() => { setPosX(0); setPosY(-2); setScale(40); setRotation(0); }}
+                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Full Front
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-28); setScale(12); }}
-                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border border-slate-200 rounded-md transition-colors"
+                          onClick={() => { setPosX(0); setPosY(-28); setScale(12); setRotation(0); }}
+                          className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Collar
                         </button>
@@ -962,15 +1077,15 @@ export function GarmentStudioModal({
                             onClick={() => setPrintStyle(style.id)}
                             className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
                               printStyle === style.id
-                                ? 'bg-amber-50/70 border-amber-300 ring-1 ring-amber-300'
+                                ? 'bg-slate-100/90 border-slate-800 ring-1 ring-slate-800'
                                 : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                             }`}
                           >
                             <div className="flex items-center justify-between">
-                              <span className={`text-xs font-bold ${printStyle === style.id ? 'text-amber-900' : 'text-slate-700'}`}>
+                              <span className={`text-xs font-bold ${printStyle === style.id ? 'text-slate-900' : 'text-slate-700'}`}>
                                 {style.label}
                               </span>
-                              {printStyle === style.id && <Check size={14} className="text-amber-600" />}
+                              {printStyle === style.id && <Check size={14} className="text-slate-900" />}
                             </div>
                             <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{style.desc}</p>
                           </div>
@@ -988,7 +1103,7 @@ export function GarmentStudioModal({
                     onClick={handleBakeLogo}
                     disabled={isProcessing}
                     isLoading={isProcessing}
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 rounded-full text-xs uppercase tracking-widest shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
+                    className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 rounded-full text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
                   >
                     <Sparkles size={15} />
                     <span>Bake Realistic Mockup</span>
@@ -1002,16 +1117,16 @@ export function GarmentStudioModal({
         {/* Bottom Studio Controls / Prompt Bar */}
         <div className="p-4 sm:p-5 border-t border-slate-200 bg-white shrink-0 space-y-3">
           
-          {/* Revision Banner (when edits exist) */}
+          {/* Revision Banner (when edits exist) - Grayscale */}
           {historyIndex > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-purple-50/70 border border-purple-200/80 rounded-xl text-xs text-purple-900 animate-in fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 animate-in fade-in">
               <div className="flex items-center gap-2">
-                <span className="font-bold flex items-center gap-1.5 text-purple-700">
-                  <CheckCircle2 size={15} className="text-purple-600" />
+                <span className="font-bold flex items-center gap-1.5 text-slate-900">
+                  <CheckCircle2 size={15} className="text-slate-700" />
                   <span>Revision {historyIndex} of {historyStack.length - 1} applied</span>
                 </span>
-                <span className="text-purple-300">•</span>
-                <span className="text-purple-600/80 text-[11px] hidden sm:inline">
+                <span className="text-slate-300">•</span>
+                <span className="text-slate-500 text-[11px] hidden sm:inline">
                   {activeTab === 'modify' 
                     ? (strokeCount > 0 ? "Brush strokes ready — type prompt below" : "Draw on garment above to add another modification")
                     : "Logo positioned — click Bake Realistic Mockup"}
@@ -1023,7 +1138,7 @@ export function GarmentStudioModal({
                   type="button"
                   onClick={handleUndoStep}
                   disabled={historyIndex === 0 || isProcessing}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-purple-100/70 border border-purple-200 text-purple-800 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
                   title="Take away the last modification"
                 >
                   <Undo2 size={13} />
@@ -1034,7 +1149,7 @@ export function GarmentStudioModal({
                   type="button"
                   onClick={handleRedoStep}
                   disabled={historyIndex >= historyStack.length - 1 || isProcessing}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-purple-100/70 border border-purple-200 text-purple-800 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
                   title="Redo next modification"
                 >
                   <Redo2 size={13} />
@@ -1045,7 +1160,7 @@ export function GarmentStudioModal({
                   type="button"
                   onClick={handleRevertAll}
                   disabled={historyIndex === 0 || isProcessing}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-600 hover:text-red-600 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs cursor-pointer"
                   title="Revert all changes and restore original photo"
                 >
                   <RotateCcw size={13} />
@@ -1055,7 +1170,7 @@ export function GarmentStudioModal({
             </div>
           )}
 
-          {/* Mode 1: Prompt Input Row (only in Modify tab) */}
+          {/* Mode 1: Prompt Input Row (only in Modify tab) - Grayscale */}
           {activeTab === 'modify' && (
             <div className="space-y-2.5">
               <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
@@ -1077,7 +1192,7 @@ export function GarmentStudioModal({
                         : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."
                     }
                     disabled={isProcessing || showOriginalPreview}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all disabled:opacity-50"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:border-slate-800 focus:ring-2 focus:ring-slate-100 transition-all disabled:opacity-50"
                   />
                 </div>
 
@@ -1085,7 +1200,7 @@ export function GarmentStudioModal({
                   onClick={handleApplyModification}
                   disabled={isProcessing || strokeCount === 0 || !prompt.trim()}
                   isLoading={isProcessing}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-purple-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50 cursor-pointer"
+                  className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md transition-all flex items-center justify-center gap-2 border-0 shrink-0 disabled:opacity-50 cursor-pointer"
                 >
                   <Sparkles size={15} />
                   {isProcessing ? 'Applying...' : historyIndex > 0 ? 'Apply Another Change' : 'Apply Modification'}
@@ -1096,7 +1211,7 @@ export function GarmentStudioModal({
                     onClick={handleSaveToTechPack}
                     disabled={isSaving || isProcessing}
                     isLoading={isSaving}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 border-0 shrink-0 cursor-pointer"
+                    className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-xl text-xs uppercase tracking-widest font-bold shadow-md transition-all flex items-center justify-center gap-2 border-0 shrink-0 cursor-pointer"
                   >
                     <CheckCircle2 size={15} />
                     {isSaving ? 'Saving...' : `Save to Tech Pack (${historyIndex})`}
@@ -1104,7 +1219,7 @@ export function GarmentStudioModal({
                 )}
               </div>
 
-              {/* Suggestions Chips */}
+              {/* Suggestions Chips - Grayscale */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
                 <span className="text-[10px] uppercase font-bold text-slate-400 shrink-0">Suggestions:</span>
                 {INSPIRATION_PROMPTS.map((item, idx) => (
@@ -1112,7 +1227,7 @@ export function GarmentStudioModal({
                     key={idx}
                     type="button"
                     onClick={() => setPrompt(item)}
-                    className="whitespace-nowrap text-[11px] bg-slate-100 hover:bg-purple-50 hover:border-purple-200 hover:text-purple-700 text-slate-600 border border-slate-200/80 rounded-lg px-2.5 py-1 transition-all shrink-0 cursor-pointer"
+                    className="whitespace-nowrap text-[11px] bg-slate-100 hover:bg-slate-200 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1 transition-all shrink-0 cursor-pointer"
                   >
                     + {item}
                   </button>
@@ -1128,7 +1243,7 @@ export function GarmentStudioModal({
                 onClick={handleSaveToTechPack}
                 disabled={isSaving || isProcessing}
                 isLoading={isSaving}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-3 rounded-full text-xs uppercase tracking-widest font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
+                className="bg-slate-900 hover:bg-black text-white px-8 py-3 rounded-full text-xs uppercase tracking-widest font-bold shadow-md transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
               >
                 <CheckCircle2 size={16} />
                 {isSaving ? 'Saving...' : `Save to Tech Pack (${historyIndex} revisions)`}
