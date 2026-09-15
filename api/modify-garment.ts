@@ -93,6 +93,16 @@ CRITICAL INSTRUCTIONS & CONSTRAINTS:
       });
 
     } else if (action === 'bake-logo') {
+      let cleanMaskData: string | null = null;
+      let actualMaskMimeType = 'image/png';
+      if (maskBase64 && typeof maskBase64 === 'string') {
+        const match = maskBase64.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          actualMaskMimeType = match[1];
+          cleanMaskData = match[2];
+        }
+      }
+
       const STYLE_DIRECTIVES: Record<string, string> = {
         'Screenprint': 'REALISTIC SCREENPRINT: The graphic has a smooth, slightly matte ink deposit with subtle ink penetration into the cloth fibers and microscopic surface grain.',
         'Embroidered': 'REALISTIC EMBROIDERY: Render the logo with distinct 3D embroidered thread satin/fill stitches, subtle thread sheen, raised textural thread borders, and stitch directionality conforming to the garment surface.',
@@ -105,24 +115,25 @@ CRITICAL INSTRUCTIONS & CONSTRAINTS:
       const bakePrompt = `TASK: Realistic Apparel Logo & Graphic Baking (Ultra-Realistic Fabric Integration & 3D Contour Wrapping)
 PRINT / EMBROIDERY FINISH: ${styleInstruction}
 
-CRITICAL FABRIC INTEGRATION & 3D WRAPPING DIRECTIVES (HIGHEST PRIORITY):
-1. BAKE THE LOGO REALISTICALLY INTO THE GARMENT:
-   - The graphic/logo overlaid on the garment in the input image MUST be rendered as a physical, realistic part of the actual textile.
+CRITICAL STRICT CONSTRAINTS (HIGHEST PRIORITY):
+1. ZERO HALLUCINATIONS / STRICT BOUNDING BOX CONFINEMENT (HIGHEST PRIORITY):
+   - Only conform and bake the EXACT graphic elements present inside the designated bounding box / placed position on the garment.
+   - UNDER NO CIRCUMSTANCES should you generate, invent, paint, or add ANY new graphics, illustrations, animals, text, letters, symbols, or slogans anywhere else on the garment!
+   - DO NOT complete or extend the graphic into empty areas of the shirt. Every square inch outside the placed graphic's bounding box MUST remain 100% untouched plain garment fabric, identical to the original image.
+2. BAKE THE LOGO REALISTICALLY INTO THE GARMENT:
+   - The graphic overlaid on the garment in the input image MUST be rendered as a physical, realistic part of the actual textile.
    - DRAPE & FOLD CONFORMITY: Deform and conform the logo naturally along all cloth wrinkles, fabric ripples, surface curvature, and folds underneath it. It must NOT look like a flat 2D sticker or digital graphic.
    - LIGHTING & SHADOWING: Cast realistic highlights, ambient shadows, and crease shadows across the logo matching the exact 3D lighting of the garment.
    - TEXTILE TEXTURE INTERACTION: Embed the subtle texture of the garment fabric (knit, fleece, twill, or rib) through the graphic finish.
-2. 3D TORSO WRAPPING & EDGE CONTOUR (ULTRA-CRITICAL):
-   - When any part of the graphic/logo extends towards the side edge, side seam, sleeve, or outer silhouette of the garment, it MUST wrap naturally around the 3D cylindrical curve of the torso/body.
+3. 3D TORSO WRAPPING & EDGE CONTOUR:
+   - When any part of the graphic extends towards the side edge, side seam, sleeve, or outer silhouette of the garment, it MUST wrap naturally around the 3D cylindrical curve of the torso/body.
    - Letters and graphic elements near the silhouette edge MUST be perspective-foreshortened and curved around the body fold as if continuing around the back/side.
-3. ZERO LOGO SPILLOVER ONTO BACKGROUND (STRICT ABSOLUTE ZERO):
-   - The graphic/logo belongs EXCLUSIVELY on the garment fabric.
-   - Under NO circumstances should any part of the logo, text, letters, or graphic ink float, bleed, or appear on the white background outside the garment outline.
-   - Any portion of the graphic that wraps past the visible silhouette into empty space MUST be completely hidden behind the garment body.
-4. PRESERVE THE REST OF THE GARMENT:
+4. ZERO LOGO SPILLOVER ONTO BACKGROUND (STRICT ABSOLUTE ZERO):
+   - The graphic belongs EXCLUSIVELY on the garment fabric. Under NO circumstances should any part of the logo or ink bleed onto the white background outside the garment silhouette.
+5. PRESERVE THE REST OF THE GARMENT:
    - Keep the garment color, silhouette, collar, sleeves, hems, and details identical to the input image.
-5. ISOLATE ON PURE WHITE BACKGROUND (ULTRA-CRITICAL):
-   - The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF).
-   - Absolutely NO floor shadows, no grey halos, and no background objects. Every background pixel outside the garment MUST be exactly #FFFFFF.`;
+6. ISOLATE ON PURE WHITE BACKGROUND (ULTRA-CRITICAL):
+   - The garment MUST be completely isolated on a flat, solid, mathematically pure white background (HEX #FFFFFF). Every background pixel outside the garment MUST be exactly #FFFFFF.`;
 
       contentParts.push(bakePrompt);
       contentParts.push({
@@ -131,6 +142,14 @@ CRITICAL FABRIC INTEGRATION & 3D WRAPPING DIRECTIVES (HIGHEST PRIORITY):
           mimeType: actualMimeType
         }
       });
+      if (cleanMaskData) {
+        contentParts.push({
+          inlineData: {
+            data: cleanMaskData,
+            mimeType: actualMaskMimeType
+          }
+        });
+      }
 
     } else {
       return res.status(400).json({ error: 'Invalid action parameter. Must be "inpaint" or "bake-logo".' });

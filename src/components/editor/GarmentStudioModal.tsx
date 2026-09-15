@@ -16,12 +16,26 @@ import {
   Layers,
   UploadCloud,
   Scissors,
-  Check
+  Check,
+  Plus,
+  Eye
 } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { modifyGarmentRegion, bakeGarmentLogo } from '../../services/nanobananaService';
+import { modifyGarmentRegion, bakeGarmentLogo, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
 import { GraphicEditorModal } from './GraphicEditorModal';
+
+export interface PlacedGraphic {
+  id: string;
+  name: string;
+  src: string;          // current processed graphic (color knockout, crop, etc.)
+  originalSrc: string;  // original uploaded dataUrl
+  posX: number;         // percentage offset (-45 to 45%)
+  posY: number;         // percentage offset (-45 to 45%)
+  scale: number;        // percentage width (5 to 80%)
+  rotation: number;     // degrees (-180 to 180)
+  aspectRatio: number;  // naturalHeight / naturalWidth
+}
 
 interface GarmentStudioModalProps {
   isOpen: boolean;
@@ -93,21 +107,22 @@ export function GarmentStudioModal({
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   // ----------------------------------------------------
-  // BAKE TAB STATES & PHOTOSHOP TRANSFORM
+  // MULTI-GRAPHIC BAKE TAB STATES & PHOTOSHOP TRANSFORM
   // ----------------------------------------------------
-  const [logoSrc, setLogoSrc] = useState<string | null>(null);
-  const [logoName, setLogoName] = useState<string>('');
-  const [showGraphicEditor, setShowGraphicEditor] = useState<boolean>(false);
-  const [posX, setPosX] = useState<number>(0); // -45 to 45%
-  const [posY, setPosY] = useState<number>(-8); // -45 to 45%
-  const [scale, setScale] = useState<number>(26); // 5 to 75%
-  const [rotation, setRotation] = useState<number>(0);
+  const [graphics, setGraphics] = useState<PlacedGraphic[]>([]);
+  const [selectedGraphicId, setSelectedGraphicId] = useState<string | null>(null);
+  const [editingGraphicId, setEditingGraphicId] = useState<string | null>(null);
   const [printStyle, setPrintStyle] = useState<PrintStyle>('Screenprint');
+
+  const selectedGraphic = graphics.find(g => g.id === selectedGraphicId) || null;
+  const editingGraphic = graphics.find(g => g.id === editingGraphicId) || null;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const artboardContainerRef = useRef<HTMLDivElement>(null);
-  const logoTransformRef = useRef<HTMLDivElement>(null);
+  const graphicRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  
   const transformStartRef = useRef<{
+    graphicId: string;
     action: string;
     clientX: number;
     clientY: number;
@@ -331,8 +346,12 @@ export function GarmentStudioModal({
   };
 
   // ----------------------------------------------------
-  // PHOTOSHOP-STYLE INTERACTIVE LOGO TRANSFORM
+  // MULTI-GRAPHIC MANAGEMENT & TRANSFORM LOGIC
   // ----------------------------------------------------
+  const updateGraphic = (id: string, updates: Partial<PlacedGraphic>) => {
+    setGraphics(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+  };
+
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -342,28 +361,68 @@ export function GarmentStudioModal({
       return;
     }
 
-    setLogoName(file.name);
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      setLogoSrc(dataUrl);
-      setError(null);
+      const img = new Image();
+      img.onload = () => {
+        const ar = (img.naturalHeight || 1) / (img.naturalWidth || 1);
+        const newGraphic: PlacedGraphic = {
+          id: `graphic_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          src: dataUrl,
+          originalSrc: dataUrl,
+          posX: 0,
+          posY: graphics.length > 0 ? (graphics.length % 2 === 1 ? -12 : 12) : -8,
+          scale: 26,
+          rotation: 0,
+          aspectRatio: ar
+        };
+        setGraphics(prev => [...prev, newGraphic]);
+        setSelectedGraphicId(newGraphic.id);
+        setError(null);
+      };
+      img.src = dataUrl;
     };
     reader.readAsDataURL(file);
+
+    // Reset input so user can upload the same file again if desired
+    e.target.value = '';
   };
 
-  // 1. Move logo by dragging body
-  const handleLogoMoveDown = (e: React.PointerEvent) => {
-    if (!logoSrc || isProcessing) return;
+  const handleDeleteGraphic = (id: string) => {
+    setGraphics(prev => prev.filter(g => g.id !== id));
+    if (selectedGraphicId === id) {
+      setSelectedGraphicId(null);
+    }
+  };
+
+  // Photoshop-Style: Click off to deselect any graphic (clean preview mode)
+  const handleArtboardPointerDown = (e: React.PointerEvent) => {
+    if (activeTab === 'modify') return;
+    const target = e.target as HTMLElement;
+    // If not clicking inside an active graphic or handle, deselect
+    if (!target.closest('[data-graphic-element="true"]')) {
+      setSelectedGraphicId(null);
+    }
+  };
+
+  // 1. Move graphic by dragging body
+  const handleLogoMoveDown = (graphicId: string, e: React.PointerEvent) => {
+    const targetGraphic = graphics.find(g => g.id === graphicId);
+    if (!targetGraphic || isProcessing) return;
     e.stopPropagation();
+    setSelectedGraphicId(graphicId);
+
     transformStartRef.current = {
+      graphicId,
       action: 'move',
       clientX: e.clientX,
       clientY: e.clientY,
-      initPosX: posX,
-      initPosY: posY,
-      initScale: scale,
-      initRotation: rotation,
+      initPosX: targetGraphic.posX,
+      initPosY: targetGraphic.posY,
+      initScale: targetGraphic.scale,
+      initRotation: targetGraphic.rotation,
       centerX: 0,
       centerY: 0,
       initDistance: 0,
@@ -373,22 +432,27 @@ export function GarmentStudioModal({
   };
 
   // 2. Proportional scale by dragging any corner handle
-  const handleCornerResizeDown = (corner: string, e: React.PointerEvent) => {
-    if (!logoSrc || isProcessing || !logoTransformRef.current) return;
+  const handleCornerResizeDown = (graphicId: string, corner: string, e: React.PointerEvent) => {
+    const targetGraphic = graphics.find(g => g.id === graphicId);
+    const el = graphicRefs.current[graphicId];
+    if (!targetGraphic || isProcessing || !el) return;
     e.stopPropagation();
-    const rect = logoTransformRef.current.getBoundingClientRect();
+    setSelectedGraphicId(graphicId);
+
+    const rect = el.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     const initDistance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
 
     transformStartRef.current = {
+      graphicId,
       action: corner,
       clientX: e.clientX,
       clientY: e.clientY,
-      initPosX: posX,
-      initPosY: posY,
-      initScale: scale,
-      initRotation: rotation,
+      initPosX: targetGraphic.posX,
+      initPosY: targetGraphic.posY,
+      initScale: targetGraphic.scale,
+      initRotation: targetGraphic.rotation,
       centerX,
       centerY,
       initDistance,
@@ -397,23 +461,28 @@ export function GarmentStudioModal({
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
-  // 3. Rotate logo by dragging top stem handle
-  const handleRotateDown = (e: React.PointerEvent) => {
-    if (!logoSrc || isProcessing || !logoTransformRef.current) return;
+  // 3. Rotate graphic by dragging top stem handle
+  const handleRotateDown = (graphicId: string, e: React.PointerEvent) => {
+    const targetGraphic = graphics.find(g => g.id === graphicId);
+    const el = graphicRefs.current[graphicId];
+    if (!targetGraphic || isProcessing || !el) return;
     e.stopPropagation();
-    const rect = logoTransformRef.current.getBoundingClientRect();
+    setSelectedGraphicId(graphicId);
+
+    const rect = el.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     const initAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
 
     transformStartRef.current = {
+      graphicId,
       action: 'rotate',
       clientX: e.clientX,
       clientY: e.clientY,
-      initPosX: posX,
-      initPosY: posY,
-      initScale: scale,
-      initRotation: rotation,
+      initPosX: targetGraphic.posX,
+      initPosY: targetGraphic.posY,
+      initScale: targetGraphic.scale,
+      initRotation: targetGraphic.rotation,
       centerX,
       centerY,
       initDistance: 0,
@@ -425,7 +494,7 @@ export function GarmentStudioModal({
   // 4. Combined pointer move for move / scale / rotate
   const handleTransformPointerMove = (e: React.PointerEvent) => {
     if (!transformStartRef.current) return;
-    const { action, clientX, clientY, initPosX, initPosY, initScale, initRotation, centerX, centerY, initDistance, initAngle } = transformStartRef.current;
+    const { graphicId, action, clientX, clientY, initPosX, initPosY, initScale, initRotation, centerX, centerY, initDistance, initAngle } = transformStartRef.current;
 
     if (action === 'move') {
       if (!artboardContainerRef.current) return;
@@ -435,8 +504,10 @@ export function GarmentStudioModal({
       const deltaY = ((e.clientY - clientY) / rect.height) * 100;
       const newX = Math.max(-45, Math.min(45, initPosX + deltaX));
       const newY = Math.max(-45, Math.min(45, initPosY + deltaY));
-      setPosX(Math.round(newX * 10) / 10);
-      setPosY(Math.round(newY * 10) / 10);
+      updateGraphic(graphicId, {
+        posX: Math.round(newX * 10) / 10,
+        posY: Math.round(newY * 10) / 10
+      });
     } else if (action === 'rotate') {
       const currentAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI);
       const deltaAngle = currentAngle - initAngle;
@@ -444,12 +515,12 @@ export function GarmentStudioModal({
       if (newRot > 180) newRot -= 360;
       if (newRot < -180) newRot += 360;
       if (e.shiftKey) newRot = Math.round(newRot / 15) * 15; // Shift to snap to 15 degrees
-      setRotation(newRot);
+      updateGraphic(graphicId, { rotation: newRot });
     } else if (action.startsWith('scale')) {
       const currentDistance = Math.hypot(e.clientX - centerX, e.clientY - centerY);
       const ratio = currentDistance / (initDistance || 1);
       const newScale = Math.max(5, Math.min(80, Math.round(initScale * ratio * 10) / 10));
-      setScale(newScale);
+      updateGraphic(graphicId, { scale: newScale });
     }
   };
 
@@ -457,10 +528,12 @@ export function GarmentStudioModal({
     transformStartRef.current = null;
   };
 
-  // Create high-res composite and bake realistically
+  // ----------------------------------------------------
+  // STRICT BOUNDING-BOX MULTI-GRAPHIC BAKING
+  // ----------------------------------------------------
   const handleBakeLogo = async () => {
-    if (!logoSrc) {
-      setError('Please upload a logo first.');
+    if (graphics.length === 0) {
+      setError('Please upload at least one graphic to bake.');
       return;
     }
 
@@ -468,6 +541,7 @@ export function GarmentStudioModal({
     setError(null);
 
     try {
+      // 1. Load pristine base garment
       const garment = new Image();
       garment.crossOrigin = 'anonymous';
       garment.src = currentGarmentImage;
@@ -476,93 +550,170 @@ export function GarmentStudioModal({
         garment.onerror = rej;
       });
 
-      const logo = new Image();
-      logo.crossOrigin = 'anonymous';
-      logo.src = logoSrc;
-      await new Promise((res, rej) => {
-        logo.onload = res;
-        logo.onerror = rej;
-      });
+      const canvasWidth = garment.naturalWidth || 1200;
+      const canvasHeight = garment.naturalHeight || 1200;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = garment.naturalWidth;
-      canvas.height = garment.naturalHeight;
-      const ctx = canvas.getContext('2d');
+      // 2. Create high-resolution composite canvas
+      const compositeCanvas = document.createElement('canvas');
+      compositeCanvas.width = canvasWidth;
+      compositeCanvas.height = canvasHeight;
+      const ctx = compositeCanvas.getContext('2d');
       if (!ctx) throw new Error('Could not create composite canvas');
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(garment, 0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      ctx.drawImage(garment, 0, 0, canvasWidth, canvasHeight);
 
-      const logoTargetWidth = (canvas.width * scale) / 100;
-      const logoAspect = logo.naturalHeight / (logo.naturalWidth || 1);
-      const logoTargetHeight = logoTargetWidth * logoAspect;
-      const centerPxX = canvas.width / 2 + (canvas.width * posX) / 100;
-      const centerPxY = canvas.height / 2 + (canvas.height * posY) / 100;
+      // 3. Create footprint mask canvas (strictly covers bounding boxes of all placed graphics)
+      const footprintCanvas = document.createElement('canvas');
+      footprintCanvas.width = canvasWidth;
+      footprintCanvas.height = canvasHeight;
+      const fCtx = footprintCanvas.getContext('2d');
+      if (!fCtx) throw new Error('Could not create footprint mask canvas');
 
-      // Mask logo strictly to garment silhouette
+      fCtx.fillStyle = '#000000';
+      fCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      // 4. Garment silhouette mask so logos never spill onto the white background
+      let silhouetteMask: ImageData | null = null;
       try {
-        const gCanvas = document.createElement('canvas');
-        gCanvas.width = canvas.width;
-        gCanvas.height = canvas.height;
-        const gCtx = gCanvas.getContext('2d', { willReadFrequently: true });
-        if (gCtx) {
-          gCtx.drawImage(garment, 0, 0);
-          const imgData = gCtx.getImageData(0, 0, gCanvas.width, gCanvas.height);
-          const data = imgData.data;
-          const maskImgData = gCtx.createImageData(gCanvas.width, gCanvas.height);
-          const md = maskImgData.data;
-
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i];
-            const g = data[i + 1];
-            const b = data[i + 2];
-            const a = data[i + 3];
-            const isBg = (r > 248 && g > 248 && b > 248) || a < 20;
-            if (!isBg) {
-              md[i + 3] = 255;
-            } else {
-              md[i + 3] = 0;
-            }
+        const silCanvas = document.createElement('canvas');
+        silCanvas.width = canvasWidth;
+        silCanvas.height = canvasHeight;
+        const sCtx = silCanvas.getContext('2d', { willReadFrequently: true });
+        if (sCtx) {
+          sCtx.drawImage(garment, 0, 0);
+          const rawData = sCtx.getImageData(0, 0, canvasWidth, canvasHeight);
+          const d = rawData.data;
+          const maskData = sCtx.createImageData(canvasWidth, canvasHeight);
+          const md = maskData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const isBg = (d[i] > 248 && d[i + 1] > 248 && d[i + 2] > 248) || d[i + 3] < 20;
+            md[i + 3] = isBg ? 0 : 255;
           }
-
-          const logoLayer = document.createElement('canvas');
-          logoLayer.width = canvas.width;
-          logoLayer.height = canvas.height;
-          const lCtx = logoLayer.getContext('2d');
-          if (lCtx) {
-            lCtx.save();
-            lCtx.translate(centerPxX, centerPxY);
-            lCtx.rotate((rotation * Math.PI) / 180);
-            lCtx.drawImage(logo, -logoTargetWidth / 2, -logoTargetHeight / 2, logoTargetWidth, logoTargetHeight);
-            lCtx.restore();
-
-            const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = canvas.width;
-            maskCanvas.height = canvas.height;
-            const mCtx = maskCanvas.getContext('2d');
-            if (mCtx) {
-              mCtx.putImageData(maskImgData, 0, 0);
-              lCtx.globalCompositeOperation = 'destination-in';
-              lCtx.drawImage(maskCanvas, 0, 0);
-            }
-            ctx.drawImage(logoLayer, 0, 0);
-          }
+          silhouetteMask = maskData;
         }
       } catch (e) {
-        ctx.save();
-        ctx.translate(centerPxX, centerPxY);
-        ctx.rotate((rotation * Math.PI) / 180);
-        ctx.drawImage(logo, -logoTargetWidth / 2, -logoTargetHeight / 2, logoTargetWidth, logoTargetHeight);
-        ctx.restore();
+        console.warn('Silhouette masking skipped:', e);
       }
 
-      const compositeBase64 = canvas.toDataURL('image/jpeg', 0.95);
-      const bakedResultUrl = await bakeGarmentLogo(compositeBase64, printStyle);
+      // 5. Draw each graphic onto composite and mark its footprint mask
+      for (const g of graphics) {
+        const logoImg = new Image();
+        logoImg.crossOrigin = 'anonymous';
+        logoImg.src = g.src;
+        await new Promise((res, rej) => {
+          logoImg.onload = res;
+          logoImg.onerror = rej;
+        });
 
-      const nextStack = [...historyStack.slice(0, historyIndex + 1), bakedResultUrl];
+        const targetW = (canvasWidth * g.scale) / 100;
+        const targetH = targetW * (g.aspectRatio || 1);
+        const centerPxX = canvasWidth / 2 + (canvasWidth * g.posX) / 100;
+        const centerPxY = canvasHeight / 2 + (canvasHeight * g.posY) / 100;
+
+        // Draw onto composite with silhouette restriction
+        const layerCanvas = document.createElement('canvas');
+        layerCanvas.width = canvasWidth;
+        layerCanvas.height = canvasHeight;
+        const lCtx = layerCanvas.getContext('2d');
+        if (lCtx) {
+          lCtx.save();
+          lCtx.translate(centerPxX, centerPxY);
+          lCtx.rotate((g.rotation * Math.PI) / 180);
+          lCtx.drawImage(logoImg, -targetW / 2, -targetH / 2, targetW, targetH);
+          lCtx.restore();
+
+          if (silhouetteMask) {
+            const smCanvas = document.createElement('canvas');
+            smCanvas.width = canvasWidth;
+            smCanvas.height = canvasHeight;
+            const smCtx = smCanvas.getContext('2d');
+            if (smCtx) {
+              smCtx.putImageData(silhouetteMask, 0, 0);
+              lCtx.globalCompositeOperation = 'destination-in';
+              lCtx.drawImage(smCanvas, 0, 0);
+            }
+          }
+          ctx.drawImage(layerCanvas, 0, 0);
+        }
+
+        // Draw bounding box footprint into footprint mask (with ~25px padding for fabric shadow/ripple transition)
+        fCtx.save();
+        fCtx.translate(centerPxX, centerPxY);
+        fCtx.rotate((g.rotation * Math.PI) / 180);
+        fCtx.fillStyle = '#FFFFFF';
+        const padX = Math.max(25, Math.round(targetW * 0.1));
+        const padY = Math.max(25, Math.round(targetH * 0.1));
+        fCtx.fillRect(- (targetW + padX) / 2, - (targetH + padY) / 2, targetW + padX, targetH + padY);
+        fCtx.restore();
+      }
+
+      const compositeBase64 = compositeCanvas.toDataURL('image/jpeg', 0.95);
+      const maskBase64 = footprintCanvas.toDataURL('image/png');
+
+      // 6. Send composite + precision footprint mask to baking service
+      const rawBakedResultUrl = await bakeGarmentLogo(compositeBase64, printStyle, maskBase64);
+
+      // 7. STRICT BOUNDING-BOX SEAL:
+      // Mathematically guarantees that NOTHING outside the placed graphic footprint is modified.
+      // Blends the realistic fabric bake strictly inside the footprint, keeping the rest 100% pristine original.
+      let finalResultUrl = rawBakedResultUrl;
+      try {
+        const bakedImg = new Image();
+        bakedImg.crossOrigin = 'anonymous';
+        bakedImg.src = rawBakedResultUrl;
+        await new Promise((res, rej) => {
+          bakedImg.onload = res;
+          bakedImg.onerror = rej;
+        });
+
+        const sealCanvas = document.createElement('canvas');
+        sealCanvas.width = canvasWidth;
+        sealCanvas.height = canvasHeight;
+        const sCtx = sealCanvas.getContext('2d');
+        if (sCtx) {
+          // A. Draw pristine original garment
+          sCtx.drawImage(garment, 0, 0, canvasWidth, canvasHeight);
+
+          // B. Create feathered mask for smooth ripple transition around the graphic
+          const blurCanvas = document.createElement('canvas');
+          blurCanvas.width = canvasWidth;
+          blurCanvas.height = canvasHeight;
+          const bCtx = blurCanvas.getContext('2d');
+          if (bCtx) {
+            bCtx.filter = 'blur(16px)';
+            bCtx.drawImage(footprintCanvas, 0, 0);
+          }
+
+          // C. Mask baked image to footprint
+          const bakedLayer = document.createElement('canvas');
+          bakedLayer.width = canvasWidth;
+          bakedLayer.height = canvasHeight;
+          const blCtx = bakedLayer.getContext('2d');
+          if (blCtx) {
+            blCtx.drawImage(bakedImg, 0, 0, canvasWidth, canvasHeight);
+            blCtx.globalCompositeOperation = 'destination-in';
+            blCtx.drawImage(blurCanvas, 0, 0);
+
+            // D. Composite baked graphics onto clean original garment
+            sCtx.drawImage(bakedLayer, 0, 0);
+            finalResultUrl = sealCanvas.toDataURL('image/jpeg', 0.95);
+          }
+        }
+      } catch (sealErr) {
+        console.warn('Bounding box seal fallback:', sealErr);
+      }
+
+      // Auto-trim white margins
+      const trimmedResult = await autoTrimWhitePadding(finalResultUrl);
+
+      const nextStack = [...historyStack.slice(0, historyIndex + 1), trimmedResult];
       setHistoryStack(nextStack);
       setHistoryIndex(nextStack.length - 1);
+      // Once baked into the fabric, clear placed overlay graphics so user can review the true baked fabric
+      setGraphics([]);
+      setSelectedGraphicId(null);
     } catch (err: any) {
       setError(err?.message || 'Failed to bake logo into fabric. Please try again.');
     } finally {
@@ -588,18 +739,24 @@ export function GarmentStudioModal({
   };
 
   const handleRevertAll = () => {
-    setHistoryIndex(0);
-    clearModifyCanvas();
+    if (confirm('Revert all changes and restore the original photo?')) {
+      setHistoryIndex(0);
+      clearModifyCanvas();
+      setGraphics([]);
+      setSelectedGraphicId(null);
+    }
   };
 
+  // Save to Tech Pack
   const handleSaveToTechPack = async () => {
+    if (isSaving || isProcessing) return;
     setIsSaving(true);
     setError(null);
     try {
       await onSaveImage(currentGarmentImage);
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Failed to save garment to Tech Pack.');
+      setError(err?.message || 'Failed to save to tech pack.');
     } finally {
       setIsSaving(false);
     }
@@ -608,24 +765,26 @@ export function GarmentStudioModal({
   if (!isOpen) return null;
 
   const modalContent = (
-    <div 
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-0 sm:p-4 md:p-6 animate-in fade-in duration-200"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-5 animate-in fade-in duration-200">
       <div 
-        className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-3xl shadow-2xl w-full h-full max-w-7xl max-h-[96vh] mx-auto flex flex-col overflow-hidden" 
-        onClick={e => e.stopPropagation()}
+        className="bg-white border border-slate-200 w-full max-w-7xl h-[94vh] rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Header - Monochrome & Clean */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
+        
+        {/* Header Bar - Monochrome / Grayscale */}
+        <div className="p-4 sm:px-6 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
+          
+          {/* Left Title */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-800 border border-slate-200 flex items-center justify-center shadow-xs">
-              <Wand2 size={18} />
+            <div className="w-10 h-10 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-900 shadow-xs">
+              <Wand2 size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-serif text-lg sm:text-xl text-slate-900 font-bold tracking-tight">Garment Studio</h3>
-                <span className="text-[10px] uppercase font-bold tracking-widest bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full">Studio</span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Garment Studio</h3>
+                <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  Studio
+                </span>
               </div>
               <p className="text-xs text-slate-500">Modify garment details or position brand graphics and bake them realistically into fabric</p>
             </div>
@@ -700,30 +859,46 @@ export function GarmentStudioModal({
           <div className="flex-1 relative flex flex-col items-center justify-center p-4 sm:p-6 min-h-[350px] overflow-hidden bg-slate-50 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px]">
             
             {/* Top helper notification */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-800 text-xs flex items-center gap-2 shadow-md">
-                {activeTab === 'modify' ? (
-                  <>
-                    <Sparkles size={13} className="text-slate-800" />
-                    <span>Click & drag on garment to highlight target area, then describe changes below</span>
-                  </>
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+              {activeTab === 'modify' ? (
+                <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-800 text-xs flex items-center gap-2 shadow-md">
+                  <Sparkles size={13} className="text-slate-800" />
+                  <span>Click & drag on garment to highlight target area, then describe changes below</span>
+                </div>
+              ) : (
+                selectedGraphicId ? (
+                  <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-800 text-xs flex items-center gap-3 shadow-md">
+                    <span>Drag to move • Corners to scale • Top stem to rotate</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGraphicId(null)}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Deselect to preview clean mockup without bounding boxes"
+                    >
+                      <Eye size={12} />
+                      <span>Preview Clean</span>
+                    </button>
+                  </div>
                 ) : (
-                  <>
-                    <Layers size={13} className="text-slate-800" />
-                    <span>Drag body to move, drag corners to scale, drag top handle to rotate</span>
-                  </>
-                )}
-              </div>
+                  graphics.length > 0 && (
+                    <div className="bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-1.5 rounded-full text-slate-600 text-xs flex items-center gap-2 shadow-md">
+                      <CheckCircle2 size={13} className="text-slate-800" />
+                      <span>Clean Mockup Preview — Click any graphic to transform or bake below</span>
+                    </div>
+                  )
+                )
+              )}
             </div>
 
             {/* Artboard Container */}
             <div 
               ref={artboardContainerRef}
+              onPointerDown={activeTab === 'bake' ? handleArtboardPointerDown : undefined}
               onPointerMove={activeTab === 'bake' ? handleTransformPointerMove : undefined}
               onPointerUp={activeTab === 'bake' ? handleTransformPointerUp : undefined}
               onPointerLeave={activeTab === 'bake' ? handleTransformPointerUp : undefined}
               style={{ touchAction: 'none' }}
-              className="relative max-w-full max-h-full flex items-center justify-center select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white"
+              className="relative max-w-full max-h-full flex items-center justify-center select-none shadow-xl border border-slate-200 rounded-2xl overflow-hidden bg-white cursor-default"
             >
               {/* Garment Image */}
               <img 
@@ -748,83 +923,98 @@ export function GarmentStudioModal({
                 />
               )}
 
-              {/* Mode 2: Photoshop-Style Interactive Transform Box */}
-              {activeTab === 'bake' && logoSrc && (
-                <div
-                  ref={logoTransformRef}
-                  style={{
-                    position: 'absolute',
-                    left: `${50 + posX}%`,
-                    top: `${50 + posY}%`,
-                    width: `${scale}%`,
-                    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-                    transformOrigin: 'center center'
-                  }}
-                  className="z-20 select-none group/transform"
-                >
-                  <div 
-                    onPointerDown={handleLogoMoveDown}
-                    className="relative cursor-move select-none"
+              {/* Mode 2: Multiple Placed Graphics with Photoshop-Style Free Transform */}
+              {activeTab === 'bake' && graphics.map(g => {
+                const isSelected = g.id === selectedGraphicId;
+                return (
+                  <div
+                    key={g.id}
+                    ref={el => { graphicRefs.current[g.id] = el; }}
+                    data-graphic-element="true"
+                    style={{
+                      position: 'absolute',
+                      left: `${50 + g.posX}%`,
+                      top: `${50 + g.posY}%`,
+                      width: `${g.scale}%`,
+                      transform: `translate(-50%, -50%) rotate(${g.rotation}deg)`,
+                      transformOrigin: 'center center'
+                    }}
+                    className={`z-20 select-none ${isSelected ? 'group/transform z-30' : 'cursor-pointer'}`}
+                    onPointerDown={(e) => {
+                      if (!isSelected) {
+                        e.stopPropagation();
+                        setSelectedGraphicId(g.id);
+                      }
+                    }}
                   >
-                    <img 
-                      src={logoSrc} 
-                      alt="Logo Overlay" 
-                      draggable={false}
-                      className="w-full h-auto object-contain drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)] select-none pointer-events-none block" 
-                    />
-
-                    {/* Photoshop Selection Border */}
-                    <div className="absolute inset-0 border border-slate-900/60 border-dashed pointer-events-none" />
-
-                    {/* Rotation Stem & Handle (Top Center) */}
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto">
-                      <div
-                        onPointerDown={handleRotateDown}
-                        className="w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-900 shadow-sm cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
-                        title="Drag to rotate (Hold Shift to snap to 15°)"
+                    <div 
+                      onPointerDown={isSelected ? (e) => handleLogoMoveDown(g.id, e) : undefined}
+                      className={`relative select-none ${isSelected ? 'cursor-move' : 'cursor-pointer'}`}
+                    >
+                      <img 
+                        src={g.src} 
+                        alt={g.name} 
+                        draggable={false}
+                        className="w-full h-auto object-contain drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)] select-none pointer-events-none block" 
                       />
-                      <div className="w-px h-3.5 bg-slate-900/60" />
-                    </div>
 
-                    {/* 4 Corner Resize Handles */}
-                    <div
-                      onPointerDown={e => handleCornerResizeDown('scale-tl', e)}
-                      className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
-                      title="Drag corner to scale"
-                    />
-                    <div
-                      onPointerDown={e => handleCornerResizeDown('scale-tr', e)}
-                      className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
-                      title="Drag corner to scale"
-                    />
-                    <div
-                      onPointerDown={e => handleCornerResizeDown('scale-bl', e)}
-                      className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
-                      title="Drag corner to scale"
-                    />
-                    <div
-                      onPointerDown={e => handleCornerResizeDown('scale-br', e)}
-                      className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
-                      title="Drag corner to scale"
-                    />
+                      {/* Photoshop Selection Border & Handles: ONLY rendered if graphic is selected */}
+                      {isSelected && (
+                        <>
+                          <div className="absolute inset-0 border border-slate-900/70 border-dashed pointer-events-none" />
+
+                          {/* Rotation Stem & Handle (Top Center) */}
+                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto">
+                            <div
+                              onPointerDown={e => handleRotateDown(g.id, e)}
+                              className="w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-900 shadow-sm cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
+                              title="Drag to rotate (Hold Shift to snap to 15°)"
+                            />
+                            <div className="w-px h-3.5 bg-slate-900/70" />
+                          </div>
+
+                          {/* 4 Corner Resize Handles */}
+                          <div
+                            onPointerDown={e => handleCornerResizeDown(g.id, 'scale-tl', e)}
+                            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
+                            title="Drag corner to scale"
+                          />
+                          <div
+                            onPointerDown={e => handleCornerResizeDown(g.id, 'scale-tr', e)}
+                            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
+                            title="Drag corner to scale"
+                          />
+                          <div
+                            onPointerDown={e => handleCornerResizeDown(g.id, 'scale-bl', e)}
+                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nesw-resize hover:scale-130 transition-transform pointer-events-auto"
+                            title="Drag corner to scale"
+                          />
+                          <div
+                            onPointerDown={e => handleCornerResizeDown(g.id, 'scale-br', e)}
+                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border border-slate-900 shadow-xs cursor-nwse-resize hover:scale-130 transition-transform pointer-events-auto"
+                            title="Drag corner to scale"
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })}
 
               {/* Processing Loading Overlay */}
               {isProcessing && (
-                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-30 animate-in fade-in">
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-40 animate-in fade-in">
                   <div className="relative mb-4">
                     <div className="w-14 h-14 rounded-full border-3 border-slate-200 border-t-slate-900 animate-spin" />
                     <Sparkles className="w-5 h-5 text-slate-800 absolute inset-0 m-auto animate-pulse" />
                   </div>
                   <h4 className="text-slate-900 font-bold text-base mb-1">
-                    {activeTab === 'modify' ? 'Applying Garment Modifications...' : 'Baking Logo Realistically...'}
+                    {activeTab === 'modify' ? 'Applying Garment Modifications...' : 'Baking Logos into Fabric...'}
                   </h4>
                   <p className="text-slate-500 text-xs max-w-xs">
                     {activeTab === 'modify' 
                       ? 'Reconstructing garment pattern, seams, knit texture, and lighting accurately' 
-                      : 'Adapting graphic to natural fabric folds, cloth ripples, surface texture, and ambient lighting'}
+                      : 'Deforming graphics to natural cloth ripples, fabric weave, and ambient shadowing strictly within bounding boxes'}
                   </p>
                 </div>
               )}
@@ -862,51 +1052,30 @@ export function GarmentStudioModal({
                   type="button"
                   onClick={clearModifyCanvas}
                   disabled={strokeCount === 0 || isProcessing}
-                  className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                  title="Clear all strokes"
+                  className="p-1.5 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  title="Clear brush mask"
                 >
                   <Trash2 size={14} />
-                </button>
-
-                <div className="h-4 w-px bg-slate-200" />
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (isDownloading) return;
-                    setIsDownloading(true);
-                    try {
-                      await downloadAsLargePng(currentGarmentImage, 'garment_studio_export', { resolution: 'large' });
-                    } catch (e) {
-                      alert('Download failed');
-                    } finally {
-                      setIsDownloading(false);
-                    }
-                  }}
-                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-semibold px-2 py-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
-                >
-                  {isDownloading ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-                  <span>PNG</span>
                 </button>
               </div>
             )}
 
-            {activeTab === 'bake' && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/95 backdrop-blur-md border border-slate-200 px-4 py-2 rounded-full shadow-lg z-20">
+            {/* Download PNG Button on artboard */}
+            {historyIndex > 0 && (
+              <div className="absolute bottom-4 right-4 z-20">
                 <button
                   type="button"
                   onClick={async () => {
                     if (isDownloading) return;
                     setIsDownloading(true);
                     try {
-                      await downloadAsLargePng(currentGarmentImage, 'garment_logo_mockup', { resolution: 'large' });
-                    } catch (e) {
-                      alert('Download failed');
+                      await downloadAsLargePng(currentGarmentImage, `garment_studio_rev_${historyIndex}`);
                     } finally {
                       setIsDownloading(false);
                     }
                   }}
-                  className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-medium px-2 py-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                  disabled={isDownloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-slate-900 hover:text-white text-slate-700 border border-slate-200 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer"
                 >
                   {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                   <span>Download PNG</span>
@@ -915,15 +1084,17 @@ export function GarmentStudioModal({
             )}
           </div>
 
-          {/* Mode 2 Sidebar: Place & Bake Logo Controls - Grayscale */}
+          {/* Mode 2 Sidebar: Place & Bake Logo Controls - Multi-Graphic & Grayscale */}
           {activeTab === 'bake' && (
             <div className="w-full md:w-[380px] lg:w-[420px] shrink-0 border-t md:border-t-0 md:border-l border-slate-200 p-5 flex flex-col justify-between bg-white overflow-y-auto space-y-5">
               <div className="space-y-4">
-                {/* Logo File Selector */}
-                <div>
-                  <label className="text-xs uppercase tracking-widest font-bold text-slate-500 mb-2 block">
-                    Brand Logo Graphic
+                
+                {/* Header & Add Button */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs uppercase tracking-widest font-bold text-slate-500 block">
+                    Placed Graphics ({graphics.length})
                   </label>
+                  
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -932,132 +1103,181 @@ export function GarmentStudioModal({
                     className="hidden"
                   />
 
-                  {!logoSrc ? (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full p-4 border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer bg-slate-50/50 group"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
-                        <UploadCloud size={20} />
-                      </div>
-                      <div className="text-center">
-                        <span className="text-xs font-bold text-slate-800 block">Upload Logo Graphic</span>
-                        <span className="text-[11px] text-slate-500">PNG, SVG, or JPG (High Res)</span>
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-lg border border-slate-200 bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
-                          <img src={logoSrc} alt="Thumbnail" className="max-w-full max-h-full object-contain" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">{logoName || 'Custom Graphic'}</p>
-                          <p className="text-[10px] text-slate-500 font-semibold">Ready to place</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowGraphicEditor(true)}
-                          className="text-[11px] font-bold text-slate-800 hover:text-black px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Remove background colors or crop graphic"
-                        >
-                          <Scissors size={12} />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded hover:bg-slate-200/50 transition-colors cursor-pointer"
-                        >
-                          Change
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLogoSrc(null);
-                            setLogoName('');
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-800 rounded hover:bg-slate-100 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Crop & Remove Background Colors Button */}
-                  {logoSrc && (
-                    <button
-                      type="button"
-                      onClick={() => setShowGraphicEditor(true)}
-                      className="w-full mt-2 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer group"
-                    >
-                      <Scissors size={14} className="text-slate-700 group-hover:rotate-12 transition-transform" />
-                      <span>Crop & Remove Background Colors</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Plus size={13} />
+                    <span>Add Graphic</span>
+                  </button>
                 </div>
 
-                {/* Placement Controls (Can also drag corners/body directly on the garment) */}
-                {logoSrc && (
-                  <div className="space-y-3.5 pt-2 border-t border-slate-100">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Scale (or drag corners)</span>
-                      <span className="text-slate-900 font-mono font-medium">{scale}%</span>
+                {/* Graphics List */}
+                {graphics.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full p-6 border-2 border-dashed border-slate-300 hover:border-slate-800 hover:bg-slate-50 rounded-2xl flex flex-col items-center justify-center gap-2 transition-all cursor-pointer bg-slate-50/50 group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xs">
+                      <UploadCloud size={20} />
                     </div>
-                    <input 
-                      type="range" 
-                      min="5" 
-                      max="75" 
-                      value={scale} 
-                      onChange={e => setScale(Number(e.target.value))}
-                      className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
-                    />
+                    <div className="text-center">
+                      <span className="text-xs font-bold text-slate-800 block">Upload Brand Logo or Graphic</span>
+                      <span className="text-[11px] text-slate-500">PNG, SVG, or JPG (Add multiple graphics)</span>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {graphics.map((g) => {
+                      const isSelected = g.id === selectedGraphicId;
+                      return (
+                        <div
+                          key={g.id}
+                          onClick={() => setSelectedGraphicId(g.id)}
+                          className={`flex items-center gap-2.5 p-2 rounded-xl border transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-slate-900 text-white border-slate-900 shadow-sm' 
+                              : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                          }`}
+                        >
+                          <div className="w-9 h-9 rounded-lg border border-slate-200 bg-white p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                            <img src={g.src} alt={g.name} className="max-w-full max-h-full object-contain" />
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{g.name}</p>
+                            <p className={`text-[10px] ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                              Scale {g.scale}% • Rot {g.rotation}°
+                            </p>
+                          </div>
 
-                    <div className="flex justify-between items-center text-xs pt-1">
-                      <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Rotation (or drag top dot)</span>
-                      <span className="text-slate-900 font-mono font-medium">{rotation}°</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingGraphicId(g.id);
+                              }}
+                              className={`text-[11px] font-bold px-2 py-1 rounded border transition-colors flex items-center gap-1 cursor-pointer ${
+                                isSelected 
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-white border-slate-700' 
+                                  : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
+                              }`}
+                              title="Remove background colors or crop graphic"
+                            >
+                              <Scissors size={12} />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGraphic(g.id);
+                              }}
+                              className={`p-1.5 rounded transition-colors cursor-pointer ${
+                                isSelected 
+                                  ? 'hover:bg-red-900/60 text-slate-300 hover:text-red-300' 
+                                  : 'hover:bg-red-50 text-slate-400 hover:text-red-600'
+                              }`}
+                              title="Delete graphic"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Selected Graphic Transform Fine-Tuning Controls */}
+                {selectedGraphic ? (
+                  <div className="space-y-3.5 pt-2 border-t border-slate-100 animate-in fade-in">
+                    
+                    {/* Crop & Remove Background Colors Button */}
+                    <button
+                      type="button"
+                      onClick={() => setEditingGraphicId(selectedGraphic.id)}
+                      className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-900 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer group"
+                    >
+                      <Scissors size={14} className="text-slate-700 group-hover:rotate-12 transition-transform" />
+                      <span>Crop & Remove Background Colors ({selectedGraphic.name})</span>
+                    </button>
+
+                    {/* Scale slider */}
+                    <div>
+                      <div className="flex justify-between items-center text-xs mb-1">
+                        <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Scale (or drag corners)</span>
+                        <span className="text-slate-900 font-mono font-medium">{selectedGraphic.scale}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="5" 
+                        max="80" 
+                        value={selectedGraphic.scale} 
+                        onChange={e => updateGraphic(selectedGraphic.id, { scale: Number(e.target.value) })}
+                        className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
+                      />
                     </div>
-                    <input 
-                      type="range" 
-                      min="-180" 
-                      max="180" 
-                      value={rotation} 
-                      onChange={e => setRotation(Number(e.target.value))}
-                      className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
-                    />
+
+                    {/* Rotation slider */}
+                    <div>
+                      <div className="flex justify-between items-center text-xs mb-1">
+                        <span className="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Rotation (or drag top dot)</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-900 font-mono font-medium">{selectedGraphic.rotation}°</span>
+                          {selectedGraphic.rotation !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => updateGraphic(selectedGraphic.id, { rotation: 0 })}
+                              className="text-[10px] text-slate-500 hover:text-slate-900 underline cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-180" 
+                        max="180" 
+                        value={selectedGraphic.rotation} 
+                        onChange={e => updateGraphic(selectedGraphic.id, { rotation: Number(e.target.value) })}
+                        className="w-full accent-slate-900 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
+                      />
+                    </div>
 
                     {/* Quick placement presets */}
-                    <div className="pt-2">
+                    <div>
                       <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider block mb-1.5">Quick Placement</span>
                       <div className="grid grid-cols-4 gap-1.5">
                         <button
                           type="button"
-                          onClick={() => { setPosX(-18); setPosY(-14); setScale(16); setRotation(0); }}
+                          onClick={() => updateGraphic(selectedGraphic.id, { posX: -18, posY: -14, scale: 16, rotation: 0 })}
                           className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Left Chest
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-8); setScale(26); setRotation(0); }}
+                          onClick={() => updateGraphic(selectedGraphic.id, { posX: 0, posY: -8, scale: 26, rotation: 0 })}
                           className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Center
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-2); setScale(40); setRotation(0); }}
+                          onClick={() => updateGraphic(selectedGraphic.id, { posX: 0, posY: -2, scale: 40, rotation: 0 })}
                           className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Full Front
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setPosX(0); setPosY(-28); setScale(12); setRotation(0); }}
+                          onClick={() => updateGraphic(selectedGraphic.id, { posX: 0, posY: -28, scale: 12, rotation: 0 })}
                           className="py-1 px-1.5 text-[10px] font-semibold bg-slate-50 hover:bg-slate-100 hover:text-slate-900 text-slate-700 border border-slate-200 rounded-md transition-colors"
                         >
                           Collar
@@ -1065,39 +1285,63 @@ export function GarmentStudioModal({
                       </div>
                     </div>
 
-                    {/* Print Style */}
-                    <div className="pt-2">
-                      <label className="text-xs uppercase tracking-widest font-bold text-slate-500 mb-2 block">
-                        Print Finish & Application
-                      </label>
-                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                        {PRINT_STYLES.map(style => (
-                          <div
-                            key={style.id}
-                            onClick={() => setPrintStyle(style.id)}
-                            className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
-                              printStyle === style.id
-                                ? 'bg-slate-100/90 border-slate-800 ring-1 ring-slate-800'
-                                : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className={`text-xs font-bold ${printStyle === style.id ? 'text-slate-900' : 'text-slate-700'}`}>
-                                {style.label}
-                              </span>
-                              {printStyle === style.id && <Check size={14} className="text-slate-900" />}
-                            </div>
-                            <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{style.desc}</p>
+                    {/* Deselect / Clean View Button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGraphicId(null)}
+                      className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye size={13} />
+                      <span>Hide Bounding Box (Clean Preview)</span>
+                    </button>
+                  </div>
+                ) : (
+                  graphics.length > 0 && (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1">
+                      <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-slate-700" />
+                        <span>Clean Mockup Preview Mode</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Bounding boxes and handles are hidden so you can inspect your mockup. Click any graphic above or on the garment to adjust scale, position, or remove colors.
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {/* Print Style */}
+                {graphics.length > 0 && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <label className="text-xs uppercase tracking-widest font-bold text-slate-500 mb-2 block">
+                      Print Finish & Application
+                    </label>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {PRINT_STYLES.map(style => (
+                        <div
+                          key={style.id}
+                          onClick={() => setPrintStyle(style.id)}
+                          className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
+                            printStyle === style.id
+                              ? 'bg-slate-100/90 border-slate-800 ring-1 ring-slate-800'
+                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-bold ${printStyle === style.id ? 'text-slate-900' : 'text-slate-700'}`}>
+                              {style.label}
+                            </span>
+                            {printStyle === style.id && <Check size={14} className="text-slate-900" />}
                           </div>
-                        ))}
-                      </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">{style.desc}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Bake Action Button */}
-              {logoSrc && (
+              {graphics.length > 0 && (
                 <div className="pt-3 border-t border-slate-200">
                   <Button
                     onClick={handleBakeLogo}
@@ -1106,7 +1350,7 @@ export function GarmentStudioModal({
                     className="w-full bg-slate-900 hover:bg-black text-white font-bold py-3 rounded-full text-xs uppercase tracking-widest shadow-md transition-all flex items-center justify-center gap-2 border-0 cursor-pointer"
                   >
                     <Sparkles size={15} />
-                    <span>Bake Realistic Mockup</span>
+                    <span>Bake Realistic Mockup {graphics.length > 1 ? `(${graphics.length} Graphics)` : ''}</span>
                   </Button>
                 </div>
               )}
@@ -1129,11 +1373,11 @@ export function GarmentStudioModal({
                 <span className="text-slate-500 text-[11px] hidden sm:inline">
                   {activeTab === 'modify' 
                     ? (strokeCount > 0 ? "Brush strokes ready — type prompt below" : "Draw on garment above to add another modification")
-                    : "Logo positioned — click Bake Realistic Mockup"}
+                    : "Logos conformed to cloth folds — click Save to Tech Pack"}
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleUndoStep}
@@ -1185,10 +1429,8 @@ export function GarmentStudioModal({
                       }
                     }}
                     placeholder={
-                      strokeCount > 0 
-                        ? "Describe how to change the drawn area (e.g. Change collar to ribbed knit, add kangaroo pocket)..." 
-                        : historyIndex > 0
-                        ? "Draw another area on the garment above to add another modification..."
+                      strokeCount > 0
+                        ? "Describe what to change in the highlighted area (e.g. 'add metal zipper pocket')..."
                         : "1. Draw on the garment above to mark the area -> 2. Type your prompt here..."
                     }
                     disabled={isProcessing || showOriginalPreview}
@@ -1254,13 +1496,14 @@ export function GarmentStudioModal({
       </div>
 
       {/* Graphic Editor Modal (InkTheory Manual Background & Color Remover) */}
-      {showGraphicEditor && logoSrc && (
+      {editingGraphic && (
         <GraphicEditorModal
-          isOpen={showGraphicEditor}
-          onClose={() => setShowGraphicEditor(false)}
-          imageSrc={logoSrc}
+          isOpen={!!editingGraphic}
+          onClose={() => setEditingGraphicId(null)}
+          imageSrc={editingGraphic.src}
           onApply={(editedSrc) => {
-            setLogoSrc(editedSrc);
+            updateGraphic(editingGraphic.id, { src: editedSrc });
+            setEditingGraphicId(null);
           }}
         />
       )}

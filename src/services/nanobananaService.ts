@@ -472,21 +472,27 @@ export async function modifyGarmentRegion(imageUrl: string, maskBase64: string, 
   }
 }
 
-export async function bakeGarmentLogo(compositeImageUrl: string, styleOption: string = 'Screenprint'): Promise<string> {
+export async function bakeGarmentLogo(compositeImageUrl: string, styleOption: string = 'Screenprint', maskBase64?: string): Promise<string> {
   try {
     const { base64Data, mimeType } = await resizeImage(compositeImageUrl);
+
+    const payload: any = {
+      action: 'bake-logo',
+      base64Data,
+      mimeType,
+      styleOption
+    };
+
+    if (maskBase64) {
+      payload.maskBase64 = maskBase64;
+    }
 
     const res = await fetch('/api/modify-garment', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        action: 'bake-logo',
-        base64Data,
-        mimeType,
-        styleOption
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
