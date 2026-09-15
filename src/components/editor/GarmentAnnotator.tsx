@@ -426,15 +426,15 @@ export function GarmentAnnotator({
                   size="sm" 
                   onClick={onVectorize} 
                   isLoading={isVectorizing}
-                  className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs"
+                  className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs font-bold"
                 >
                   <Wand2 size={14} />
                   Vector Blueprint
                 </Button>
                 {isVectorizing && (
-                  <div className="absolute top-full mt-2 lg:mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-purple-100 text-purple-800 text-[11px] lg:text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg border border-purple-200 animate-pulse z-50 pointer-events-none">
+                  <div className="absolute top-full mt-2 lg:mt-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-900 text-white text-[11px] lg:text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg border border-slate-700 animate-pulse z-50 pointer-events-none">
                     Feel free to do other things while this loads
-                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-purple-100 border-l border-t border-purple-200 rotate-45"></div>
+                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-900 border-l border-t border-slate-700 rotate-45"></div>
                   </div>
                 )}
               </div>
@@ -445,7 +445,7 @@ export function GarmentAnnotator({
                 variant="secondary" 
                 size="sm" 
                 onClick={() => setShowMannequinModal(true)} 
-                className="gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-sm transition-all text-xs shrink-0"
+                className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
               >
                 <Sparkles size={14} />
                 Mannequin
@@ -457,7 +457,7 @@ export function GarmentAnnotator({
                 variant="secondary" 
                 size="sm" 
                 onClick={() => setShowFlatlayModal(true)} 
-                className="gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+                className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
                 title="Create Studio Flat-Lay Mockup"
               >
                 <Layers size={14} />
@@ -470,7 +470,7 @@ export function GarmentAnnotator({
               size="sm"
               onClick={handleAutoTrimCurrent}
               isLoading={isTrimming}
-              className="gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 shadow-sm transition-all text-xs shrink-0"
+              className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
               title="Crop out excess white background to fill full height"
             >
               <Crop size={14} />
@@ -508,25 +508,11 @@ export function GarmentAnnotator({
                 setStudioTab('modify');
                 setShowStudioModal(true);
               }}
-              className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs shrink-0 font-bold"
-              title="Modify garment details or structure"
+              className="gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200 shadow-sm transition-all text-xs shrink-0 font-bold"
+              title="Modify garment details, colors, or bake logos in Garment Studio"
             >
               <Wand2 size={14} />
-              Modify Area
-            </Button>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                setStudioTab('bake');
-                setShowStudioModal(true);
-              }}
-              className="gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 shadow-sm transition-all text-xs shrink-0 font-bold"
-              title="Upload brand logo and bake realistically into fabric"
-            >
-              <Layers size={14} />
-              Bake Logo
+              Modify Garment
             </Button>
 
             {/* Branding Eraser / Save / Reset Controls in Toolbar */}
@@ -539,10 +525,10 @@ export function GarmentAnnotator({
                   setIsDrawingMode(false);
                   setSelectedMeasurement('');
                 }}
-                className={`gap-2 border shadow-sm mx-2 transition-all ${
+                className={`gap-2 border shadow-sm mx-2 transition-all font-bold text-xs ${
                   isEraserMode 
-                    ? 'bg-red-600 border-red-600 text-white hover:bg-red-700 hover:border-red-700' 
-                    : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+                    ? 'bg-slate-900 border-slate-900 text-white hover:bg-black hover:border-black' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-200'
                 }`}
               >
                 <Eraser size={14} />
