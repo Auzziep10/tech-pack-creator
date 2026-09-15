@@ -1798,12 +1798,77 @@ export function TechPackEditor() {
     setData(newData);
   };
 
+  const getBOMList = (source: any = data) => {
+    if (Array.isArray(source?.bom)) return source.bom;
+    if (Array.isArray(source?.fabrication)) return source.fabrication;
+    return [];
+  };
+
   const updateBOM = (index: number, field: string, value: string) => {
     if (checkReadonly()) return;
-    const newData = { ...data };
-    if (!newData.bom) newData.bom = [];
-    newData.bom[index][field] = value;
-    setData(newData);
+    const currentBOM = [...getBOMList(data)];
+    if (!currentBOM[index]) {
+      currentBOM[index] = { category: 'FABRIC', component: '', positioning: '', comment: '', supplier: '' };
+    } else {
+      currentBOM[index] = { ...currentBOM[index] };
+    }
+    currentBOM[index][field] = value;
+    setData((prev: any) => ({
+      ...prev,
+      bom: currentBOM
+    }));
+  };
+
+  const addBOMItem = (category: string = 'FABRIC') => {
+    if (checkReadonly()) return;
+    const currentBOM = [...getBOMList(data)];
+    currentBOM.push({
+      category: category || 'FABRIC',
+      component: '',
+      positioning: '',
+      comment: '',
+      supplier: ''
+    });
+    setData((prev: any) => ({
+      ...prev,
+      bom: currentBOM
+    }));
+    pushLog(`Added BOM item (${category || 'FABRIC'})`);
+  };
+
+  const removeBOMItem = (index: number) => {
+    if (checkReadonly()) return;
+    const currentBOM = [...getBOMList(data)];
+    if (!currentBOM[index]) return;
+    const removedName = currentBOM[index]?.component || currentBOM[index]?.material || currentBOM[index]?.category || 'item';
+    if (window.confirm(`Are you sure you want to delete BOM item "${removedName}"?`)) {
+      currentBOM.splice(index, 1);
+      setData((prev: any) => ({
+        ...prev,
+        bom: currentBOM
+      }));
+      pushLog(`Removed BOM item: ${removedName}`);
+    }
+  };
+
+  const moveBOMItem = (fromIndex: number, toIndex: number) => {
+    if (checkReadonly() || isTechPackLocked) return;
+    const currentBOM = [...getBOMList(data)];
+    if (
+      fromIndex < 0 || 
+      fromIndex >= currentBOM.length || 
+      toIndex < 0 || 
+      toIndex >= currentBOM.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+    const [moved] = currentBOM.splice(fromIndex, 1);
+    currentBOM.splice(toIndex, 0, moved);
+    setData((prev: any) => ({
+      ...prev,
+      bom: currentBOM
+    }));
   };
 
   const updateConstruction = (val: string) => {
@@ -2880,7 +2945,20 @@ export function TechPackEditor() {
 
               {/* Style BOM (Bill of Materials) Table */}
               <div className="print-force-new-page">
-                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 leading-tight">Style BOM (Bill of Materials)</h3>
+                <h3 className="text-lg font-serif font-bold border-b border-gray-200 pb-1 mb-2 text-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 leading-tight">
+                  <span>Style BOM (Bill of Materials)</span>
+                  {!isTechPackLocked && (
+                    <button 
+                      type="button"
+                      onClick={() => addBOMItem()} 
+                      className="text-[10px] font-sans font-bold bg-white hover:bg-black hover:text-white border border-gray-200 text-gray-700 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-xs flex items-center gap-1 print:hidden cursor-pointer"
+                      title="Add a new item to Bill of Materials"
+                    >
+                      <Plus size={13} />
+                      <span>Add Item</span>
+                    </button>
+                  )}
+                </h3>
                 <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
                   <table className="w-full text-xs print:text-[10px] text-left min-w-[500px]">
                     <thead className="text-xs print:text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200">
@@ -2890,30 +2968,121 @@ export function TechPackEditor() {
                         <th className="px-2 py-1 font-medium">Positioning</th>
                         <th className="px-2 py-1 font-medium">Comment</th>
                         <th className="px-2 py-1 font-medium">Supplier</th>
+                        {!isTechPackLocked && (
+                          <th className="px-1 py-1 font-medium w-20 text-center print:hidden">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {(displayData.bom || displayData.fabrication || []).map((f: any, i: number) => (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors" style={{ pageBreakInside: 'avoid' }}>
+                      {getBOMList(displayData).map((f: any, i: number) => (
+                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors group/bom-row" style={{ pageBreakInside: 'avoid' }}>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none font-semibold text-gray-900 uppercase text-xs print:text-[10px] tracking-wider leading-tight" value={f.category || 'FABRIC'} onChange={e => updateBOM(i, 'category', e.target.value)} />
+                             <input 
+                               list="bom-category-options"
+                               disabled={isTechPackLocked}
+                               className="w-full bg-transparent outline-none font-semibold text-gray-900 uppercase text-xs print:text-[10px] tracking-wider leading-tight placeholder:normal-case placeholder:font-normal placeholder:text-gray-400" 
+                               value={f.category || ''} 
+                               placeholder="e.g. FABRIC"
+                               onChange={e => updateBOM(i, 'category', e.target.value)} 
+                             />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-semibold leading-tight" value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-semibold leading-tight placeholder:font-normal placeholder:text-gray-400" placeholder="Component name..." value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight" value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" placeholder="Positioning..." value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight" value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" placeholder="Comment / notes..." value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
+                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight placeholder:text-gray-400" placeholder="Supplier..." value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
                           </td>
+                          {!isTechPackLocked && (
+                            <td className="px-1 py-2 align-middle text-center print:hidden w-20">
+                              <div className="flex items-center justify-center gap-0.5 opacity-60 group-hover/bom-row:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  disabled={i === 0}
+                                  onClick={() => moveBOMItem(i, i - 1)}
+                                  className="text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400 p-1 rounded hover:bg-gray-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                  title="Move up"
+                                  aria-label="Move BOM item up"
+                                >
+                                  <ArrowUp size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={i === getBOMList(displayData).length - 1}
+                                  onClick={() => moveBOMItem(i, i + 1)}
+                                  className="text-gray-400 hover:text-gray-900 disabled:opacity-20 disabled:hover:text-gray-400 p-1 rounded hover:bg-gray-100 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                  title="Move down"
+                                  aria-label="Move BOM item down"
+                                >
+                                  <ArrowDown size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeBOMItem(i)}
+                                  className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-all cursor-pointer inline-flex items-center justify-center group-hover/bom-row:text-red-500 ml-0.5"
+                                  title={`Delete BOM item ${f.component ? `(${f.component})` : ''}`}
+                                  aria-label="Delete BOM item"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
+                      {getBOMList(displayData).length === 0 && (
+                        <tr>
+                          <td colSpan={!isTechPackLocked ? 6 : 5} className="py-8 text-center text-gray-400 italic text-xs">
+                            No BOM items added yet. Click &quot;+ Add Item&quot; to begin.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
+                  <datalist id="bom-category-options">
+                    <option value="FABRIC" />
+                    <option value="TRIMS" />
+                    <option value="LABELS" />
+                    <option value="HARDWARE" />
+                    <option value="WASH" />
+                    <option value="PACKAGING" />
+                    <option value="THREAD" />
+                    <option value="EMBROIDERY / PRINT" />
+                    <option value="LINING" />
+                  </datalist>
+                  {!isTechPackLocked && (
+                    <div className="p-2.5 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 print:hidden">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => addBOMItem()}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-black bg-white hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Plus size={14} className="text-gray-500" />
+                          <span>Add Item</span>
+                        </button>
+                        <span className="text-[11px] text-gray-400 ml-1">Quick add:</span>
+                        {['FABRIC', 'TRIMS', 'LABELS', 'HARDWARE', 'WASH', 'PACKAGING'].map(cat => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => addBOMItem(cat)}
+                            className="px-2 py-1 rounded-md bg-white hover:bg-gray-100 border border-gray-200 text-gray-600 hover:text-gray-900 text-[10px] font-medium transition cursor-pointer"
+                          >
+                            +{cat}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-gray-400 shrink-0">
+                        {getBOMList(displayData).length} item{getBOMList(displayData).length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
