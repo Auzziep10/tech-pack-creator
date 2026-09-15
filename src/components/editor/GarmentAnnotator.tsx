@@ -6,8 +6,7 @@ import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { FreeCropper } from '../../pages/MobileScanner';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
-import { AIModifyModal } from './AIModifyModal';
-import { BakeLogoModal } from './BakeLogoModal';
+import { GarmentStudioModal } from './GarmentStudioModal';
 
 // Helper function to rotate an image 90 degrees clockwise or counter-clockwise
 const rotateImage90Degrees = async (imageSrc: string, direction: 'cw' | 'ccw' = 'cw'): Promise<string> => {
@@ -180,9 +179,9 @@ export function GarmentAnnotator({
   const [manualCropPixels, setManualCropPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [isSavingManualCrop, setIsSavingManualCrop] = useState(false);
 
-  // Area Modification & Logo Studio States
-  const [showAIModifyModal, setShowAIModifyModal] = useState(false);
-  const [showBakeLogoModal, setShowBakeLogoModal] = useState(false);
+  // Unified Garment Studio States
+  const [showStudioModal, setShowStudioModal] = useState(false);
+  const [studioTab, setStudioTab] = useState<'modify' | 'bake'>('modify');
 
   // Branding Eraser States
   const [isEraserMode, setIsEraserMode] = useState(false);
@@ -505,9 +504,12 @@ export function GarmentAnnotator({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setShowAIModifyModal(true)}
+              onClick={() => {
+                setStudioTab('modify');
+                setShowStudioModal(true);
+              }}
               className="gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 shadow-sm transition-all text-xs shrink-0 font-bold"
-              title="Brush over any garment area to modify it"
+              title="Modify garment details or structure"
             >
               <Wand2 size={14} />
               Modify Area
@@ -516,9 +518,12 @@ export function GarmentAnnotator({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setShowBakeLogoModal(true)}
+              onClick={() => {
+                setStudioTab('bake');
+                setShowStudioModal(true);
+              }}
               className="gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200 shadow-sm transition-all text-xs shrink-0 font-bold"
-              title="Upload brand logo and bake it realistically into fabric weave & folds"
+              title="Upload brand logo and bake realistically into fabric"
             >
               <Layers size={14} />
               Bake Logo
@@ -1158,23 +1163,11 @@ export function GarmentAnnotator({
         </div>
       )}
 
-      {/* Area Modification Modal */}
-      <AIModifyModal
-        isOpen={showAIModifyModal}
-        onClose={() => setShowAIModifyModal(false)}
-        imageUrl={erasedResultImage || imageUrl}
-        onSaveImage={async (newUrl) => {
-          setErasedResultImage(newUrl);
-          if (onSaveErasedImage) {
-            await onSaveErasedImage(newUrl);
-          }
-        }}
-      />
-
-      {/* Realistic Logo Baking Modal */}
-      <BakeLogoModal
-        isOpen={showBakeLogoModal}
-        onClose={() => setShowBakeLogoModal(false)}
+      {/* Unified Garment Studio Modal (Modify Garment & Place/Bake Logo) */}
+      <GarmentStudioModal
+        isOpen={showStudioModal}
+        onClose={() => setShowStudioModal(false)}
+        initialTab={studioTab}
         imageUrl={erasedResultImage || imageUrl}
         onSaveImage={async (newUrl) => {
           setErasedResultImage(newUrl);
