@@ -23,7 +23,7 @@ export function Header({ onOpenMobileSidebar }: { onOpenMobileSidebar?: () => vo
   };
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 md:px-8">
+    <header className="h-16 border-b border-gray-200 bg-white sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 md:px-8">
       <div className="flex items-center gap-3 w-full max-w-[200px] sm:max-w-xs md:w-96">
         <button
           onClick={onOpenMobileSidebar}

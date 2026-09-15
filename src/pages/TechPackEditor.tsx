@@ -1928,10 +1928,9 @@ export function TechPackEditor() {
     .slice(0, 4);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-hidden">
-      {/* Top Header Navigation & Controls */}
-      <div className="space-y-3 print:hidden">
-        {/* Tier 1: Document Title & Primary Actions */}
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-[1300px] mx-auto max-w-full overflow-x-clip">
+      {/* Tier 1: Document Title & Primary Actions */}
+      <div className="print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-sm p-3 rounded-2xl border border-gray-100 shadow-sm">
           {/* Title & Status */}
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -2010,9 +2009,11 @@ export function TechPackEditor() {
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Tier 2: Secondary Toolbar (Scrollable on Mobile) */}
-        <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-hide py-1 px-1">
+      {/* Tier 2: Secondary Toolbar (Sticky & Always Available While Scrolling) */}
+      <div className="sticky top-16 z-20 print:hidden -mx-4 sm:-mx-6 md:-mx-8 px-4 sm:px-6 md:px-8 py-2.5 bg-[#fafafa]/95 backdrop-blur-md border-b border-gray-200/80 shadow-2xs transition-all">
+        <div className="max-w-[1300px] mx-auto flex items-center justify-between gap-2 overflow-x-auto scrollbar-hide py-0.5">
           {/* Left Controls: View Mode & Language */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex bg-gray-100 p-1 rounded-xl shrink-0">
@@ -2069,7 +2070,7 @@ export function TechPackEditor() {
               className={`px-3 h-9 shrink-0 text-xs font-semibold rounded-xl ${
                 isTechPackLocked 
                   ? 'opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border border-gray-200' 
-                  : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200'
+                  : 'bg-white text-gray-800 hover:bg-gray-50 border border-gray-200 shadow-xs'
               }`}
             >
               <div className="flex items-center gap-1.5">
@@ -2083,7 +2084,7 @@ export function TechPackEditor() {
               className={`px-3 h-9 shrink-0 text-xs font-bold rounded-xl transition-all border flex items-center gap-1.5 cursor-pointer ${
                 isTechPackLocked 
                   ? 'bg-black text-white hover:bg-gray-800 border-black shadow-sm' 
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-xs'
               }`}
               title={isTechPackLocked ? "Click to Unlock Tech Pack for Editing" : "Click to Lock Tech Pack from Updates"}
             >
@@ -2091,7 +2092,7 @@ export function TechPackEditor() {
               <span className={isTechPackLocked ? "text-white font-bold" : "text-gray-700 font-semibold"}>{isTechPackLocked ? 'Locked' : 'Lock'}</span>
             </button>
 
-            <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl" title="Activity Log">
+            <Button onClick={() => setShowHistory(true)} variant="secondary" className="w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl shadow-xs" title="Activity Log">
                <History size={15} />
             </Button>
           </div>
@@ -2271,6 +2272,7 @@ export function TechPackEditor() {
                         onSaveMannequinImage={handleSaveMannequinImage}
                         onSaveErasedImage={handleSaveErasedImage}
                         defaultGarmentType={displayData?.properties?.category || displayData?.properties?.garmentType}
+                        techPackId={id}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>

@@ -1,12 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers, RotateCw, Download, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, MousePointer2, CheckCircle2, Maximize, Minimize, Wand2, Sparkles, X, Eraser, Crop, Layers, RotateCw, Download, Loader2, MessageSquare, MapPin } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { motion, useMotionValue } from 'framer-motion';
 import { eraseBrandingRegion, autoTrimWhitePadding } from '../../services/nanobananaService';
 import { FreeCropper } from '../../pages/MobileScanner';
 import { downloadAsLargePng } from '../../utils/imageDownloader';
 import { GarmentStudioModal } from './GarmentStudioModal';
+import { ImageCalloutChatSidebar } from './ImageCalloutChatSidebar';
+import { useAuth } from '../../contexts/AuthContext';
+import { 
+  ImageCalloutComment, 
+  subscribeToImageComments, 
+  addImageComment, 
+  updateImageComment, 
+  deleteImageComment 
+} from '../../services/dbService';
 
 // Helper function to rotate an image 90 degrees clockwise or counter-clockwise
 const rotateImage90Degrees = async (imageSrc: string, direction: 'cw' | 'ccw' = 'cw'): Promise<string> => {
@@ -105,6 +114,7 @@ interface GarmentAnnotatorProps {
   onSaveMannequinImage?: (imgUrl: string) => Promise<void>;
   onSaveErasedImage?: (imgUrl: string) => Promise<void>;
   defaultGarmentType?: string;
+  techPackId?: string;
 }
 
 export function GarmentAnnotator({ 
@@ -117,8 +127,10 @@ export function GarmentAnnotator({
   onGenerateFlatlay,
   onSaveMannequinImage,
   onSaveErasedImage,
-  defaultGarmentType
+  defaultGarmentType,
+  techPackId
 }: GarmentAnnotatorProps) {
+  const { user, profile } = useAuth();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [selectedMeasurement, setSelectedMeasurement] = useState('');
@@ -127,6 +139,66 @@ export function GarmentAnnotator({
   const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
   const [isBlueprintMode, setIsBlueprintMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Callout Pins & Side Chat Channel States
+  const [showChatSidebar, setShowChatSidebar] = useState(false);
+  const [comments, setComments] = useState<ImageCalloutComment[]>([]);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [isDroppingPin, setIsDroppingPin] = useState(false);
+  const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!techPackId) return;
+    const unsub = subscribeToImageComments(techPackId, (list) => {
+      setComments(list);
+    });
+    return () => unsub();
+  }, [techPackId]);
+
+  const nextPinNumber = comments.length > 0
+    ? Math.max(...comments.map(c => c.pinNumber || 0)) + 1
+    : 1;
+
+  const handleAddComment = async (text: string, pinCoord?: { x: number; y: number }) => {
+    const pinNumber = nextPinNumber;
+    const coord = pinCoord || pendingPin || { x: 50, y: 50 };
+    const newComment: Omit<ImageCalloutComment, 'id'> = {
+      pinNumber,
+      x: coord.x,
+      y: coord.y,
+      text,
+      authorUid: user?.uid || 'guest',
+      authorName: user?.displayName || profile?.name || user?.email?.split('@')[0] || 'User',
+      authorEmail: user?.email || '',
+      createdAt: Date.now(),
+      resolved: false,
+      imageUrl: imageUrl || ''
+    };
+
+    if (techPackId && techPackId !== 'draft') {
+      await addImageComment(techPackId, newComment);
+    } else {
+      const localId = 'local-' + Date.now();
+      setComments(prev => [...prev, { id: localId, ...newComment }]);
+    }
+  };
+
+  const handleToggleResolveComment = async (id: string, currentResolved: boolean) => {
+    if (techPackId && techPackId !== 'draft') {
+      await updateImageComment(techPackId, id, { resolved: !currentResolved });
+    } else {
+      setComments(prev => prev.map(c => c.id === id ? { ...c, resolved: !currentResolved } : c));
+    }
+  };
+
+  const handleDeleteComment = async (id: string) => {
+    if (techPackId && techPackId !== 'draft') {
+      await deleteImageComment(techPackId, id);
+    } else {
+      setComments(prev => prev.filter(c => c.id !== id));
+    }
+    if (activeCommentId === id) setActiveCommentId(null);
+  };
 
   const [showMannequinModal, setShowMannequinModal] = useState(false);
   const [mannequinGender, setMannequinGender] = useState('Unisex');
@@ -330,6 +402,16 @@ export function GarmentAnnotator({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (isDroppingPin && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100));
+      setPendingPin({ x, y });
+      setIsDroppingPin(false);
+      setShowChatSidebar(true);
+      return;
+    }
+
     if (!isDrawingMode || !selectedMeasurement || !containerRef.current) return;
     
     // Fix issue where clicking outside the image breaks boundary coords
@@ -380,7 +462,7 @@ export function GarmentAnnotator({
       }>
         {/* Artboard Toolbar */}
         {isFullscreen && (
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 bg-white border border-gray-200 p-2.5 sm:p-3 rounded-xl shadow-sm shrink-0 mx-auto w-full max-w-5xl max-h-36 overflow-y-auto">
+          <div className={`flex flex-wrap items-center gap-2 sm:gap-3 bg-white border border-gray-200 p-2.5 sm:p-3 rounded-xl shadow-sm shrink-0 mx-auto w-full ${showChatSidebar ? 'max-w-7xl' : 'max-w-5xl'} max-h-36 overflow-y-auto`}>
            <button 
              onClick={() => setIsBlueprintMode(!isBlueprintMode)}
              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors shrink-0 ${isBlueprintMode ? 'bg-black text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
@@ -571,6 +653,35 @@ export function GarmentAnnotator({
               </Button>
             )}
            
+           <div className="w-px h-6 bg-gray-200 hidden sm:block" />
+
+           <button 
+             type="button"
+             onClick={() => {
+               setShowChatSidebar(!showChatSidebar);
+               if (showChatSidebar) {
+                 setIsDroppingPin(false);
+                 setPendingPin(null);
+               }
+             }}
+             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+               showChatSidebar 
+                 ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                 : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+             }`}
+             title="Toggle Callouts & Side Chat Feed"
+           >
+             <MessageSquare size={14} />
+             <span>Callouts</span>
+             {comments.length > 0 && (
+               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold leading-none ${
+                 showChatSidebar ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+               }`}>
+                 {comments.length}
+               </span>
+             )}
+           </button>
+            
            <button 
              onClick={() => {
                setIsFullscreen(false);
@@ -584,23 +695,25 @@ export function GarmentAnnotator({
         </div>
         )}
 
-        {/* Interactive Main Canvas */}
-        <div 
-          className={`select-none bg-white rounded-2xl border relative overflow-hidden group ${
-            isDrawingMode ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
-          } ${
-            isFullscreen ? 'flex-1 min-h-0 mx-auto w-full max-w-5xl shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
-          }`}
-        >
-          <div className="absolute inset-0 flex items-center justify-center p-2 pointer-events-none">
-            <div 
-              ref={containerRef}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              style={{ touchAction: 'none' }}
-              className={`relative flex items-center justify-center w-full h-full pointer-events-auto ${isDrawingMode ? 'cursor-crosshair' : ''}`}
+        {/* Canvas & Sidebar Split Container */}
+        <div className={`flex-1 min-h-0 mx-auto w-full ${isFullscreen ? (showChatSidebar ? 'max-w-7xl' : 'max-w-5xl') : ''} flex flex-row items-stretch gap-4 overflow-hidden`}>
+          {/* Interactive Main Canvas */}
+          <div 
+            className={`select-none bg-white rounded-2xl border relative overflow-hidden group flex-1 min-h-0 ${
+              isDrawingMode || isDroppingPin ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
+            } ${
+              isFullscreen ? 'shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
+            }`}
+          >
+            <div className="absolute inset-0 flex items-center justify-center p-2 pointer-events-none">
+              <div 
+                ref={containerRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                style={{ touchAction: 'none' }}
+                className={`relative flex items-center justify-center w-full h-full pointer-events-auto ${isDrawingMode || isDroppingPin ? 'cursor-crosshair' : ''}`}
             >
               <img 
                 src={erasedResultImage || imageUrl} 
@@ -659,6 +772,63 @@ export function GarmentAnnotator({
               />
               )}
             </svg>
+
+            {/* Numbered Callout Pins Layer */}
+            {comments.map((c) => {
+              const isSelected = activeCommentId === c.id;
+              return (
+                <div
+                  key={c.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveCommentId(isSelected ? null : c.id);
+                    setShowChatSidebar(true);
+                  }}
+                  style={{ left: `${c.x}%`, top: `${c.y}%` }}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 cursor-pointer group/pin transition-transform ${
+                    isSelected ? 'scale-125 z-30' : 'hover:scale-115'
+                  }`}
+                  title={`Callout #${c.pinNumber} by ${c.authorName}: ${c.text}`}
+                >
+                  <div className="relative flex items-center justify-center">
+                    {/* Pulsing halo when active */}
+                    {isSelected && (
+                      <span className="absolute -inset-1.5 rounded-full bg-blue-500/40 animate-ping pointer-events-none" />
+                    )}
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-lg ring-2 ring-white transition-all select-none ${
+                        c.resolved
+                          ? 'bg-emerald-600 text-white'
+                          : isSelected
+                            ? 'bg-blue-600 text-white shadow-blue-500/50 ring-blue-300'
+                            : 'bg-blue-600 text-white group-hover/pin:bg-blue-700'
+                      }`}
+                    >
+                      {c.pinNumber}
+                    </div>
+
+                    {/* Tooltip on hover */}
+                    <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none whitespace-nowrap bg-gray-900/95 backdrop-blur-xs text-white text-[11px] px-2.5 py-1 rounded-lg shadow-xl border border-gray-700 z-40 max-w-[200px] truncate">
+                      <span className="font-bold mr-1">#{c.pinNumber}</span>
+                      <span>{c.text}</span>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Pending Pin Placement Indicator */}
+            {pendingPin && (
+              <div
+                style={{ left: `${pendingPin.x}%`, top: `${pendingPin.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none animate-bounce"
+              >
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xl ring-2 ring-white ring-offset-1">
+                  {nextPinNumber}
+                </div>
+              </div>
+            )}
 
             {/* Draggable Eraser Bounding Box Overlay */}
             {!erasedResultImage && isEraserMode && (
@@ -762,9 +932,55 @@ export function GarmentAnnotator({
             </div>
           </div>
         )}
-      </div>
+          </div>
 
-      {!isFullscreen && !isLocked && (
+          {/* Collaborative Chat Channel Sidebar */}
+          {isFullscreen && showChatSidebar && (
+            <div className="h-full rounded-2xl overflow-hidden border border-gray-200 shadow-2xl bg-white shrink-0 animate-in fade-in slide-in-from-right-4">
+              <ImageCalloutChatSidebar
+                comments={comments}
+                activeCommentId={activeCommentId}
+                onSelectComment={setActiveCommentId}
+                isDroppingPin={isDroppingPin}
+                onToggleDropPin={(dropping) => {
+                  setIsDroppingPin(dropping);
+                  if (!dropping) setPendingPin(null);
+                }}
+                nextPinNumber={nextPinNumber}
+                pendingPin={pendingPin}
+                onCancelPendingPin={() => setPendingPin(null)}
+                onAddComment={handleAddComment}
+                onToggleResolveComment={handleToggleResolveComment}
+                onDeleteComment={handleDeleteComment}
+                currentUserName={user?.displayName || profile?.name || user?.email?.split('@')[0] || 'User'}
+                currentUserUid={user?.uid || 'anonymous'}
+                onClose={() => {
+                  setShowChatSidebar(false);
+                  setIsDroppingPin(false);
+                  setPendingPin(null);
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Non-fullscreen Callouts Badge */}
+        {!isFullscreen && comments.length > 0 && (
+          <div 
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsFullscreen(true);
+              setShowChatSidebar(true);
+            }}
+            className="absolute top-3 left-3 z-30 flex items-center gap-1.5 px-2.5 py-1 bg-white/95 backdrop-blur-xs rounded-full shadow-md border border-gray-200 text-xs font-bold text-gray-800 hover:text-blue-600 cursor-pointer transition print:hidden"
+            title="View Callout Pins & Discussion"
+          >
+            <MessageSquare size={13} className="text-blue-600" />
+            <span>{comments.length} Callout{comments.length === 1 ? '' : 's'}</span>
+          </div>
+        )}
+
+        {!isFullscreen && !isLocked && (
           <div 
             className="absolute inset-0 z-20 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer" 
             onClick={() => setIsFullscreen(true)}

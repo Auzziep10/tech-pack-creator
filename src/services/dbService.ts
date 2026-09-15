@@ -466,3 +466,75 @@ export const duplicateTechPack = async (
   return newDocRef.id;
 };
 
+// --- Image Callout Pins & Chat Channel ---
+
+export interface ImageCalloutComment {
+  id: string;
+  pinNumber: number;
+  x: number; // 0 - 100 percentage
+  y: number; // 0 - 100 percentage
+  text: string;
+  authorUid: string;
+  authorName: string;
+  authorEmail?: string;
+  createdAt: number;
+  resolved?: boolean;
+  resolvedBy?: string;
+  imageUrl?: string;
+}
+
+export const subscribeToImageComments = (
+  packId: string,
+  callback: (comments: ImageCalloutComment[]) => void
+) => {
+  if (!packId || packId === 'draft') {
+    callback([]);
+    return () => {};
+  }
+  const commentsColl = collection(db, 'techPacks', packId, 'imageComments');
+  return onSnapshot(commentsColl, (snap) => {
+    const list = snap.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    })) as ImageCalloutComment[];
+    list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    callback(list);
+  }, (err) => {
+    console.error("Error in subscribeToImageComments:", err);
+  });
+};
+
+export const addImageComment = async (
+  packId: string,
+  comment: Omit<ImageCalloutComment, 'id'>
+): Promise<string> => {
+  if (!packId || packId === 'draft') {
+    return 'local-' + Date.now();
+  }
+  const commentsColl = collection(db, 'techPacks', packId, 'imageComments');
+  const docRef = await addDoc(commentsColl, {
+    ...comment,
+    createdAt: comment.createdAt || Date.now()
+  });
+  return docRef.id;
+};
+
+export const updateImageComment = async (
+  packId: string,
+  commentId: string,
+  updates: Partial<ImageCalloutComment>
+) => {
+  if (!packId || packId === 'draft' || !commentId || commentId.startsWith('local-')) return;
+  const commentRef = doc(db, 'techPacks', packId, 'imageComments', commentId);
+  await updateDoc(commentRef, updates);
+};
+
+export const deleteImageComment = async (
+  packId: string,
+  commentId: string
+) => {
+  if (!packId || packId === 'draft' || !commentId || commentId.startsWith('local-')) return;
+  const commentRef = doc(db, 'techPacks', packId, 'imageComments', commentId);
+  await deleteDoc(commentRef);
+};
+
