@@ -50,6 +50,9 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
   // Preview Data URL
   const [previewSrc, setPreviewSrc] = useState<string>(imageSrc);
 
+  const [hoverColor, setHoverColor] = useState<{ r: number; g: number; b: number; hex: string; clientX: number; clientY: number } | null>(null);
+  const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   // Interactive Crop states (percentages 0-100)
   const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number }>({
     x: 5,
@@ -75,7 +78,12 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
       setFeather(4);
       setActiveTab('knockout');
       setIsEyedropperActive(true);
+      setHoverColor(null);
       setCropBox({ x: 5, y: 5, w: 90, h: 90 });
+      if (sampleCanvasRef.current) {
+        sampleCanvasRef.current.width = 0;
+        sampleCanvasRef.current.height = 0;
+      }
     }
   }, [isOpen, imageSrc]);
 
@@ -146,28 +154,54 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
+    // Account for object-fit: contain letterboxing/pillarboxing
+    const imgRatio = img.naturalWidth / (img.naturalHeight || 1);
+    const elemRatio = rect.width / (rect.height || 1);
+    let actualW = rect.width;
+    let actualH = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (elemRatio > imgRatio) {
+      actualW = rect.height * imgRatio;
+      offsetX = (rect.width - actualW) / 2;
+    } else {
+      actualH = rect.width / imgRatio;
+      offsetY = (rect.height - actualH) / 2;
+    }
+
+    const adjustedX = clickX - offsetX;
+    const adjustedY = clickY - offsetY;
+
+    if (adjustedX < 0 || adjustedX > actualW || adjustedY < 0 || adjustedY > actualH) {
+      return;
+    }
+
+    const pxX = Math.floor((adjustedX / actualW) * img.naturalWidth);
+    const pxY = Math.floor((adjustedY / actualH) * img.naturalHeight);
+
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    // Sample from the base image so we get true color values
     const sampleImg = new Image();
     sampleImg.crossOrigin = 'anonymous';
-    sampleImg.src = baseImageSrc;
     sampleImg.onload = () => {
       ctx.drawImage(sampleImg, 0, 0);
-      const pxX = Math.floor((clickX / rect.width) * img.naturalWidth);
-      const pxY = Math.floor((clickY / rect.height) * img.naturalHeight);
-      
-      const pixel = ctx.getImageData(Math.max(0, Math.min(img.naturalWidth - 1, pxX)), Math.max(0, Math.min(img.naturalHeight - 1, pxY)), 1, 1).data;
+      const pixel = ctx.getImageData(
+        Math.max(0, Math.min(img.naturalWidth - 1, pxX)),
+        Math.max(0, Math.min(img.naturalHeight - 1, pxY)),
+        1,
+        1
+      ).data;
       const r = pixel[0];
       const g = pixel[1];
       const b = pixel[2];
       const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
 
-      // Check if this color is already removed
+      // Check if already removed
       const alreadyRemoved = removedColors.some(c => 
         Math.abs(c.r - r) < 8 && Math.abs(c.g - g) < 8 && Math.abs(c.b - b) < 8
       );
@@ -179,6 +213,81 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
         ]);
       }
     };
+    sampleImg.src = baseImageSrc;
+  };
+
+  // Hover color inspector over image
+  const handleImageMouseMove = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!isEyedropperActive || activeTab !== 'knockout') {
+      if (hoverColor) setHoverColor(null);
+      return;
+    }
+    const img = previewImgRef.current;
+    if (!img) return;
+
+    const rect = img.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const imgRatio = img.naturalWidth / (img.naturalHeight || 1);
+    const elemRatio = rect.width / (rect.height || 1);
+    let actualW = rect.width;
+    let actualH = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (elemRatio > imgRatio) {
+      actualW = rect.height * imgRatio;
+      offsetX = (rect.width - actualW) / 2;
+    } else {
+      actualH = rect.width / imgRatio;
+      offsetY = (rect.height - actualH) / 2;
+    }
+
+    const adjustedX = clickX - offsetX;
+    const adjustedY = clickY - offsetY;
+
+    if (adjustedX < 0 || adjustedX > actualW || adjustedY < 0 || adjustedY > actualH) {
+      if (hoverColor) setHoverColor(null);
+      return;
+    }
+
+    const pxX = Math.floor((adjustedX / actualW) * img.naturalWidth);
+    const pxY = Math.floor((adjustedY / actualH) * img.naturalHeight);
+
+    if (!sampleCanvasRef.current) {
+      sampleCanvasRef.current = document.createElement('canvas');
+    }
+    const canvas = sampleCanvasRef.current;
+    if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) ctx.drawImage(img, 0, 0);
+    }
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      const pixel = ctx.getImageData(
+        Math.max(0, Math.min(img.naturalWidth - 1, pxX)),
+        Math.max(0, Math.min(img.naturalHeight - 1, pxY)),
+        1,
+        1
+      ).data;
+      const r = pixel[0];
+      const g = pixel[1];
+      const b = pixel[2];
+      const a = pixel[3];
+      if (a === 0) {
+        if (hoverColor) setHoverColor(null);
+        return;
+      }
+      const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+      setHoverColor({ r, g, b, hex, clientX: e.clientX, clientY: e.clientY });
+    }
+  };
+
+  const handleImageMouseLeave = () => {
+    setHoverColor(null);
   };
 
   // Quick preset: Remove White Background
@@ -536,11 +645,11 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
 
   const modalContent = (
     <div 
-      className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[10000] flex flex-col p-0 sm:p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-white border-0 sm:border border-slate-200 rounded-none sm:rounded-3xl shadow-2xl w-full max-w-4xl mx-auto flex flex-col h-full sm:max-h-[92vh] overflow-hidden" 
+        className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-2xl w-[96vw] max-w-6xl mx-auto flex flex-col h-[92vh] max-h-[92vh] overflow-hidden" 
         onClick={e => e.stopPropagation()}
       >
         {/* Top Header */}
@@ -610,10 +719,10 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
         </div>
 
         {/* Main Work Area */}
-        <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden bg-slate-50">
+        <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 overflow-hidden bg-slate-50">
           
           {/* Canvas / Image Display with Transparency Checkerboard */}
-          <div className="flex-1 relative flex flex-col items-center justify-center p-4 min-h-[300px] overflow-hidden bg-slate-100/80 select-none">
+          <div className="flex-1 min-w-0 min-h-[320px] md:min-h-0 relative flex flex-col items-center justify-center p-4 sm:p-6 overflow-hidden bg-slate-100/90 select-none">
             
             {/* Top helper notification */}
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
@@ -655,15 +764,17 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
                 backgroundSize: '16px 16px',
                 backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px'
               }}
-              className="relative max-h-[55vh] max-w-full rounded-2xl shadow-xl border border-slate-300 overflow-hidden flex items-center justify-center bg-white"
+              className="relative max-h-[58vh] max-w-[95%] rounded-2xl shadow-xl border border-slate-300 overflow-hidden flex items-center justify-center bg-white"
             >
               <img
                 ref={previewImgRef}
                 src={previewSrc}
                 alt="Logo Working Preview"
                 onClick={handleImageClick}
+                onMouseMove={handleImageMouseMove}
+                onMouseLeave={handleImageMouseLeave}
                 draggable={false}
-                className={`max-h-[55vh] max-w-full object-contain block select-none ${
+                className={`max-h-[58vh] max-w-full object-contain block select-none ${
                   activeTab === 'knockout' ? 'cursor-crosshair' : ''
                 }`}
               />
@@ -713,12 +824,23 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
           </div>
 
           {/* Right Control Sidebar */}
-          <div className="w-full md:w-88 shrink-0 border-t md:border-t-0 md:border-l border-slate-200 p-5 flex flex-col justify-between bg-white overflow-y-auto space-y-4">
+          <div className="w-full md:w-[380px] lg:w-[420px] shrink-0 border-t md:border-t-0 md:border-l border-slate-200 p-5 flex flex-col justify-between bg-white overflow-y-auto space-y-4">
             <div className="space-y-4">
               
               {/* TAB 1: COLOR KNOCKOUT CONTROLS */}
               {activeTab === 'knockout' && (
                 <div className="space-y-4">
+                  {/* Eyedropper Live Status Box */}
+                  <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5 animate-pulse">
+                      <Pipette size={13} />
+                    </div>
+                    <div className="text-xs text-amber-950">
+                      <p className="font-bold">Click any color on the logo to remove it</p>
+                      <p className="text-[11px] text-amber-800/80 mt-0.5">Move your mouse over the logo on the left to inspect colors, then click anywhere to knock out that background or shade.</p>
+                    </div>
+                  </div>
+
                   {/* Quick Color Removers */}
                   <div>
                     <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 block">
@@ -952,6 +1074,26 @@ export function GraphicEditorModal({ isOpen, onClose, imageSrc, onApply }: Graph
           </div>
         </div>
       </div>
+
+      {/* Floating live hover color loupe under cursor */}
+      {hoverColor && activeTab === 'knockout' && (
+        <div 
+          style={{
+            position: 'fixed',
+            left: `${hoverColor.clientX + 16}px`,
+            top: `${hoverColor.clientY + 16}px`,
+            pointerEvents: 'none'
+          }}
+          className="z-[10001] flex items-center gap-2 bg-slate-900/95 text-white backdrop-blur-md px-2.5 py-1.5 rounded-lg shadow-xl text-xs font-mono border border-slate-700 animate-in fade-in duration-75 select-none"
+        >
+          <div 
+            className="w-4 h-4 rounded border border-white/60 shadow-inner shrink-0" 
+            style={{ backgroundColor: hoverColor.hex }} 
+          />
+          <span className="font-bold">{hoverColor.hex}</span>
+          <span className="text-[10px] text-amber-300 font-sans uppercase font-bold tracking-wider">Click to remove</span>
+        </div>
+      )}
     </div>
   );
 
