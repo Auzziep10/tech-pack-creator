@@ -102,7 +102,7 @@ export function Sidebar({
           <Settings size={18} className="shrink-0" />
           {!isCollapsed && <span>Settings</span>}
         </button>
-        <button onClick={logout} title={isCollapsed ? "Log Out" : undefined} className={`flex items-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent text-sm w-full ${isCollapsed ? 'justify-center p-3 w-12' : 'gap-3 px-4 py-3 justify-start'}`}>
+        <button onClick={() => { sessionStorage.removeItem('activeFolderId'); logout(); }} title={isCollapsed ? "Log Out" : undefined} className={`flex items-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all border border-transparent text-sm w-full ${isCollapsed ? 'justify-center p-3 w-12' : 'gap-3 px-4 py-3 justify-start'}`}>
           <LogOut size={18} className="shrink-0" />
           {!isCollapsed && <span>Log Out</span>}
         </button>

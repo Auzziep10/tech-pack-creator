@@ -91,12 +91,22 @@ export function Dashboard() {
     position: 'before' | 'after';
   } | null>(null);
 
-  // Sync activeFolderId to sessionStorage
+  // Sync activeFolderId to sessionStorage and ensure it exists in company folders
   useEffect(() => {
     if (activeFolderId) {
       sessionStorage.setItem('activeFolderId', activeFolderId);
     }
   }, [activeFolderId]);
+
+  useEffect(() => {
+    if (activeFolderId && activeFolderId !== 'ALL' && !loading) {
+      const exists = folders.some(f => f.id === activeFolderId);
+      if (!exists) {
+        sessionStorage.removeItem('activeFolderId');
+        setSearchParams({});
+      }
+    }
+  }, [folders, activeFolderId, loading]);
 
   // Folder Modal State
   const [folderModalState, setFolderModalState] = useState<{

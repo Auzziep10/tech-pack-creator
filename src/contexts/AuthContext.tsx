@@ -84,18 +84,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             let needsUpdate = false;
             const updatedData = { ...data };
 
-            if (!data.companyId) {
-              const companyDocRef = doc(collection(db, 'companies'));
-              const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-              await setDoc(companyDocRef, {
-                name: `${u.displayName || 'My'} Company`,
-                adminUid: u.uid,
-                joinCode: newJoinCode,
-                members: [u.uid],
-                createdAt: new Date()
-              });
-              updatedData.companyId = companyDocRef.id;
-              needsUpdate = true;
+            // Auto-provision unique company if missing companyId OR if assigned legacy 'default_company' with 0 packs
+            if (!data.companyId || data.companyId === 'default_company') {
+              let shouldCreateNew = !data.companyId;
+
+              if (data.companyId === 'default_company') {
+                // Check if user actually created any tech packs in default_company
+                const userPacksQ = query(collection(db, 'techPacks'), where('userId', '==', u.uid));
+                const userPacksSnap = await getDocs(userPacksQ);
+                if (userPacksSnap.empty) {
+                  shouldCreateNew = true;
+                }
+              }
+
+              if (shouldCreateNew) {
+                const companyDocRef = doc(collection(db, 'companies'));
+                const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                await setDoc(companyDocRef, {
+                  name: `${u.displayName || 'My'} Company`,
+                  adminUid: u.uid,
+                  joinCode: newJoinCode,
+                  members: [u.uid],
+                  createdAt: new Date()
+                });
+                updatedData.companyId = companyDocRef.id;
+                updatedData.role = 'admin';
+                needsUpdate = true;
+              }
             }
 
             if (!data.role) {

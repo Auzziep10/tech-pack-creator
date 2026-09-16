@@ -18,6 +18,7 @@ export function Header({ onOpenMobileSidebar }: { onOpenMobileSidebar?: () => vo
   };
 
   const handleSignOut = async () => {
+    sessionStorage.removeItem('activeFolderId');
     await logout();
     navigate('/login');
   };
