@@ -1901,7 +1901,7 @@ export function TechPackEditor() {
       ...prev,
       bom: currentBOM
     }));
-    pushLog(`Added BOM item (${category || 'FABRIC'})`);
+    pushLog(`Added BOM item (${category || 'FABRIC'})`, 'bom');
   };
 
   const removeBOMItem = (index: number) => {
@@ -1915,7 +1915,7 @@ export function TechPackEditor() {
         ...prev,
         bom: currentBOM
       }));
-      pushLog(`Removed BOM item: ${removedName}`);
+      pushLog(`Removed BOM item: ${removedName}`, 'bom');
     }
   };
 
