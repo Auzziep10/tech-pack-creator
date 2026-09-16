@@ -45,6 +45,31 @@ const forceDownload = async (url: string, filename: string) => {
 
 const svgToDataUri = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
+const COLOR_NAME_TO_HEX: Record<string, string> = {
+  black: '#1A1A1A',
+  white: '#FFFFFF',
+  navy: '#001F3F',
+  blue: '#2563EB',
+  red: '#DC2626',
+  green: '#16A34A',
+  grey: '#4B5563',
+  gray: '#4B5563',
+  charcoal: '#374151',
+  olive: '#556B2F',
+  brown: '#78350F',
+  beige: '#D0C9B6',
+  cream: '#FFFDD0',
+  khaki: '#C3B091',
+  pink: '#EC4899',
+  purple: '#9333EA',
+  orange: '#EA580C',
+  yellow: '#CA8A04',
+  burgundy: '#5F1D33',
+  maroon: '#800000',
+  forest: '#065F46',
+  sand: '#D0C9B6'
+};
+
 const STANDARD_SEAMS = [
   // Hems
   { name: 'Coverstitch', type: 'Hem', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,40 L 160,40 A 10,10 0 0 1 170,50 A 10,10 0 0 1 160,60 L 100,60" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="120" y1="30" x2="120" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /><line x1="140" y1="30" x2="140" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /><path d="M 120,60 C 130,70 130,70 140,60" fill="none" stroke="#ef4444" stroke-width="2" /></svg>') },
@@ -2866,14 +2891,13 @@ export function TechPackEditor() {
                     );
                   })()}
 
-                  {/* Extracted Color Swatches Row */}
+                  {/* Color Swatches & Variations Section */}
                   {(() => {
                     const colorways: any[] = displayData?.properties?.dominantColorways || [];
-                    if (!colorways || colorways.length === 0) return null;
 
                     // Convert CIE L*a*b* to Hex RGB fallback
                     const labToHex = (lab?: number[]) => {
-                      if (!lab || lab.length < 3) return '#888888';
+                      if (!lab || lab.length < 3) return '';
                       const [L, a, b] = lab;
                       const y = (L + 16) / 116;
                       const x = a / 500 + y;
@@ -2900,40 +2924,167 @@ export function TechPackEditor() {
                       return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1).toUpperCase()}`;
                     };
 
+                    const resolveHex = (cw: any) => {
+                      if (cw.hex && cw.hex.startsWith('#')) return cw.hex;
+                      const fromLab = labToHex(cw.lab);
+                      if (fromLab) return fromLab;
+                      const nameKey = (cw.name || '').trim().toLowerCase();
+                      if (COLOR_NAME_TO_HEX[nameKey]) return COLOR_NAME_TO_HEX[nameKey];
+                      return '#1A1A1A';
+                    };
+
+                    const handleAddSwatch = (defaultName?: string, defaultHex?: string) => {
+                      const name = defaultName || `Colorway ${colorways.length + 1}`;
+                      const hex = defaultHex || '#1D4ED8';
+                      const newSwatch = {
+                        id: `cw_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+                        name,
+                        hex,
+                        lab: [50.0, 0.0, 0.0]
+                      };
+                      const updated = [...colorways, newSwatch];
+                      updateProperty('dominantColorways', updated);
+                      const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
+                      updateProperty('colorsText', newNames);
+                      pushLog(`Added color swatch "${name}"`, 'property');
+                    };
+
+                    if (!colorways || colorways.length === 0) {
+                      const colorsTextRaw = (displayData?.properties?.colorsText || '').trim();
+                      return (
+                        <div className="mt-3 p-3 bg-gradient-to-r from-gray-50 via-slate-50 to-gray-50 rounded-2xl border border-dashed border-gray-300 print:hidden transition-all hover:border-gray-400">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <Palette size={14} className="text-gray-700" />
+                                <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">Color Swatches</span>
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-0.5">
+                                Add colorways and fabric swatches for this garment style.
+                              </p>
+                            </div>
+                            {!isTechPackLocked && !isTranslated && (
+                              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                                {colorsTextRaw && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const names = colorsTextRaw
+                                        .split(',')
+                                        .map((s: string) => s.trim())
+                                        .filter(Boolean);
+                                      if (names.length > 0) {
+                                        const newCws = names.map((name: string, i: number) => ({
+                                          id: `cw_${Date.now()}_${i}`,
+                                          name,
+                                          hex: COLOR_NAME_TO_HEX[name.toLowerCase()] || '#1D4ED8',
+                                          lab: [50.0, 0.0, 0.0]
+                                        }));
+                                        updateProperty('dominantColorways', newCws);
+                                        pushLog(`Populated color swatches from "${colorsTextRaw}"`, 'property');
+                                      }
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs transition-all cursor-pointer"
+                                    title={`Generate swatches from "${colorsTextRaw}"`}
+                                  >
+                                    <Sparkles size={12} className="text-blue-600" />
+                                    <span>Use &quot;{colorsTextRaw}&quot;</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddSwatch()}
+                                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 shadow-2xs transition-all cursor-pointer"
+                                >
+                                  <Plus size={13} className="text-gray-500" />
+                                  <span>+ Add Swatch</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                                    setRecolorBaseImage(imageUrl);
+                                    setColorwayTab('generate');
+                                    setShowColorwayModal(true);
+                                  }}
+                                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl bg-black hover:bg-gray-800 text-white shadow-2xs transition-all cursor-pointer"
+                                >
+                                  <Sparkles size={13} className="text-yellow-300" />
+                                  <span>Colorway Studio</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
-                      <div className="mt-3 pt-2.5 border-t border-gray-100 print:mt-2">
-                        <div className="flex items-center justify-between mb-1.5 px-0.5">
-                          <span className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
-                            Color Swatches ({colorways.length})
-                          </span>
+                      <div className="mt-3 pt-2.5 border-t border-gray-200/70 print:mt-2">
+                        <div className="flex items-center justify-between mb-2 px-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <Palette size={13} className="text-gray-600" />
+                            <span className="text-xs font-bold text-gray-800 tracking-tight">
+                              Color Swatches
+                            </span>
+                            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                              {colorways.length}
+                            </span>
+                          </div>
                           {!isTechPackLocked && !isTranslated && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setExtractedColorways(displayData?.properties?.dominantColorways || []);
-                                setRecolorBaseImage(imageUrl);
-                                setColorwayTab('generate');
-                                setShowColorwayModal(true);
-                              }}
-                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline transition-all print:hidden"
-                            >
-                              <span>Manage Colors</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleAddSwatch()}
+                                className="text-[11px] font-bold text-gray-700 hover:text-black flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-100 border border-gray-200 transition-all cursor-pointer print:hidden"
+                              >
+                                <Plus size={12} />
+                                <span>Add Swatch</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                                  setRecolorBaseImage(imageUrl);
+                                  setColorwayTab('generate');
+                                  setShowColorwayModal(true);
+                                }}
+                                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 border border-blue-200 transition-all cursor-pointer print:hidden"
+                              >
+                                <Sparkles size={12} />
+                                <span>Colorway Studio</span>
+                              </button>
+                            </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide py-0.5">
+                        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin py-0.5">
                           {colorways.map((cw: any, idx: number) => {
-                            const swatchColor = cw.hex || labToHex(cw.lab);
+                            const swatchColor = resolveHex(cw);
                             return (
                               <div
                                 key={cw.id || idx}
-                                className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl shrink-0 shadow-xs hover:border-gray-300 transition-all group"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl shrink-0 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all group"
                                 title={cw.name ? `${cw.name} (${swatchColor})` : swatchColor}
                               >
-                                <span
-                                  className="w-4 h-4 rounded-full border border-black/15 shadow-xs shrink-0 group-hover:scale-110 transition-transform"
-                                  style={{ backgroundColor: swatchColor }}
-                                />
+                                <label className="relative cursor-pointer shrink-0" title="Click to change color">
+                                  <span
+                                    className="w-5 h-5 rounded-full border border-black/20 shadow-xs block group-hover:scale-110 group-hover:ring-2 group-hover:ring-blue-400 transition-all"
+                                    style={{ backgroundColor: swatchColor }}
+                                  />
+                                  {!isTechPackLocked && !isTranslated && (
+                                    <input
+                                      type="color"
+                                      value={swatchColor.startsWith('#') && swatchColor.length === 7 ? swatchColor : '#1D4ED8'}
+                                      onChange={(e) => {
+                                        const newHex = e.target.value;
+                                        const updated = [...colorways];
+                                        updated[idx] = { ...updated[idx], hex: newHex };
+                                        updateProperty('dominantColorways', updated);
+                                      }}
+                                      className="absolute inset-0 opacity-0 w-0 h-0 cursor-pointer pointer-events-none"
+                                    />
+                                  )}
+                                </label>
                                 {(!isTechPackLocked && !isTranslated) ? (
                                   <input
                                     type="text"
@@ -2960,9 +3111,35 @@ export function TechPackEditor() {
                                 <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider select-none">
                                   {swatchColor}
                                 </span>
+                                {!isTechPackLocked && !isTranslated && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = colorways.filter((_: any, i: number) => i !== idx);
+                                      updateProperty('dominantColorways', updated);
+                                      const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
+                                      updateProperty('colorsText', newNames);
+                                      pushLog(`Removed color swatch "${cw.name || swatchColor}"`, 'property');
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 rounded transition-opacity cursor-pointer ml-0.5"
+                                    title="Delete swatch"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
                               </div>
                             );
                           })}
+                          {!isTechPackLocked && !isTranslated && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddSwatch()}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-600 hover:text-black hover:border-gray-400 hover:bg-gray-50 text-xs font-semibold transition-all shrink-0 cursor-pointer shadow-2xs"
+                            >
+                              <Plus size={13} className="text-gray-400" />
+                              <span>+ Add Swatch</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
