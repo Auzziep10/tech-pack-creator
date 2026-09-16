@@ -167,7 +167,7 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
     }
   };
 
-  const handleRoleChange = async (uid: string, newRole: 'admin' | 'staff') => {
+  const handleRoleChange = async (uid: string, newRole: 'admin' | 'staff' | 'viewer') => {
     try {
       await updateUserRole(uid, newRole);
       setUsers(prev => prev.map(u => u.uid === uid ? { ...u, role: newRole } : u));
@@ -650,19 +650,22 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                                 {profile.role === 'admin' && !isSelf ? (
                                   <select
                                     value={u.role || 'staff'}
-                                    onChange={(e) => handleRoleChange(u.uid, e.target.value as 'admin' | 'staff')}
+                                    onChange={(e) => handleRoleChange(u.uid, e.target.value as 'admin' | 'staff' | 'viewer')}
                                     className="bg-white border border-gray-200 rounded-lg text-xs font-bold px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-black focus:border-black cursor-pointer shadow-2xs"
                                   >
-                                    <option value="staff">Staff</option>
-                                    <option value="admin">Admin</option>
+                                    <option value="viewer">Viewer (View-Only)</option>
+                                    <option value="staff">Staff (Read & Write)</option>
+                                    <option value="admin">Admin (Full Control)</option>
                                   </select>
                                 ) : (
                                   <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${
                                     isAdmin 
                                       ? 'bg-purple-100 text-purple-700' 
+                                      : u.role === 'viewer'
+                                      ? 'bg-amber-100 text-amber-800'
                                       : 'bg-gray-100 text-gray-600'
                                   }`}>
-                                    {u.role || 'staff'}
+                                    {u.role === 'viewer' ? 'Viewer (Read-Only)' : u.role || 'staff'}
                                   </span>
                                 )}
                               </div>

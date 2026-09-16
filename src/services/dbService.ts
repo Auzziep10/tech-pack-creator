@@ -175,7 +175,7 @@ export const getCompanyUsers = async (companyId: string): Promise<any[]> => {
   return snap.docs.map(doc => doc.data());
 };
 
-export const updateUserRole = async (uid: string, role: 'admin' | 'staff') => {
+export const updateUserRole = async (uid: string, role: 'admin' | 'staff' | 'viewer') => {
   const userRef = doc(db, 'users', uid);
   await updateDoc(userRef, { role });
 };
@@ -668,11 +668,11 @@ export const mergeUserIntoCompany = async (
       });
     });
 
-    // Update user profile
+    // Update user profile - set joined user as viewer (view-only until promoted to staff by admin)
     const userRef = doc(db, 'users', userId);
     batch.update(userRef, {
       companyId: targetCompanyId,
-      role: 'staff'
+      role: 'viewer'
     });
 
     // Add user to company members list
@@ -688,7 +688,7 @@ export const mergeUserIntoCompany = async (
     const userRef = doc(db, 'users', userId);
     batch.update(userRef, {
       companyId: targetCompanyId,
-      role: 'staff'
+      role: 'viewer'
     });
 
     const companyRef = doc(db, 'companies', targetCompanyId);

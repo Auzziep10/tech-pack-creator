@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 
 export interface UserProfile {
@@ -8,8 +8,21 @@ export interface UserProfile {
   email: string | null;
   name?: string;
   companyId: string;
-  role?: 'admin' | 'staff';
+  role?: 'admin' | 'staff' | 'viewer';
 }
+
+const CORE_TEAM_EMAILS = [
+  'austin@catalyst.com.co',
+  'garrett@catalyst.com.co',
+  'clayton@catalyst.com.co',
+  'josh@catalyst.com.co'
+];
+
+export const isCoreTeamEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  return CORE_TEAM_EMAILS.includes(clean);
+};
 
 interface AuthContextType {
   user: User | null;
@@ -38,36 +51,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       try {
         if (u && !u.isAnonymous) {
+          const cleanEmail = (u.email || '').trim().toLowerCase();
+          const isCore = isCoreTeamEmail(cleanEmail);
           const userRef = doc(db, 'users', u.uid);
           const snap = await getDoc(userRef);
-          
-          if (!snap.exists()) {
-            const cleanEmail = (u.email || '').trim().toLowerCase();
-            let companyId = '';
-            let role: 'admin' | 'staff' = 'admin';
 
-            // Check if there is an existing pending invite for this user's email
-            if (cleanEmail) {
-              const pendingQuery = query(collection(db, 'companies'), where('pendingInvites', 'array-contains', cleanEmail));
-              const pendingSnap = await getDocs(pendingQuery);
-              if (!pendingSnap.empty) {
-                companyId = pendingSnap.docs[0].id;
-                role = 'staff';
-              }
-            }
-
-            // Otherwise, create a unique company for them
-            if (!companyId) {
-              const companyDocRef = doc(collection(db, 'companies'));
-              const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-              companyId = companyDocRef.id;
-              await setDoc(companyDocRef, {
-                name: `${u.displayName || 'My'} Company`,
+          // Helper to ensure default_company (WOVN Studio) document exists & member is registered
+          const ensureDefaultCompanyDoc = async () => {
+            const defaultCompRef = doc(db, 'companies', 'default_company');
+            const defaultCompSnap = await getDoc(defaultCompRef);
+            if (!defaultCompSnap.exists()) {
+              await setDoc(defaultCompRef, {
+                name: 'WOVN Studio',
                 adminUid: u.uid,
-                joinCode: newJoinCode,
+                joinCode: 'WOVN01',
                 members: [u.uid],
                 createdAt: new Date()
               });
+            } else {
+              await updateDoc(defaultCompRef, {
+                members: arrayUnion(u.uid)
+              });
+            }
+          };
+
+          if (!snap.exists()) {
+            let companyId = '';
+            let role: 'admin' | 'staff' | 'viewer' = 'admin';
+
+            if (isCore) {
+              companyId = 'default_company';
+              role = 'admin';
+              await ensureDefaultCompanyDoc();
+            } else {
+              // Check if there is an existing pending invite for this user's email
+              if (cleanEmail) {
+                const pendingQuery = query(collection(db, 'companies'), where('pendingInvites', 'array-contains', cleanEmail));
+                const pendingSnap = await getDocs(pendingQuery);
+                if (!pendingSnap.empty) {
+                  companyId = pendingSnap.docs[0].id;
+                  role = 'viewer'; // Team invitees start as view-only until owner promotes to staff
+                }
+              }
+
+              // Otherwise, create a unique company for them
+              if (!companyId) {
+                const companyDocRef = doc(collection(db, 'companies'));
+                const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                companyId = companyDocRef.id;
+                await setDoc(companyDocRef, {
+                  name: `${u.displayName || 'My'} Company`,
+                  adminUid: u.uid,
+                  joinCode: newJoinCode,
+                  members: [u.uid],
+                  createdAt: new Date()
+                });
+                role = 'admin';
+              }
             }
 
             const newProfile: UserProfile = {
@@ -84,20 +124,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             let needsUpdate = false;
             const updatedData = { ...data };
 
-            // Auto-provision unique company if missing companyId OR if assigned legacy 'default_company' with 0 packs
-            if (!data.companyId || data.companyId === 'default_company') {
-              let shouldCreateNew = !data.companyId;
-
-              if (data.companyId === 'default_company') {
-                // Check if user actually created any tech packs in default_company
-                const userPacksQ = query(collection(db, 'techPacks'), where('userId', '==', u.uid));
-                const userPacksSnap = await getDocs(userPacksQ);
-                if (userPacksSnap.empty) {
-                  shouldCreateNew = true;
-                }
+            if (isCore) {
+              // Core Catalyst team members always belong to default_company with admin full access
+              if (data.companyId !== 'default_company' || data.role !== 'admin') {
+                updatedData.companyId = 'default_company';
+                updatedData.role = 'admin';
+                needsUpdate = true;
+                await ensureDefaultCompanyDoc();
               }
-
-              if (shouldCreateNew) {
+            } else {
+              if (!data.companyId) {
                 const companyDocRef = doc(collection(db, 'companies'));
                 const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
                 await setDoc(companyDocRef, {
@@ -111,11 +147,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updatedData.role = 'admin';
                 needsUpdate = true;
               }
-            }
-
-            if (!data.role) {
-              updatedData.role = 'admin';
-              needsUpdate = true;
+              if (!data.role) {
+                updatedData.role = 'admin';
+                needsUpdate = true;
+              }
             }
 
             if (needsUpdate) {
