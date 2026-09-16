@@ -1487,7 +1487,7 @@ export function TechPackEditor() {
       const finalActivityLog = [...(displayData.activityLog || []), saveLog];
       setData((prev: any) => ({ ...prev, activityLog: finalActivityLog }));
       if (id && id !== 'draft') {
-        addTechPackActivityLog(id, 'Saved Tech Pack', user.email || undefined, 'general').catch(console.error);
+        addTechPackActivityLog(id, 'Saved Tech Pack', user.email || 'Unknown', 'general').catch(console.error);
       }
 
       let annotatedImg = '';
