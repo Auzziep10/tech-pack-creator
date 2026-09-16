@@ -526,7 +526,7 @@ export interface ActivityLogEntry {
 export const addTechPackActivityLog = async (
   packId: string,
   message: string,
-  userEmail: string,
+  userEmail?: string,
   category?: ActivityLogEntry['category']
 ) => {
   if (!packId || packId === 'draft') return;

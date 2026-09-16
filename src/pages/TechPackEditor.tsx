@@ -864,6 +864,7 @@ export function TechPackEditor() {
       const newPOMs = await expandMeasurements(
         imageUrl,
         displayData?.measurements || [],
+        displayData?.properties?.baseSize || 'M',
         displayData?.properties?.category || packName || 'Garment',
         globalUnit || 'in'
       );
@@ -1486,7 +1487,7 @@ export function TechPackEditor() {
       const finalActivityLog = [...(displayData.activityLog || []), saveLog];
       setData((prev: any) => ({ ...prev, activityLog: finalActivityLog }));
       if (id && id !== 'draft') {
-        addTechPackActivityLog(id, 'Saved Tech Pack', user.email, 'general').catch(console.error);
+        addTechPackActivityLog(id, 'Saved Tech Pack', user.email || undefined, 'general').catch(console.error);
       }
 
       let annotatedImg = '';
@@ -2071,7 +2072,7 @@ export function TechPackEditor() {
               </div>
             )}
 
-            <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`); handleExport(); }} className="px-3.5 h-9 shadow-sm shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs font-bold rounded-xl">
+            <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`, 'export'); handleExport(); }} className="px-3.5 h-9 shadow-sm shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs font-bold rounded-xl">
               <div className="flex items-center gap-1.5 font-semibold">
                 <Download size={14} />
                 <span>Export</span>
@@ -3638,13 +3639,20 @@ export function TechPackEditor() {
                          <input type="file" className="hidden" accept="image/*" onChange={e => {
                              if(e.target.files && e.target.files[0]) {
                                 const reader = new FileReader();
-                                reader.onload = ev => updateProperty('wovnLogo', ev.target?.result as string);
+                                reader.onload = ev => {
+                                  updateProperty('wovnLogo', ev.target?.result as string);
+                                  pushLog('Uploaded WOVN Studio Logo', 'image');
+                                };
                                 reader.readAsDataURL(e.target.files[0]);
                              }
                          }} />
                        </label>
                        {displayData?.properties?.wovnLogo && (
-                         <button onClick={(e) => { e.preventDefault(); updateProperty('wovnLogo', ''); }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                         <button onClick={(e) => { 
+                           e.preventDefault(); 
+                           updateProperty('wovnLogo', ''); 
+                           pushLog('Removed WOVN Studio Logo', 'image');
+                         }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
                        )}
                      </div>
                      <div className="flex justify-end group relative">
@@ -3660,13 +3668,20 @@ export function TechPackEditor() {
                          <input type="file" className="hidden" accept="image/*" onChange={e => {
                              if(e.target.files && e.target.files[0]) {
                                 const reader = new FileReader();
-                                reader.onload = ev => updateProperty('clientLogo', ev.target?.result as string);
+                                reader.onload = ev => {
+                                  updateProperty('clientLogo', ev.target?.result as string);
+                                  pushLog('Uploaded Client Logo', 'image');
+                                };
                                 reader.readAsDataURL(e.target.files[0]);
                              }
                          }} />
                        </label>
                        {displayData?.properties?.clientLogo && (
-                         <button onClick={(e) => { e.preventDefault(); updateProperty('clientLogo', ''); }} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
+                         <button onClick={(e) => { 
+                           e.preventDefault(); 
+                           updateProperty('clientLogo', ''); 
+                           pushLog('Removed Client Logo', 'image');
+                         }} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
                        )}
                      </div>
                   </header>
@@ -3687,14 +3702,20 @@ export function TechPackEditor() {
                           <input type="file" className="hidden" accept="image/*" onChange={(e) => {
                              if (e.target.files && e.target.files[0]) {
                                 const reader = new FileReader();
-                                reader.onload = (ev) => setData({...data, lineSheetImage: ev.target?.result as string});
+                                reader.onload = (ev) => {
+                                  setData({...data, lineSheetImage: ev.target?.result as string});
+                                  pushLog('Uploaded Garment Render for Line Sheet', 'image');
+                                };
                                 reader.readAsDataURL(e.target.files[0]);
                              }
                           }} />
                         </label>
 
                         {displayData?.lineSheetImage && (
-                          <button onClick={() => setData({...data, lineSheetImage: ''})} className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200 text-xs font-bold hover:bg-red-50 text-red-600">
+                          <button onClick={() => {
+                            setData({...data, lineSheetImage: ''});
+                            pushLog('Cleared Garment Render from Line Sheet', 'image');
+                          }} className="bg-white px-3 py-2 rounded-lg shadow border border-gray-200 text-xs font-bold hover:bg-red-50 text-red-600">
                             Clear
                           </button>
                         )}
@@ -3790,7 +3811,7 @@ export function TechPackEditor() {
                     setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
                     await updateDoc(doc(db, `users/${user?.uid}/pendingScans`, scan.id), { status: 'claimed' });
                     setShowScansInbox(false);
-                    pushLog(`Linked Mobile 3D Scan (${scan.mode})`);
+                    pushLog(`Linked Mobile 3D Scan (${scan.mode})`, 'image');
                   } catch (e) {
                     alert("Failed to claim scan.");
                   }
@@ -4084,6 +4105,7 @@ export function TechPackEditor() {
                          setShowColorwayModal(false);
                          setColorwayMockupImage(null);
                          setExtractedColorways([]);
+                         pushLog(`Applied colorways to Tech Pack (${names})`, 'property');
                      }}
                  >
                      Apply to Tech Pack
@@ -4158,6 +4180,7 @@ export function TechPackEditor() {
                             hiddenGalleryImages
                           );
                         }
+                        pushLog(`Uploaded ${files.length} garment photo(s)`, 'image');
                         setShowAddPhotoModal(false);
                       } catch (err) {
                         console.error("Failed to upload image(s):", err);
