@@ -145,24 +145,6 @@ export function Dashboard() {
         setTechPacks(data);
         setLoading(false);
 
-        // Auto-migrate orphaned packs that user securely owns but aren't currently bound to the active team
-        const orphanedPacks = data.filter(p => p.userId === user.uid && p.companyId !== profile.companyId);
-        if (orphanedPacks.length > 0) {
-          try {
-            const batch = writeBatch(db);
-            let count = 0;
-            orphanedPacks.forEach(p => {
-              if (p.id) {
-                 batch.update(doc(db, 'techPacks', p.id), { companyId: profile.companyId });
-                 count++;
-              }
-            });
-            if (count > 0) await batch.commit();
-          } catch(e) {
-            console.error("Auto-migration failed:", e);
-          }
-        }
-
         // Fetch and auto-hydrate missing author emails for legacy collaborative tech packs
         const missingEmailUsers = Array.from(new Set(data.filter(p => !p.creatorEmail && p.userId).map(p => p.userId)));
         if (missingEmailUsers.length > 0) {

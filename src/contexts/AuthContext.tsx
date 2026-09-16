@@ -42,43 +42,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const snap = await getDoc(userRef);
           
           if (!snap.exists()) {
-            // Find if there are admins
-            const usersRef = collection(db, 'users');
-            const adminsQuery = query(usersRef, where('role', '==', 'admin'));
-            const adminsSnap = await getDocs(adminsQuery);
-            const role = adminsSnap.empty ? 'admin' : 'staff';
+            const cleanEmail = (u.email || '').trim().toLowerCase();
+            let companyId = '';
+            let role: 'admin' | 'staff' = 'admin';
 
-            // Create initial profile where companyId is 'default_company'
+            // Check if there is an existing pending invite for this user's email
+            if (cleanEmail) {
+              const pendingQuery = query(collection(db, 'companies'), where('pendingInvites', 'array-contains', cleanEmail));
+              const pendingSnap = await getDocs(pendingQuery);
+              if (!pendingSnap.empty) {
+                companyId = pendingSnap.docs[0].id;
+                role = 'staff';
+              }
+            }
+
+            // Otherwise, create a unique company for them
+            if (!companyId) {
+              const companyDocRef = doc(collection(db, 'companies'));
+              const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+              companyId = companyDocRef.id;
+              await setDoc(companyDocRef, {
+                name: `${u.displayName || 'My'} Company`,
+                adminUid: u.uid,
+                joinCode: newJoinCode,
+                members: [u.uid],
+                createdAt: new Date()
+              });
+            }
+
             const newProfile: UserProfile = {
               uid: u.uid,
               email: u.email,
               name: u.displayName || undefined,
-              companyId: 'default_company',
+              companyId: companyId,
               role: role
             };
             await setDoc(userRef, newProfile);
             setProfile(newProfile);
           } else {
-            // Migrate legacy user profile
             const data = snap.data() as UserProfile;
             let needsUpdate = false;
             const updatedData = { ...data };
 
-            if (data.companyId !== 'default_company') {
-               updatedData.companyId = 'default_company';
-               needsUpdate = true;
+            if (!data.companyId) {
+              const companyDocRef = doc(collection(db, 'companies'));
+              const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+              await setDoc(companyDocRef, {
+                name: `${u.displayName || 'My'} Company`,
+                adminUid: u.uid,
+                joinCode: newJoinCode,
+                members: [u.uid],
+                createdAt: new Date()
+              });
+              updatedData.companyId = companyDocRef.id;
+              needsUpdate = true;
             }
 
             if (!data.role) {
-               const usersRef = collection(db, 'users');
-               const adminsQuery = query(usersRef, where('role', '==', 'admin'));
-               const adminsSnap = await getDocs(adminsQuery);
-               updatedData.role = adminsSnap.empty ? 'admin' : 'staff';
-               needsUpdate = true;
+              updatedData.role = 'admin';
+              needsUpdate = true;
             }
 
             if (needsUpdate) {
-               await setDoc(userRef, updatedData, { merge: true });
+              await setDoc(userRef, updatedData, { merge: true });
             }
             setProfile(updatedData);
           }
@@ -86,11 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Listen for live updates
           unsubscribeProfile = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
-              const liveData = docSnap.data() as UserProfile;
-              if (liveData.companyId !== 'default_company') {
-                liveData.companyId = 'default_company';
-              }
-              setProfile(liveData);
+              setProfile(docSnap.data() as UserProfile);
             }
           });
         } else {

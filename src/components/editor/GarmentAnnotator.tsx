@@ -184,16 +184,18 @@ export function GarmentAnnotator({
   };
 
   const handleToggleResolveComment = async (id: string, currentResolved: boolean) => {
+    const target = comments.find(c => c.id === id);
     if (techPackId && techPackId !== 'draft') {
-      await updateImageComment(techPackId, id, { resolved: !currentResolved });
+      await updateImageComment(techPackId, id, { resolved: !currentResolved }, user?.email || user?.displayName || 'User', target?.pinNumber);
     } else {
       setComments(prev => prev.map(c => c.id === id ? { ...c, resolved: !currentResolved } : c));
     }
   };
 
   const handleDeleteComment = async (id: string) => {
+    const target = comments.find(c => c.id === id);
     if (techPackId && techPackId !== 'draft') {
-      await deleteImageComment(techPackId, id);
+      await deleteImageComment(techPackId, id, user?.email || user?.displayName || 'User', target?.pinNumber);
     } else {
       setComments(prev => prev.filter(c => c.id !== id));
     }

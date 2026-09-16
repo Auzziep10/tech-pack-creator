@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../services/firebase';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -13,6 +13,7 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -26,22 +27,56 @@ export function Login() {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(cred.user, { displayName: name });
+        const cleanEmail = email.trim().toLowerCase();
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        await updateProfile(cred.user, { displayName: name.trim() });
 
-        // Find if there are admins
-        const usersRef = collection(db, 'users');
-        const adminsQuery = query(usersRef, where('role', '==', 'admin'));
-        const adminsSnap = await getDocs(adminsQuery);
-        const role = adminsSnap.empty ? 'admin' : 'staff';
+        // Check if there is a pending invite for this email in any company
+        const pendingCompaniesQuery = query(
+          collection(db, 'companies'),
+          where('pendingInvites', 'array-contains', cleanEmail)
+        );
+        const pendingSnap = await getDocs(pendingCompaniesQuery);
 
-        await setDoc(doc(db, 'users', cred.user.uid), {
-           uid: cred.user.uid,
-           email: email,
-           name: name,
-           companyId: 'default_company',
-           role: role
-        }, { merge: true });
+        if (!pendingSnap.empty) {
+          // Join the inviting company
+          const targetCompanyDoc = pendingSnap.docs[0];
+          const targetCompanyId = targetCompanyDoc.id;
+
+          await updateDoc(targetCompanyDoc.ref, {
+            pendingInvites: arrayRemove(cleanEmail),
+            members: arrayUnion(cred.user.uid)
+          });
+
+          await setDoc(doc(db, 'users', cred.user.uid), {
+            uid: cred.user.uid,
+            email: cleanEmail,
+            name: name.trim(),
+            companyId: targetCompanyId,
+            role: 'staff'
+          });
+        } else {
+          // Every new account creates their own company brand
+          const companyDocRef = doc(collection(db, 'companies'));
+          const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          const brandName = companyName.trim() || `${name.trim() || 'My'} Company`;
+
+          await setDoc(companyDocRef, {
+            name: brandName,
+            adminUid: cred.user.uid,
+            joinCode: newJoinCode,
+            members: [cred.user.uid],
+            createdAt: serverTimestamp()
+          });
+
+          await setDoc(doc(db, 'users', cred.user.uid), {
+            uid: cred.user.uid,
+            email: cleanEmail,
+            name: name.trim(),
+            companyId: companyDocRef.id,
+            role: 'admin'
+          });
+        }
       }
       navigate('/');
     } catch (err: any) {
@@ -67,13 +102,24 @@ export function Login() {
         <GlassCard className="p-8 shadow-sm border-gray-200">
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
-              <Input
-                label="Full Name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+              <>
+                <Input
+                  label="Full Name"
+                  type="text"
+                  placeholder="e.g. Alex Morgan"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Company / Brand Name"
+                  type="text"
+                  placeholder="e.g. Acme Apparel, Studios, etc."
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  required
+                />
+              </>
             )}
             <Input
               label="Email Address"

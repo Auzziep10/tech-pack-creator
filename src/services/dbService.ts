@@ -1,4 +1,4 @@
-import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from './firebase';
 
@@ -152,7 +152,8 @@ export const uploadBase64Image = async (base64String: string, userId: string): P
 };
 
 export const getUserAndCompanyTechPacks = async (userId: string, companyId: string) => {
-  const q = query(collection(db, 'techPacks'));
+  if (!companyId) return [];
+  const q = query(collection(db, 'techPacks'), where('companyId', '==', companyId));
   const snap = await getDocs(q);
   const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
   return results.sort((a, b) => {
@@ -164,6 +165,13 @@ export const getUserAndCompanyTechPacks = async (userId: string, companyId: stri
 
 export const getAllUsers = async (): Promise<any[]> => {
   const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(doc => doc.data());
+};
+
+export const getCompanyUsers = async (companyId: string): Promise<any[]> => {
+  if (!companyId) return [];
+  const q = query(collection(db, 'users'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
   return snap.docs.map(doc => doc.data());
 };
 
@@ -338,7 +346,11 @@ export const subscribeToUserAndCompanyTechPacks = (
   companyId: string,
   callback: (packs: TechPackData[]) => void
 ) => {
-  const q = query(collection(db, 'techPacks'));
+  if (!companyId) {
+    callback([]);
+    return () => {};
+  }
+  const q = query(collection(db, 'techPacks'), where('companyId', '==', companyId));
   return onSnapshot(q, (snap) => {
     const results = snap.docs.map(d => ({ id: d.id, ...d.data() })) as TechPackData[];
     results.sort((a, b) => {
@@ -504,6 +516,37 @@ export const subscribeToImageComments = (
   });
 };
 
+export interface ActivityLogEntry {
+  timestamp: string;
+  message: string;
+  user: string;
+  category?: 'measurement' | 'bom' | 'property' | 'image' | 'comment' | 'security' | 'export' | 'general';
+}
+
+export const addTechPackActivityLog = async (
+  packId: string,
+  message: string,
+  userEmail: string,
+  category?: ActivityLogEntry['category']
+) => {
+  if (!packId || packId === 'draft') return;
+  try {
+    const packRef = doc(db, 'techPacks', packId);
+    const logEntry: ActivityLogEntry = {
+      timestamp: new Date().toISOString(),
+      message,
+      user: userEmail || 'Unknown',
+      ...(category ? { category } : {})
+    };
+    await updateDoc(packRef, {
+      activityLog: arrayUnion(logEntry),
+      updatedAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Failed to append activity log to Firestore:", err);
+  }
+};
+
 export const addImageComment = async (
   packId: string,
   comment: Omit<ImageCalloutComment, 'id'>
@@ -516,25 +559,225 @@ export const addImageComment = async (
     ...comment,
     createdAt: comment.createdAt || Date.now()
   });
+  const preview = comment.text.length > 40 ? comment.text.substring(0, 37) + '...' : comment.text;
+  addTechPackActivityLog(packId, `Added Callout Pin #${comment.pinNumber}: "${preview}"`, comment.authorEmail || comment.authorName, 'comment');
   return docRef.id;
 };
 
 export const updateImageComment = async (
   packId: string,
   commentId: string,
-  updates: Partial<ImageCalloutComment>
+  updates: Partial<ImageCalloutComment>,
+  userEmail?: string,
+  pinNumber?: number
 ) => {
   if (!packId || packId === 'draft' || !commentId || commentId.startsWith('local-')) return;
   const commentRef = doc(db, 'techPacks', packId, 'imageComments', commentId);
   await updateDoc(commentRef, updates);
+  if (updates.resolved !== undefined && pinNumber !== undefined) {
+    const action = updates.resolved ? 'Resolved' : 'Reopened';
+    addTechPackActivityLog(packId, `${action} Callout Pin #${pinNumber}`, userEmail || 'Unknown', 'comment');
+  }
 };
 
 export const deleteImageComment = async (
   packId: string,
-  commentId: string
+  commentId: string,
+  userEmail?: string,
+  pinNumber?: number
 ) => {
   if (!packId || packId === 'draft' || !commentId || commentId.startsWith('local-')) return;
   const commentRef = doc(db, 'techPacks', packId, 'imageComments', commentId);
   await deleteDoc(commentRef);
+  if (pinNumber !== undefined) {
+    addTechPackActivityLog(packId, `Deleted Callout Pin #${pinNumber}`, userEmail || 'Unknown', 'comment');
+  }
 };
+
+// --- Multi-Company & Team Merging Features ---
+
+export const mergeUserIntoCompany = async (
+  userId: string,
+  userEmail: string,
+  userName: string,
+  currentCompanyId: string,
+  targetCompanyId: string
+): Promise<{ containerFolderId: string | null }> => {
+  if (currentCompanyId === targetCompanyId) {
+    return { containerFolderId: null };
+  }
+
+  // 1. Fetch user's tech packs currently in their existing company
+  const packsQuery = query(
+    collection(db, 'techPacks'),
+    where('companyId', '==', currentCompanyId),
+    where('userId', '==', userId)
+  );
+  const packsSnap = await getDocs(packsQuery);
+
+  // 2. Fetch user's folders in current company
+  const foldersQuery = query(
+    collection(db, 'folders'),
+    where('companyId', '==', currentCompanyId)
+  );
+  const foldersSnap = await getDocs(foldersQuery);
+  const userFolders = foldersSnap.docs.filter(d => {
+    const data = d.data();
+    return data.userId === userId || !data.userId;
+  });
+
+  const hasItems = !packsSnap.empty || userFolders.length > 0;
+  let containerFolderId: string | null = null;
+
+  if (hasItems) {
+    // Determine friendly name for the merged workspace folder
+    const displayName = userName || (userEmail ? userEmail.split('@')[0] : 'Teammate');
+    const folderName = `${displayName}'s Projects`;
+
+    // Create container folder in destination company
+    const containerRef = await addDoc(collection(db, 'folders'), {
+      name: folderName,
+      companyId: targetCompanyId,
+      userId: userId,
+      parentId: null,
+      createdAt: serverTimestamp()
+    });
+    containerFolderId = containerRef.id;
+
+    // Batch update folders and tech packs
+    const batch = writeBatch(db);
+
+    // Root folders get reparented under the new container folder; nested folders retain parent
+    userFolders.forEach(d => {
+      const folderData = d.data();
+      const isRoot = !folderData.parentId;
+      batch.update(d.ref, {
+        companyId: targetCompanyId,
+        parentId: isRoot ? containerFolderId : folderData.parentId
+      });
+    });
+
+    // Unassigned tech packs go into the container folder; categorized ones stay in their folder
+    packsSnap.docs.forEach(d => {
+      const packData = d.data();
+      const isUnassigned = !packData.folderId;
+      batch.update(d.ref, {
+        companyId: targetCompanyId,
+        folderId: isUnassigned ? containerFolderId : packData.folderId,
+        updatedAt: serverTimestamp()
+      });
+    });
+
+    // Update user profile
+    const userRef = doc(db, 'users', userId);
+    batch.update(userRef, {
+      companyId: targetCompanyId,
+      role: 'staff'
+    });
+
+    // Add user to company members list
+    const companyRef = doc(db, 'companies', targetCompanyId);
+    batch.update(companyRef, {
+      members: arrayUnion(userId)
+    });
+
+    await batch.commit();
+  } else {
+    // Empty workspace - smoothly switch company without cluttering with an empty folder
+    const batch = writeBatch(db);
+    const userRef = doc(db, 'users', userId);
+    batch.update(userRef, {
+      companyId: targetCompanyId,
+      role: 'staff'
+    });
+
+    const companyRef = doc(db, 'companies', targetCompanyId);
+    batch.update(companyRef, {
+      members: arrayUnion(userId)
+    });
+
+    await batch.commit();
+  }
+
+  return { containerFolderId };
+};
+
+export const joinCompanyByCode = async (
+  code: string,
+  userId: string,
+  userEmail: string,
+  userName: string,
+  currentCompanyId: string
+): Promise<{ success: boolean; companyName?: string; error?: string }> => {
+  const cleanCode = code.trim().toUpperCase();
+  if (!cleanCode) {
+    return { success: false, error: 'Please enter a valid Join Code.' };
+  }
+
+  const q = query(collection(db, 'companies'), where('joinCode', '==', cleanCode));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    return { success: false, error: 'Invalid Join Code. Please verify with your team.' };
+  }
+
+  const targetDoc = snap.docs[0];
+  const targetCompanyId = targetDoc.id;
+  const targetData = targetDoc.data();
+
+  if (targetCompanyId === currentCompanyId) {
+    return { success: false, error: 'You are already part of this company workspace!' };
+  }
+
+  await mergeUserIntoCompany(userId, userEmail, userName, currentCompanyId, targetCompanyId);
+  return { success: true, companyName: targetData.name || 'Team Workspace' };
+};
+
+export const addTeamMemberByEmail = async (
+  targetCompanyId: string,
+  email: string
+): Promise<{ success: boolean; message: string; type: 'added' | 'invited' }> => {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    throw new Error('Please enter a valid email address.');
+  }
+
+  // Check if user already registered in the system
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where('email', '==', cleanEmail));
+  const snap = await getDocs(q);
+
+  if (!snap.empty) {
+    const userDoc = snap.docs[0];
+    const userData = userDoc.data();
+    if (userData.companyId === targetCompanyId) {
+      throw new Error('This user is already a member of your team.');
+    }
+
+    await mergeUserIntoCompany(
+      userData.uid,
+      userData.email,
+      userData.name || '',
+      userData.companyId || 'default_company',
+      targetCompanyId
+    );
+    return {
+      success: true,
+      message: `${userData.name || cleanEmail} has been added! Their existing projects were seamlessly merged into a dedicated folder on your dashboard.`,
+      type: 'added'
+    };
+  } else {
+    // User hasn't registered yet -> record pending invite
+    const companyRef = doc(db, 'companies', targetCompanyId);
+    await updateDoc(companyRef, {
+      pendingInvites: arrayUnion(cleanEmail)
+    });
+    return {
+      success: true,
+      message: `Invite saved for ${cleanEmail}. When they register, they will automatically join your company workspace.`,
+      type: 'invited'
+    };
+  }
+};
+
 

@@ -6,10 +6,11 @@ import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry } from '../services/dbService';
 import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
+import { TechPackHistoryDrawer } from '../components/editor/TechPackHistoryDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
@@ -75,12 +76,28 @@ const GROUPED_SEAMS = {
   'Stitches': STANDARD_SEAMS.filter(s => s.type === 'Stitch')
 };
 
-const AutoTextarea = ({ value, onChange, className, placeholder }: { value: string, onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void, className: string, placeholder?: string }) => {
+const AutoTextarea = ({ 
+  value, 
+  onChange, 
+  onFocus,
+  onBlur,
+  className, 
+  placeholder 
+}: { 
+  value: string; 
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; 
+  onFocus?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  className: string; 
+  placeholder?: string; 
+}) => {
   return (
     <div className="grid w-full relative">
       <textarea
         value={value}
         onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={`resize-none overflow-hidden col-start-1 row-start-1 w-full h-full ${className}`}
         rows={1}
@@ -95,7 +112,21 @@ const AutoTextarea = ({ value, onChange, className, placeholder }: { value: stri
   );
 };
 
-const RichTextCallouts = ({ value, onChange, className, placeholder, readOnly = false }: { value: string, onChange: (v: string) => void, className: string, placeholder?: string, readOnly?: boolean }) => {
+const RichTextCallouts = ({ 
+  value, 
+  onChange, 
+  onBlur,
+  className, 
+  placeholder, 
+  readOnly = false 
+}: { 
+  value: string; 
+  onChange: (v: string) => void; 
+  onBlur?: (val: string) => void;
+  className: string; 
+  placeholder?: string; 
+  readOnly?: boolean; 
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -116,13 +147,18 @@ const RichTextCallouts = ({ value, onChange, className, placeholder, readOnly = 
     onChange(e.target.value);
   };
 
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    setIsEditing(false);
+    if (onBlur) onBlur(e.target.value);
+  };
+
   if (isEditing) {
     return (
       <textarea
         ref={textareaRef}
         value={value}
         onChange={handleChange}
-        onBlur={() => setIsEditing(false)}
+        onBlur={handleBlur}
         className={`${className} bg-white border border-gray-300 focus:border-blue-500 shadow-sm`}
         placeholder={placeholder}
         rows={3}
@@ -227,6 +263,12 @@ export function TechPackEditor() {
   const isUploadingPhotosRef = useRef(false);
   const [draggedMeasurementIdx, setDraggedMeasurementIdx] = useState<number | null>(null);
   const [dragOverMeasurementIdx, setDragOverMeasurementIdx] = useState<number | null>(null);
+  const initialPackNameRef = useRef<string>('');
+  const initialPropertyRef = useRef<Record<string, string>>({});
+  const initialMeasurementRef = useRef<Record<string, string>>({});
+  const initialBOMRef = useRef<Record<string, string>>({});
+  const initialConstructionRef = useRef<string>('');
+  const initialDetailRef = useRef<Record<string, string>>({});
 
   const getNormalizedStateHash = (
     packData: any,
@@ -308,7 +350,7 @@ export function TechPackEditor() {
         }
       }));
       setActiveLanguage(newLang);
-      pushLog("Translated to " + newLang);
+      pushLog("Translated to " + newLang, 'general');
     } catch (err: any) {
       alert(err.message || "Failed to translate tech pack.");
     } finally {
@@ -354,7 +396,7 @@ export function TechPackEditor() {
         });
         return newData;
       });
-      pushLog(`Computed size ${activeSizeTab}`);
+      pushLog(`Computed size ${activeSizeTab}`, 'measurement');
     } catch (err: any) {
       alert(err.message || "Failed to grade size");
     } finally {
@@ -511,7 +553,7 @@ export function TechPackEditor() {
   const toggleTeamEditable = () => {
     if (!isCreator) return;
     const isLocking = displayData?.isTeamEditable ?? true;
-    pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing');
+    pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing', 'security');
     setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
   };
 
@@ -533,7 +575,7 @@ export function TechPackEditor() {
       }
     }
 
-    pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack');
+    pushLog(nextLocked ? 'Locked Tech Pack' : 'Unlocked Tech Pack', 'security');
 
     // Update location.state in history so refreshes or back/forward keep updated lock status
     if (location.state) {
@@ -581,7 +623,7 @@ export function TechPackEditor() {
 
     setHiddenGalleryImages(newHidden);
     setData((d: any) => ({ ...d, hiddenGalleryImages: newHidden }));
-    pushLog(isHidden ? 'Unhid thumbnail image' : 'Hid thumbnail image');
+    pushLog(isHidden ? 'Unhid thumbnail image' : 'Hid thumbnail image', 'image');
 
     if (id && id !== 'draft' && !imgUrl.startsWith('data:')) {
       try {
@@ -609,7 +651,7 @@ export function TechPackEditor() {
 
     setHiddenGalleryImages(newHidden);
     setData((d: any) => ({ ...d, hiddenGalleryImages: newHidden }));
-    pushLog(newHidden.length > 0 ? 'Hid all alternate thumbnails' : 'Unhid all thumbnails');
+    pushLog(newHidden.length > 0 ? 'Hid all alternate thumbnails' : 'Unhid all thumbnails', 'image');
 
     if (id && id !== 'draft') {
       try {
@@ -629,15 +671,20 @@ export function TechPackEditor() {
     }
   };
 
-  const pushLog = (message: string) => {
+  const pushLog = (message: string, category?: ActivityLogEntry['category']) => {
+    const entry: ActivityLogEntry = {
+      timestamp: new Date().toISOString(),
+      message,
+      user: user?.email || 'Unknown',
+      ...(category ? { category } : {})
+    };
     setData((prev: any) => ({
       ...prev,
-      activityLog: [...(prev.activityLog || []), {
-        timestamp: new Date().toISOString(),
-        message,
-        user: user?.email || 'Unknown'
-      }]
+      activityLog: [...(prev.activityLog || []), entry]
     }));
+    if (id && id !== 'draft') {
+      addTechPackActivityLog(id, message, user?.email || 'Unknown', category);
+    }
   };
 
   const handleVectorize = async () => {
@@ -651,7 +698,7 @@ export function TechPackEditor() {
         return newGallery;
       });
       setImageUrl(newImageUrl);
-      pushLog(`Generated Vector Blueprint successfully`);
+      pushLog(`Generated Vector Blueprint successfully`, 'image');
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
     } finally {
@@ -706,7 +753,7 @@ export function TechPackEditor() {
         displayData.activityLog || [],
         displayData.isTeamEditable ?? true
       );
-      pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`);
+      pushLog(`Created Invisible Mannequin mockup & saved tech pack successfully`, 'image');
       if (!id || id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true });
       }
@@ -752,7 +799,7 @@ export function TechPackEditor() {
         displayData.activityLog || [],
         displayData.isTeamEditable ?? true
       );
-      pushLog(`Erased garment logo/branding & saved tech pack successfully`);
+      pushLog(`Erased garment logo/branding & saved tech pack successfully`, 'image');
       if (!id || id === 'draft') {
         navigate(`/pack/${savedId}`, { replace: true });
       }
@@ -802,6 +849,7 @@ export function TechPackEditor() {
       }
 
       setExtractedColorways(prev => [...prev, newColorway]);
+      pushLog(`Generated colorway mockup: ${newColorway.name} (${newColorway.hex})`, 'image');
     } catch (err: any) {
       alert("Failed to recolor: " + err.message);
     } finally {
@@ -816,7 +864,6 @@ export function TechPackEditor() {
       const newPOMs = await expandMeasurements(
         imageUrl,
         displayData?.measurements || [],
-        displayData?.properties?.baseSize || 'M',
         displayData?.properties?.category || packName || 'Garment',
         globalUnit || 'in'
       );
@@ -833,7 +880,7 @@ export function TechPackEditor() {
             return prev;
           }
           const updated = [...currentMs, ...filteredNew];
-          pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`);
+          pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`, 'measurement');
           return { ...prev, measurements: updated };
         });
       } else {
@@ -901,7 +948,7 @@ export function TechPackEditor() {
             }
           });
 
-          pushLog(`Successfully updated/generated core matching measurements`);
+          pushLog(`Successfully updated/generated core matching measurements`, 'measurement');
           return { ...prev, measurements: currentMs };
         });
       } else {
@@ -936,7 +983,7 @@ export function TechPackEditor() {
             }
             return m;
           });
-          pushLog("Clarified measurement instructions successfully");
+          pushLog("Clarified measurement instructions successfully", 'measurement');
           return { ...prev, measurements: currentMs };
         });
       } else {
@@ -1123,6 +1170,12 @@ export function TechPackEditor() {
           };
 
           if (isInputFocused()) {
+            if (packInfo.activityLog) {
+              setData((prev: any) => ({
+                ...prev,
+                activityLog: packInfo.activityLog
+              }));
+            }
             return;
           }
 
@@ -1154,6 +1207,12 @@ export function TechPackEditor() {
           // Check if incoming snapshot matches what we already saved locally
           const incomingHash = getNormalizedStateHash(pack, pName, selImg, combinedGallery, packHidden);
           if (incomingHash === lastSavedJsonRef.current) {
+            if (packInfo.activityLog) {
+              setData((prev: any) => ({
+                ...prev,
+                activityLog: packInfo.activityLog
+              }));
+            }
             setIsLoading(false);
             return;
           }
@@ -1403,7 +1462,7 @@ export function TechPackEditor() {
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error || 'Sync failed');
       
-      pushLog('Synced Tech Pack to WOVN Ecosystem');
+      pushLog('Synced Tech Pack to WOVN Ecosystem', 'export');
       alert('Successfully synced to the WOVN Next.js Dashboard!');
     } catch (e: any) {
       console.error('Sync Error:', e);
@@ -1418,13 +1477,17 @@ export function TechPackEditor() {
     setIsSaving(true);
     isSavingRef.current = true;
     try {
-      const saveLog = {
+      const saveLog: ActivityLogEntry = {
         timestamp: new Date().toISOString(),
         message: 'Saved Tech Pack',
-        user: user.email || 'Unknown'
+        user: user.email || 'Unknown',
+        category: 'general'
       };
       const finalActivityLog = [...(displayData.activityLog || []), saveLog];
       setData((prev: any) => ({ ...prev, activityLog: finalActivityLog }));
+      if (id && id !== 'draft') {
+        addTechPackActivityLog(id, 'Saved Tech Pack', user.email, 'general').catch(console.error);
+      }
 
       let annotatedImg = '';
       if (annotatorRef.current) {
@@ -1779,6 +1842,8 @@ export function TechPackEditor() {
     details.push({ id: (details.length + 1).toString(), description: '', position: null });
     newData.detailModules[modIndex].details = details;
     setData(newData);
+    const modTitle = newData.detailModules[modIndex]?.title || 'module';
+    pushLog(`Added callout point to detail module "${modTitle}"`, 'image');
   };
 
   const removeDetail = (modIndex: number, index: number) => {
@@ -1788,6 +1853,8 @@ export function TechPackEditor() {
     newData.detailModules[modIndex].details.splice(index, 1);
     newData.detailModules[modIndex].details.forEach((d: any, i: number) => { d.id = (i + 1).toString(); });
     setData(newData);
+    const modTitle = newData.detailModules[modIndex]?.title || 'module';
+    pushLog(`Removed callout point from detail module "${modTitle}"`, 'image');
   };
 
   const addDetailModule = () => {
@@ -1796,6 +1863,7 @@ export function TechPackEditor() {
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules.push({ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] });
     setData(newData);
+    pushLog('Added Detail Closeup module', 'image');
   };
 
   const getBOMList = (source: any = data) => {
@@ -1869,6 +1937,8 @@ export function TechPackEditor() {
       ...prev,
       bom: currentBOM
     }));
+    const itemName = moved?.component || moved?.material || moved?.category || 'item';
+    pushLog(`Reordered BOM item: ${itemName}`, 'bom');
   };
 
   const updateConstruction = (val: string) => {
@@ -1940,6 +2010,12 @@ export function TechPackEditor() {
             
             <input 
               value={packName} 
+              onFocus={(e) => { initialPackNameRef.current = e.target.value; }}
+              onBlur={(e) => {
+                if (initialPackNameRef.current !== undefined && initialPackNameRef.current !== e.target.value && e.target.value.trim()) {
+                  pushLog(`Renamed style to "${e.target.value}"`, 'property');
+                }
+              }}
               onChange={(e) => setPackName(e.target.value)} 
               className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold tracking-tight text-gray-900 bg-transparent border-b border-transparent hover:border-gray-200 focus:border-black outline-none transition-all px-1 flex-1 min-w-0 truncate" 
               placeholder="Garment Name"
@@ -2133,121 +2209,163 @@ export function TechPackEditor() {
           </header>
 
           {/* Properties Section */}
-          <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-3 sm:gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.style || ''}
-                 placeholder="N/A"
-                 onChange={(e) => updateProperty('style', e.target.value)}
-               />
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.season || ''}
-                 placeholder="N/A"
-                 onChange={(e) => updateProperty('season', e.target.value)}
-               />
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.category || ''}
-                 placeholder="N/A"
-                 onChange={(e) => updateProperty('category', e.target.value)}
-               />
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
-               <select 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
-                 value={displayData?.properties?.occasion || ''}
-                 onChange={(e) => updateProperty('occasion', e.target.value)}
-               >
-                  <option value="" disabled>Select Occasion</option>
-                  <option value="Daily">Daily</option>
-                  <option value="Work">Work</option>
-                  <option value="Weekend">Weekend</option>
-                  <option value="Travel">Travel</option>
-                  <option value="Corporate">Corporate</option>
-                  <option value="Wedding">Wedding</option>
-                  <option value="Night Out">Night Out</option>
-                  <option value="Gym">Gym</option>
-                  <option value="Mixer">Mixer</option>
-                  {displayData?.properties?.occasion === 'Everyday' && (
-                    <option value="Everyday">Everyday</option>
+           <div className="print-properties-grid grid grid-cols-2 md:grid-cols-8 gap-3 sm:gap-4 bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Style Number</div>
+                <input 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  value={displayData?.properties?.style || ''}
+                  placeholder="N/A"
+                  onFocus={(e) => { initialPropertyRef.current.style = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialPropertyRef.current.style !== undefined && initialPropertyRef.current.style !== e.target.value) {
+                      pushLog(`Updated Style Number to "${e.target.value}"`, 'property');
+                    }
+                  }}
+                  onChange={(e) => updateProperty('style', e.target.value)}
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Season</div>
+                <input 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  value={displayData?.properties?.season || ''}
+                  placeholder="N/A"
+                  onFocus={(e) => { initialPropertyRef.current.season = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialPropertyRef.current.season !== undefined && initialPropertyRef.current.season !== e.target.value) {
+                      pushLog(`Updated Season to "${e.target.value}"`, 'property');
+                    }
+                  }}
+                  onChange={(e) => updateProperty('season', e.target.value)}
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Category</div>
+                <input 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  value={displayData?.properties?.category || ''}
+                  placeholder="N/A"
+                  onFocus={(e) => { initialPropertyRef.current.category = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialPropertyRef.current.category !== undefined && initialPropertyRef.current.category !== e.target.value) {
+                      pushLog(`Updated Category to "${e.target.value}"`, 'property');
+                    }
+                  }}
+                  onChange={(e) => updateProperty('category', e.target.value)}
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Occasion</div>
+                <select 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none"
+                  value={displayData?.properties?.occasion || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateProperty('occasion', val);
+                    pushLog(`Updated Occasion to "${val}"`, 'property');
+                  }}
+                >
+                   <option value="" disabled>Select Occasion</option>
+                   <option value="Daily">Daily</option>
+                   <option value="Work">Work</option>
+                   <option value="Weekend">Weekend</option>
+                   <option value="Travel">Travel</option>
+                   <option value="Corporate">Corporate</option>
+                   <option value="Wedding">Wedding</option>
+                   <option value="Night Out">Night Out</option>
+                   <option value="Gym">Gym</option>
+                   <option value="Mixer">Mixer</option>
+                   {displayData?.properties?.occasion === 'Everyday' && (
+                     <option value="Everyday">Everyday</option>
+                   )}
+                </select>
+              </div>
+              <div className="space-y-0.5 relative group">
+                <div className="flex items-center gap-2">
+                  <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
+                  {!isTechPackLocked && !isTranslated && (
+                    <button 
+                      onClick={() => {
+                         setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                         setRecolorBaseImage(imageUrl);
+                         setColorwayTab('generate');
+                         setShowColorwayModal(true);
+                      }}
+                      className="text-[8px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm transition-colors whitespace-nowrap leading-none border border-blue-100"
+                    >
+                      Extract 🪄
+                    </button>
                   )}
-               </select>
-             </div>
-             <div className="space-y-0.5 relative group">
-               <div className="flex items-center gap-2">
-                 <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Colors</div>
-                 {!isTechPackLocked && !isTranslated && (
-                   <button 
-                     onClick={() => {
-                        setExtractedColorways(displayData?.properties?.dominantColorways || []);
-                        setRecolorBaseImage(imageUrl);
-                        setColorwayTab('generate');
-                        setShowColorwayModal(true);
-                     }}
-                     className="text-[8px] font-bold text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shadow-sm transition-colors whitespace-nowrap leading-none border border-blue-100"
-                   >
-                     Extract 🪄
-                   </button>
-                 )}
-               </div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.colorsText || ''}
-                 placeholder="Navy, Black"
-                 onChange={(e) => {
-                    updateProperty('colorsText', e.target.value);
-                    const parsed = e.target.value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-                    const colorways = parsed.map((name: string) => ({ name, lab: [50.0, 0.0, 0.0] }));
-                    updateProperty('dominantColorways', colorways);
-                 }}
-               />
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
-               <input 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
-                 value={displayData?.properties?.designer || ''}
-                 placeholder="N/A"
-                 onChange={(e) => updateProperty('designer', e.target.value)}
-               />
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
-               <select 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
-                 value={displayData?.properties?.gender || ""}
-                 onChange={(e) => updateProperty("gender", e.target.value)}
-               >
-                 <option value="" disabled>Select Gender</option>
-                 <option value="Men">Men</option>
-                 <option value="Women">Women</option>
-                 <option value="Unisex">Unisex</option>
-                 {displayData?.properties?.gender && !["Men", "Women", "Unisex"].includes(displayData.properties.gender) && (
-                   <option value={displayData.properties.gender}>{displayData.properties.gender}</option>
-                 )}
-               </select>
-             </div>
-             <div className="space-y-0.5">
-               <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
-               <select 
-                 className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
-                 value={displayData?.properties?.baseSize || 'M'}
-                 onChange={(e) => updateProperty('baseSize', e.target.value)}
-               >
-                 {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-               </select>
-             </div>
-          </div>
+                </div>
+                <input 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  value={displayData?.properties?.colorsText || ''}
+                  placeholder="Navy, Black"
+                  onFocus={(e) => { initialPropertyRef.current.colorsText = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialPropertyRef.current.colorsText !== undefined && initialPropertyRef.current.colorsText !== e.target.value) {
+                      pushLog(`Updated Colors to "${e.target.value}"`, 'property');
+                    }
+                  }}
+                  onChange={(e) => {
+                     updateProperty('colorsText', e.target.value);
+                     const parsed = e.target.value.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+                     const colorways = parsed.map((name: string) => ({ name, lab: [50.0, 0.0, 0.0] }));
+                     updateProperty('dominantColorways', colorways);
+                  }}
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Designer</div>
+                <input 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
+                  value={displayData?.properties?.designer || ''}
+                  placeholder="N/A"
+                  onFocus={(e) => { initialPropertyRef.current.designer = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialPropertyRef.current.designer !== undefined && initialPropertyRef.current.designer !== e.target.value) {
+                      pushLog(`Updated Designer to "${e.target.value}"`, 'property');
+                    }
+                  }}
+                  onChange={(e) => updateProperty('designer', e.target.value)}
+                />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Gender</div>
+                <select 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                  value={displayData?.properties?.gender || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateProperty("gender", val);
+                    pushLog(`Updated Gender to "${val}"`, 'property');
+                  }}
+                >
+                  <option value="" disabled>Select Gender</option>
+                  <option value="Men">Men</option>
+                  <option value="Women">Women</option>
+                  <option value="Unisex">Unisex</option>
+                  {displayData?.properties?.gender && !["Men", "Women", "Unisex"].includes(displayData.properties.gender) && (
+                    <option value={displayData.properties.gender}>{displayData.properties.gender}</option>
+                  )}
+                </select>
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs print:text-[10px] uppercase font-bold text-gray-400 leading-none">Base Size</div>
+                <select 
+                  className="w-full text-xs sm:text-sm print:text-xs font-semibold bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors appearance-none cursor-pointer"
+                  value={displayData?.properties?.baseSize || 'M'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateProperty('baseSize', val);
+                    pushLog(`Changed Base Size to ${val}`, 'property');
+                  }}
+                >
+                  {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+           </div>
 
           {viewMode === 'techpack' ? (
             <>
@@ -2735,6 +2853,12 @@ export function TechPackEditor() {
                               : ''
                         }
                         onChange={(val: string) => updateConstruction(val)}
+                        onBlur={(val: string) => {
+                          if (initialConstructionRef.current !== val) {
+                            pushLog('Updated Construction Details', 'general');
+                            initialConstructionRef.current = val;
+                          }
+                        }}
                       />
                     </div>
                   </div>
@@ -2865,20 +2989,86 @@ export function TechPackEditor() {
                               </td>
                             )}
                             <td className="px-2 py-2 align-top font-mono text-xs print:text-[10px] text-gray-500">
-                               <AutoTextarea className="w-full bg-transparent outline-none uppercase leading-tight" placeholder="ID" value={m.id || ''} onChange={e => updateMeasurement(i, 'id', e.target.value)} />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none uppercase leading-tight" 
+                                 placeholder="ID" 
+                                 value={m.id || ''} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_id`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_id`] !== undefined && initialMeasurementRef.current[`${i}_id`] !== e.target.value) {
+                                     pushLog(`Updated measurement ID to "${e.target.value}"`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'id', e.target.value)} 
+                               />
                             </td>
                             <td className="px-2 py-2 align-top">
-                               <AutoTextarea className="w-full bg-transparent outline-none font-semibold text-gray-900 leading-tight" placeholder="Point of measure..." value={m.point || ''} onChange={e => updateMeasurement(i, 'point', e.target.value)} />
-                               <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" placeholder="Description / how to measure..." value={m.description || ''} onChange={e => updateMeasurement(i, 'description', e.target.value)} />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none font-semibold text-gray-900 leading-tight" 
+                                 placeholder="Point of measure..." 
+                                 value={m.point || ''} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_point`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_point`] !== undefined && initialMeasurementRef.current[`${i}_point`] !== e.target.value) {
+                                     pushLog(`Updated POM name to "${e.target.value}"`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'point', e.target.value)} 
+                               />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight" 
+                                 placeholder="Description / how to measure..." 
+                                 value={m.description || ''} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_desc`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_desc`] !== undefined && initialMeasurementRef.current[`${i}_desc`] !== e.target.value) {
+                                     pushLog(`Updated measurement instructions for "${m.point || m.id}"`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'description', e.target.value)} 
+                               />
                             </td>
                             <td className="px-2 py-2 align-top">
-                               <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" placeholder="0.0" value={activeSizeTab === (displayData?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} onChange={e => updateMeasurement(i, 'value', e.target.value)} />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none text-gray-900 font-mono font-bold leading-tight" 
+                                 placeholder="0.0" 
+                                 value={activeSizeTab === (displayData?.properties?.baseSize || 'M') ? (m.value || '') : (m.sizes?.[activeSizeTab] || '')} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_val_${activeSizeTab}`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_val_${activeSizeTab}`] !== undefined && initialMeasurementRef.current[`${i}_val_${activeSizeTab}`] !== e.target.value) {
+                                     pushLog(`Updated measurement "${m.point || m.id}" (${activeSizeTab}): ${e.target.value} ${globalUnit || ''}`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'value', e.target.value)} 
+                               />
                             </td>
                             <td className="px-1 py-2 align-top">
-                               <AutoTextarea className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolMinus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none text-red-500 font-mono text-xs print:text-[10px] text-center leading-none" 
+                                 placeholder="0.0" 
+                                 value={m.tolMinus || m.tolerance || ''} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_tolMinus`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_tolMinus`] !== undefined && initialMeasurementRef.current[`${i}_tolMinus`] !== e.target.value) {
+                                     pushLog(`Updated Tol(-) for "${m.point || m.id}" to -${e.target.value}`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'tolMinus', e.target.value)} 
+                               />
                             </td>
                             <td className="px-1 py-2 align-top">
-                               <AutoTextarea className="w-full bg-transparent outline-none text-green-600 font-mono text-xs print:text-[10px] text-center leading-none" placeholder="0.0" value={m.tolPlus || m.tolerance || ''} onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} />
+                               <AutoTextarea 
+                                 className="w-full bg-transparent outline-none text-green-600 font-mono text-xs print:text-[10px] text-center leading-none" 
+                                 placeholder="0.0" 
+                                 value={m.tolPlus || m.tolerance || ''} 
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_tolPlus`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (initialMeasurementRef.current[`${i}_tolPlus`] !== undefined && initialMeasurementRef.current[`${i}_tolPlus`] !== e.target.value) {
+                                     pushLog(`Updated Tol(+) for "${m.point || m.id}" to +${e.target.value}`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} 
+                               />
                             </td>
                             {!isTechPackLocked && (
                               <td className="px-1 py-2 align-middle text-center print:hidden w-20">
@@ -2985,20 +3175,70 @@ export function TechPackEditor() {
                                className="w-full bg-transparent outline-none font-semibold text-gray-900 uppercase text-xs print:text-[10px] tracking-wider leading-tight placeholder:normal-case placeholder:font-normal placeholder:text-gray-400" 
                                value={f.category || ''} 
                                placeholder="e.g. FABRIC"
+                               onFocus={(e) => { initialBOMRef.current[`${i}_cat`] = e.target.value; }}
+                               onBlur={(e) => {
+                                 if (initialBOMRef.current[`${i}_cat`] !== undefined && initialBOMRef.current[`${i}_cat`] !== e.target.value) {
+                                   pushLog(`Updated BOM category to "${e.target.value}"`, 'bom');
+                                 }
+                               }}
                                onChange={e => updateBOM(i, 'category', e.target.value)} 
                              />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-900 font-semibold leading-tight placeholder:font-normal placeholder:text-gray-400" placeholder="Component name..." value={f.component || f.material || ''} onChange={e => updateBOM(i, 'component', e.target.value)} />
+                             <AutoTextarea 
+                               className="w-full bg-transparent outline-none text-gray-900 font-semibold leading-tight placeholder:font-normal placeholder:text-gray-400" 
+                               placeholder="Component name..." 
+                               value={f.component || f.material || ''} 
+                               onFocus={(e) => { initialBOMRef.current[`${i}_comp`] = e.target.value; }}
+                               onBlur={(e) => {
+                                 if (initialBOMRef.current[`${i}_comp`] !== undefined && initialBOMRef.current[`${i}_comp`] !== e.target.value) {
+                                   pushLog(`Updated BOM component name to "${e.target.value}"`, 'bom');
+                                 }
+                               }}
+                               onChange={e => updateBOM(i, 'component', e.target.value)} 
+                             />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" placeholder="Positioning..." value={f.positioning || f.placement || ''} onChange={e => updateBOM(i, 'positioning', e.target.value)} />
+                             <AutoTextarea 
+                               className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" 
+                               placeholder="Positioning..." 
+                               value={f.positioning || f.placement || ''} 
+                               onFocus={(e) => { initialBOMRef.current[`${i}_pos`] = e.target.value; }}
+                               onBlur={(e) => {
+                                 if (initialBOMRef.current[`${i}_pos`] !== undefined && initialBOMRef.current[`${i}_pos`] !== e.target.value) {
+                                   pushLog(`Updated BOM positioning for "${f.component || f.category || 'item'}" to "${e.target.value}"`, 'bom');
+                                 }
+                               }}
+                               onChange={e => updateBOM(i, 'positioning', e.target.value)} 
+                             />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" placeholder="Comment / notes..." value={f.comment || f.notes || ''} onChange={e => updateBOM(i, 'comment', e.target.value)} />
+                             <AutoTextarea 
+                               className="w-full bg-transparent outline-none text-gray-600 leading-tight placeholder:text-gray-400" 
+                               placeholder="Comment / notes..." 
+                               value={f.comment || f.notes || ''} 
+                               onFocus={(e) => { initialBOMRef.current[`${i}_comment`] = e.target.value; }}
+                               onBlur={(e) => {
+                                 if (initialBOMRef.current[`${i}_comment`] !== undefined && initialBOMRef.current[`${i}_comment`] !== e.target.value) {
+                                   pushLog(`Updated BOM comment for "${f.component || f.category || 'item'}"`, 'bom');
+                                 }
+                               }}
+                               onChange={e => updateBOM(i, 'comment', e.target.value)} 
+                             />
                           </td>
                           <td className="px-2 py-2 align-top">
-                             <AutoTextarea className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight placeholder:text-gray-400" placeholder="Supplier..." value={f.supplier || ''} onChange={e => updateBOM(i, 'supplier', e.target.value)} />
+                             <AutoTextarea 
+                               className="w-full bg-transparent outline-none text-gray-500 text-xs print:text-[10px] leading-tight placeholder:text-gray-400" 
+                               placeholder="Supplier..." 
+                               value={f.supplier || ''} 
+                               onFocus={(e) => { initialBOMRef.current[`${i}_supplier`] = e.target.value; }}
+                               onBlur={(e) => {
+                                 if (initialBOMRef.current[`${i}_supplier`] !== undefined && initialBOMRef.current[`${i}_supplier`] !== e.target.value) {
+                                   pushLog(`Updated BOM supplier for "${f.component || f.category || 'item'}" to "${e.target.value}"`, 'bom');
+                                 }
+                               }}
+                               onChange={e => updateBOM(i, 'supplier', e.target.value)} 
+                             />
                           </td>
                           {!isTechPackLocked && (
                             <td className="px-1 py-2 align-middle text-center print:hidden w-20">
@@ -3114,6 +3354,12 @@ export function TechPackEditor() {
                 <input 
                   value={mod.title || ''} 
                   disabled={isTechPackLocked}
+                  onFocus={(e) => { initialDetailRef.current[`${mIdx}_title`] = e.target.value; }}
+                  onBlur={(e) => {
+                    if (initialDetailRef.current[`${mIdx}_title`] !== undefined && initialDetailRef.current[`${mIdx}_title`] !== e.target.value) {
+                      pushLog(`Renamed detail module to "${e.target.value}"`, 'image');
+                    }
+                  }}
                   onChange={(e) => updateDetailModuleStr(mIdx, 'title', e.target.value)} 
                   className={`w-full text-lg font-serif font-bold text-gray-900 leading-tight bg-transparent border-b border-transparent ${isTechPackLocked ? 'cursor-default' : 'hover:border-gray-300 focus:border-black'} outline-none transition-colors`}
                   placeholder="Detail Closeups"
@@ -3128,6 +3374,7 @@ export function TechPackEditor() {
                            newData.detailModules[mIdx - 1] = newData.detailModules[mIdx];
                            newData.detailModules[mIdx] = temp;
                            setData(newData);
+                           pushLog(`Reordered detail module "${mod.title || 'module'}"`, 'image');
                         }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Up"><ArrowUp size={14} /></button>
                      )}
                      {mIdx < dModules.length - 1 && (
@@ -3138,15 +3385,18 @@ export function TechPackEditor() {
                            newData.detailModules[mIdx + 1] = newData.detailModules[mIdx];
                            newData.detailModules[mIdx] = temp;
                            setData(newData);
+                           pushLog(`Reordered detail module "${mod.title || 'module'}"`, 'image');
                         }} className="text-gray-400 hover:text-black bg-gray-50 hover:bg-gray-100 p-1.5 rounded-md transition-colors" title="Move Module Down"><ArrowDown size={14} /></button>
                      )}
                      {mIdx >= 0 && ( /* Ensure delete is always possible if > 0 OR if we reconsider deleting the last one */
                         <button onClick={() => {
                            if (checkReadonly()) return;
                            if (window.confirm('Are you sure you want to delete this entire detail module? This cannot be undone.')) {
+                              const modName = mod.title || 'module';
                               const newData = { ...data };
                               newData.detailModules.splice(mIdx, 1);
                               setData(newData);
+                              pushLog(`Deleted detail module "${modName}"`, 'image');
                            }
                         }} className="text-red-500 hover:text-white hover:bg-red-500 bg-red-50 p-1.5 rounded-md transition-colors ml-1" title="Delete Detail Module"><X size={14} /></button>
                      )}
@@ -3250,6 +3500,12 @@ export function TechPackEditor() {
                     <div className="flex items-center justify-between mb-2">
                        <input 
                          value={mod.subtitle || ''} 
+                         onFocus={(e) => { initialDetailRef.current[`${mIdx}_subtitle`] = e.target.value; }}
+                         onBlur={(e) => {
+                           if (initialDetailRef.current[`${mIdx}_subtitle`] !== undefined && initialDetailRef.current[`${mIdx}_subtitle`] !== e.target.value) {
+                             pushLog(`Updated subtitle in "${mod.title || 'module'}" to "${e.target.value}"`, 'image');
+                           }
+                         }}
                          onChange={e => updateDetailModuleStr(mIdx, 'subtitle', e.target.value)} 
                          className="flex-1 w-full text-xs print:text-[10px] uppercase font-bold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-black outline-none transition-colors"
                          placeholder="Button & Hardware Details"
@@ -3277,6 +3533,9 @@ export function TechPackEditor() {
                                 placeholder="Add multi-line bullet details here..."
                                 value={detail.description || ''} 
                                 onChange={val => updateDetailDesc(mIdx, index, val)} 
+                                onBlur={() => {
+                                  pushLog(`Updated detail callout in "${mod.title || 'module'}"`, 'image');
+                                }}
                               /> 
                               <div className="flex items-center gap-2 print:hidden">
                                 <select 
@@ -3285,6 +3544,7 @@ export function TechPackEditor() {
                                    onChange={(e) => {
                                      const selected = STANDARD_SEAMS.find(s => s.name === e.target.value);
                                      updateDetailObj(mIdx, index, { ...detail, iconUrl: selected ? selected.svg : undefined });
+                                     pushLog(`Updated seam icon to "${e.target.value || 'None'}" in "${mod.title || 'module'}"`, 'image');
                                    }}
                                 >
                                   <option value="">No Seam Icon</option>
@@ -3443,7 +3703,18 @@ export function TechPackEditor() {
 
                   {/* Title */}
                   <div className="text-center mb-10">
-                     <AutoTextarea className="text-[40px] print:text-[36px] font-serif text-gray-900 bg-transparent outline-none text-center w-full max-w-xl mx-auto hover:bg-gray-50 transition-colors rounded-xl" value={packName} onChange={e => setPackName(e.target.value)} placeholder="Product Name" />
+                     <AutoTextarea 
+                       className="text-[40px] print:text-[36px] font-serif text-gray-900 bg-transparent outline-none text-center w-full max-w-xl mx-auto hover:bg-gray-50 transition-colors rounded-xl" 
+                       value={packName} 
+                       onFocus={(e) => { initialPackNameRef.current = e.target.value; }}
+                       onBlur={(e) => {
+                         if (initialPackNameRef.current !== undefined && initialPackNameRef.current !== e.target.value && e.target.value.trim()) {
+                           pushLog(`Renamed style to "${e.target.value}"`, 'property');
+                         }
+                       }}
+                       onChange={e => setPackName(e.target.value)} 
+                       placeholder="Product Name" 
+                     />
                   </div>
 
                   {/* One properties row block */}
@@ -3532,30 +3803,11 @@ export function TechPackEditor() {
         </div>
       </Modal>
 
-      <AnimatePresence>
-        {showHistory && (
-          <motion.div 
-             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-             className="fixed right-0 top-0 bottom-0 w-80 bg-white shadow-2xl z-50 p-6 overflow-y-auto border-l border-gray-200"
-             style={{ display: 'block' }} // Ensuring it's not hidden by print classes globally implicitly
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
-               <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><History size={18} /> History</h3>
-               <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-black transition-colors"><X size={20}/></button>
-            </div>
-             <div className="space-y-4">
-               {displayData.activityLog?.length ? [...displayData.activityLog].reverse().map((log: any, i: number) => (
-                 <div key={i} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
-                    <div className="font-bold text-gray-900 text-sm truncate">{formatName(log.user)}</div>
-                    <div className="text-gray-400 text-xs mt-0.5">{new Date(log.timestamp).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}</div>
-                    <div className="text-gray-700 mt-2 text-xs">{log.message}</div>
-                 </div>
-               )) : <p className="text-gray-500 text-sm">No activity recorded yet.</p>}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <TechPackHistoryDrawer 
+        isOpen={showHistory} 
+        onClose={() => setShowHistory(false)} 
+        activityLog={displayData.activityLog || []} 
+      />
 
       <Modal isOpen={!!qrModalUrl} onClose={() => setQrModalUrl(null)} title="Live Camera Sync">
          <div className="flex flex-col items-center justify-center p-8 bg-white rounded-2xl relative overflow-hidden">
