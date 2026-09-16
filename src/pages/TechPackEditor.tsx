@@ -2891,18 +2891,38 @@ export function TechPackEditor() {
                             const swatchColor = cw.hex || labToHex(cw.lab);
                             return (
                               <div
-                                key={cw.id || cw.name || idx}
-                                className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl shrink-0 shadow-xs hover:border-gray-300 transition-all cursor-default group"
+                                key={cw.id || idx}
+                                className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl shrink-0 shadow-xs hover:border-gray-300 transition-all group"
                                 title={cw.name ? `${cw.name} (${swatchColor})` : swatchColor}
                               >
                                 <span
                                   className="w-4 h-4 rounded-full border border-black/15 shadow-xs shrink-0 group-hover:scale-110 transition-transform"
                                   style={{ backgroundColor: swatchColor }}
                                 />
-                                <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
-                                  {cw.name || 'Unnamed Color'}
-                                </span>
-                                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                                {(!isTechPackLocked && !isTranslated) ? (
+                                  <input
+                                    type="text"
+                                    value={cw.name || ''}
+                                    placeholder="Color name..."
+                                    className="text-xs font-semibold text-gray-800 bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors min-w-[70px] max-w-[140px]"
+                                    onChange={(e) => {
+                                      const newName = e.target.value;
+                                      const updated = [...colorways];
+                                      updated[idx] = { ...updated[idx], name: newName };
+                                      updateProperty('dominantColorways', updated);
+                                      const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
+                                      updateProperty('colorsText', newNames);
+                                    }}
+                                    onBlur={(e) => {
+                                      pushLog(`Updated color swatch name to "${e.target.value}"`, 'property');
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
+                                    {cw.name || 'Unnamed Color'}
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider select-none">
                                   {swatchColor}
                                 </span>
                               </div>
