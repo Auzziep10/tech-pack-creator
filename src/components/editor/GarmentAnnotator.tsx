@@ -96,11 +96,14 @@ interface Point {
   y: number;
 }
 
-interface Annotation {
+export interface Annotation {
   id: string;
   start: Point;
   end: Point;
   label: string;
+  pointName?: string;
+  measurementId?: string;
+  imageUrl?: string;
 }
 
 interface GarmentAnnotatorProps {
@@ -116,6 +119,10 @@ interface GarmentAnnotatorProps {
   defaultGarmentType?: string;
   techPackId?: string;
   hoveredMeasurementId?: string | null;
+  annotations?: Annotation[];
+  onChangeAnnotations?: (annotations: Annotation[]) => void;
+  galleryImages?: string[];
+  onSelectImage?: (imgUrl: string) => void;
 }
 
 export function GarmentAnnotator({ 
@@ -130,12 +137,30 @@ export function GarmentAnnotator({
   onSaveErasedImage,
   defaultGarmentType,
   techPackId,
-  hoveredMeasurementId
+  hoveredMeasurementId,
+  annotations: propAnnotations,
+  onChangeAnnotations,
+  galleryImages,
+  onSelectImage
 }: GarmentAnnotatorProps) {
   const { user, profile } = useAuth();
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotations, setAnnotations] = useState<Annotation[]>(propAnnotations || []);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [selectedMeasurement, setSelectedMeasurement] = useState('');
+
+  useEffect(() => {
+    if (propAnnotations) {
+      setAnnotations(propAnnotations);
+    }
+  }, [propAnnotations]);
+
+  const updateAnnotations = (updater: (prev: Annotation[]) => Annotation[]) => {
+    setAnnotations(prev => {
+      const next = updater(prev);
+      onChangeAnnotations?.(next);
+      return next;
+    });
+  };
   
   const [currentStart, setCurrentStart] = useState<Point | null>(null);
   const [currentMouse, setCurrentMouse] = useState<Point | null>(null);
@@ -436,15 +461,22 @@ export function GarmentAnnotator({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (currentStart && currentMouse) {
-      setAnnotations(prev => [
-        ...prev,
-        {
-          id: Math.random().toString(36).substring(7),
-          start: currentStart,
-          end: currentMouse,
-          label: selectedMeasurement
-        }
-      ]);
+      const matchingMeas = measurements.find((m: any, i: number) => {
+        const lbl = m.id || (i + 1).toString();
+        return lbl === selectedMeasurement || m.id === selectedMeasurement || m.point === selectedMeasurement;
+      });
+
+      const newAnn: Annotation = {
+        id: Math.random().toString(36).substring(7),
+        start: currentStart,
+        end: currentMouse,
+        label: selectedMeasurement,
+        pointName: matchingMeas?.point || '',
+        measurementId: matchingMeas?.id || selectedMeasurement,
+        imageUrl: imageUrl || ''
+      };
+
+      updateAnnotations(prev => [...prev, newAnn]);
       setIsDrawingMode(false); // turn off drawing mode after 1 line
       setSelectedMeasurement('');
     }
@@ -454,7 +486,7 @@ export function GarmentAnnotator({
 
   const removeAnnotation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setAnnotations(prev => prev.filter(a => a.id !== id));
+    updateAnnotations(prev => prev.filter(a => a.id !== id));
   };
 
   const renderContent = () => {
@@ -677,26 +709,44 @@ export function GarmentAnnotator({
            >
              <MessageSquare size={14} />
              <span>Callouts</span>
-             {comments.length > 0 && (
-               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold leading-none ${
-                 showChatSidebar ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
-               }`}>
-                 {comments.length}
-               </span>
-             )}
-           </button>
-            
-           <button 
-             onClick={() => {
-               setIsFullscreen(false);
-               setIsEraserMode(false);
-             }}
-             className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors ml-auto"
-             title="Exit Fullscreen"
-           >
-             <Minimize size={20} />
-           </button>
-        </div>
+              {comments.length > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold leading-none ${
+                  showChatSidebar ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'
+                }`}>
+                  {comments.length}
+                </span>
+              )}
+            </button>
+
+            {galleryImages && galleryImages.length > 1 && (
+              <div className="flex items-center gap-1.5 border-l border-gray-200 pl-2 shrink-0">
+                {galleryImages.map((gImg, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onSelectImage?.(gImg)}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                      gImg === imageUrl ? 'border-blue-600 ring-2 ring-blue-500/30' : 'border-gray-200 opacity-60 hover:opacity-100'
+                    }`}
+                    title={`Switch Mockup #${idx + 1}`}
+                  >
+                    <img src={gImg} alt={`View ${idx + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+             
+            <button 
+              onClick={() => {
+                setIsFullscreen(false);
+                setIsEraserMode(false);
+              }}
+              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-900 transition-colors ml-auto cursor-pointer"
+              title="Exit Fullscreen"
+            >
+              <Minimize size={20} />
+            </button>
+         </div>
         )}
 
         {/* Canvas & Sidebar Split Container */}
@@ -738,13 +788,33 @@ export function GarmentAnnotator({
 
             {annotations
               .filter(ann => {
+                // Must match the currently displayed image!
+                if (ann.imageUrl && imageUrl && ann.imageUrl !== imageUrl && ann.imageUrl !== erasedResultImage) {
+                  return false;
+                }
+
                 if (isDrawingMode) return true;
-                if (isFullscreen && selectedMeasurement && (ann.label === selectedMeasurement || ann.label.toLowerCase() === selectedMeasurement.toLowerCase())) return true;
+
+                if (isFullscreen) {
+                  if (selectedMeasurement) {
+                    const sel = selectedMeasurement.trim().toLowerCase();
+                    const aLabel = (ann.label || '').trim().toLowerCase();
+                    const aMeasId = (ann.measurementId || '').trim().toLowerCase();
+                    const aPoint = (ann.pointName || '').trim().toLowerCase();
+                    return aLabel === sel || aMeasId === sel || aPoint === sel;
+                  }
+                  // Show all callouts for this image when in fullscreen edit modal
+                  return true;
+                }
+
                 if (hoveredMeasurementId) {
                   const target = hoveredMeasurementId.trim().toLowerCase();
-                  const label = (ann.label || '').trim().toLowerCase();
-                  return label === target;
+                  const aLabel = (ann.label || '').trim().toLowerCase();
+                  const aMeasId = (ann.measurementId || '').trim().toLowerCase();
+                  const aPoint = (ann.pointName || '').trim().toLowerCase();
+                  return aLabel === target || aMeasId === target || aPoint === target;
                 }
+
                 return false;
               })
               .map((ann, i) => (

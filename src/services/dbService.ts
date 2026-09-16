@@ -109,6 +109,8 @@ export const saveTechPack = async (
     name: name || 'Untitled',
     imageUrl: finalImageUrl || '',
     techPack: sanitizedTechPack || {},
+    model3dUrl: sanitizedTechPack?.model3dUrl || '',
+    annotations: sanitizedTechPack?.annotations || [],
     isLocked: !!sanitizedTechPack?.isLocked,
     activityLog: updatedLog,
     isTeamEditable

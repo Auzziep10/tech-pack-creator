@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
-import { collection, onSnapshot, query, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
 import { gradeSize, translateTechPack } from '../services/geminiService';
 
@@ -218,11 +218,14 @@ export function TechPackEditor() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<any>(() => {
-    const initialLocked = (location.state as any)?.isLocked ?? (location.state as any)?.techPack?.isLocked;
+    const initialPack = (location.state as any)?.techPack;
+    const initialLocked = (location.state as any)?.isLocked ?? initialPack?.isLocked;
     return { 
       properties: {}, 
       measurements: [], 
       callouts: [], 
+      annotations: initialPack?.annotations || (location.state as any)?.annotations || [],
+      model3dUrl: initialPack?.model3dUrl || (location.state as any)?.model3dUrl || '',
       bom: [],
       ...(initialLocked !== undefined ? { isLocked: Boolean(initialLocked) } : {})
     };
@@ -266,6 +269,7 @@ export function TechPackEditor() {
   const [draggedMeasurementIdx, setDraggedMeasurementIdx] = useState<number | null>(null);
   const [dragOverMeasurementIdx, setDragOverMeasurementIdx] = useState<number | null>(null);
   const [hoveredMeasurementId, setHoveredMeasurementId] = useState<string | null>(null);
+  const [hoveredPreviewImage, setHoveredPreviewImage] = useState<string | null>(null);
   const initialPackNameRef = useRef<string>('');
   const initialPropertyRef = useRef<Record<string, string>>({});
   const initialMeasurementRef = useRef<Record<string, string>>({});
@@ -1120,8 +1124,13 @@ export function TechPackEditor() {
       const isLockedState = !!(location.state.isLocked ?? pack?.isLocked);
       const loadedUnit = detectInitialUnit(pack);
 
+      const initialPackAnnotations = pack?.annotations || (location.state as any)?.annotations || [];
+      const initialPack3dUrl = pack?.model3dUrl || (location.state as any)?.model3dUrl || '';
+
       setData({
         ...pack,
+        annotations: initialPackAnnotations,
+        model3dUrl: initialPack3dUrl,
         isLocked: isLockedState,
         globalUnit: loadedUnit,
         unit: loadedUnit,
@@ -1178,9 +1187,15 @@ export function TechPackEditor() {
             return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
           };
 
+          const pack = packInfo.techPack || {};
+          const packAnnotations = pack?.annotations || (packInfo as any).annotations || [];
+          const pack3dUrl = pack?.model3dUrl || (packInfo as any).model3dUrl || '';
+
           if (isInputFocused() || isDirtyRef.current) {
             setData((prev: any) => ({
               ...prev,
+              ...(packAnnotations.length > 0 ? { annotations: packAnnotations } : {}),
+              ...(pack3dUrl ? { model3dUrl: pack3dUrl } : {}),
               ...(packInfo.activityLog ? { activityLog: packInfo.activityLog } : {}),
               ...(packInfo.isLocked !== undefined ? { isLocked: !!packInfo.isLocked } : {}),
               ...(packInfo.isTeamEditable !== undefined ? { isTeamEditable: packInfo.isTeamEditable } : {})
@@ -1189,7 +1204,6 @@ export function TechPackEditor() {
             return;
           }
 
-          const pack = packInfo.techPack || {};
           const isLockedFromDb = (packInfo as any).isLocked !== undefined 
             ? !!(packInfo as any).isLocked 
             : !!pack?.isLocked;
@@ -1229,6 +1243,8 @@ export function TechPackEditor() {
 
           setData((prev: any) => ({
             ...pack,
+            annotations: packAnnotations.length > 0 ? packAnnotations : (prev?.annotations || []),
+            model3dUrl: pack3dUrl || prev?.model3dUrl || '',
             isLocked: isLockedFromDb,
             globalUnit: loadedUnit,
             unit: loadedUnit,
@@ -1581,6 +1597,9 @@ export function TechPackEditor() {
              }
          }
       }
+
+      techPackDataToSave.annotations = displayData.annotations || data.annotations || [];
+      techPackDataToSave.model3dUrl = displayData.model3dUrl || data.model3dUrl || '';
 
       // Strip root properties that were temporarily injected for the editor UI logic to avoid Firebase undefined nesting errors
       delete techPackDataToSave.userId;
@@ -2031,6 +2050,7 @@ export function TechPackEditor() {
   const coverMainImage = (imageUrl && !isImgHidden(imageUrl))
     ? imageUrl
     : (unhiddenGalleryImages[0] || imageUrl);
+  const effectiveMockImage = hoveredPreviewImage || coverMainImage;
   const secondaryPrintImages = unhiddenGalleryImages
     .filter(img => img !== coverMainImage)
     .slice(0, 4);
@@ -2418,7 +2438,7 @@ export function TechPackEditor() {
                     {/* Interactive UI and Annotated Print */}
                     <div ref={annotatorRef} className="w-full h-full flex flex-col">
                       <GarmentAnnotator 
-                        imageUrl={coverMainImage} 
+                        imageUrl={effectiveMockImage} 
                         measurements={displayData.measurements}
                         isLocked={isTechPackLocked}
                         onVectorize={handleVectorize}
@@ -2430,6 +2450,19 @@ export function TechPackEditor() {
                         defaultGarmentType={displayData?.properties?.category || displayData?.properties?.garmentType}
                         techPackId={id}
                         hoveredMeasurementId={hoveredMeasurementId}
+                        annotations={displayData.annotations || []}
+                        onChangeAnnotations={(newAnnotations) => {
+                          setData((prev: any) => ({ ...prev, annotations: newAnnotations }));
+                          isDirtyRef.current = true;
+                          if (id && id !== 'draft') {
+                            updateDoc(doc(db, 'techPacks', id), {
+                              "annotations": newAnnotations,
+                              "techPack.annotations": newAnnotations
+                            }).catch(console.error);
+                          }
+                        }}
+                        galleryImages={unhiddenGalleryImages}
+                        onSelectImage={(img) => setImageUrl(img)}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
@@ -3116,9 +3149,29 @@ export function TechPackEditor() {
                             onMouseEnter={() => {
                               const hoverId = m.id || m.point || (i + 1).toString();
                               setHoveredMeasurementId(hoverId);
+
+                              const targetId = (m.id || '').trim().toLowerCase();
+                              const targetPoint = (m.point || '').trim().toLowerCase();
+                              const targetIdx = (i + 1).toString();
+
+                              const matchingAnn = (displayData.annotations || []).find((a: any) => {
+                                const aLabel = (a.label || '').trim().toLowerCase();
+                                const aMeasId = (a.measurementId || '').trim().toLowerCase();
+                                const aPoint = (a.pointName || '').trim().toLowerCase();
+                                return (
+                                  (targetId && (aLabel === targetId || aMeasId === targetId)) ||
+                                  (targetPoint && (aPoint === targetPoint || aLabel === targetPoint)) ||
+                                  (aLabel === targetIdx)
+                                );
+                              });
+
+                              if (matchingAnn && matchingAnn.imageUrl) {
+                                setHoveredPreviewImage(matchingAnn.imageUrl);
+                              }
                             }}
                             onMouseLeave={() => {
                               setHoveredMeasurementId(null);
+                              setHoveredPreviewImage(null);
                             }}
                             className={`group/row border-b border-gray-100 hover:bg-gray-50 transition-colors relative ${
                               isDragging ? 'opacity-30 bg-gray-100' : ''
@@ -3507,7 +3560,33 @@ export function TechPackEditor() {
           {/* 3D Viewport Full Screen Layer (Between Grid and Details) */}
           {displayData?.model3dUrl && (
             <div className="mt-8 mb-4 bg-white p-4 rounded-3xl border border-gray-200 shadow-sm print:hidden cursor-move w-full">
-              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest pl-2 mb-4">3D AR Mesh Viewer</h3>
+              <div className="flex items-center justify-between pl-2 pr-2 mb-4">
+                <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">3D AR Mesh Viewer</h3>
+                {!isTechPackLocked && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (!confirm("Are you sure you want to remove the 3D model from this tech pack?")) return;
+                      setData((prev: any) => {
+                        const copy = { ...prev };
+                        delete copy.model3dUrl;
+                        return copy;
+                      });
+                      isDirtyRef.current = true;
+                      if (id && id !== 'draft') {
+                        updateDoc(doc(db, 'techPacks', id), {
+                          "model3dUrl": deleteField(),
+                          "techPack.model3dUrl": deleteField()
+                        }).catch(console.error);
+                      }
+                      pushLog('Removed 3D Model', 'image');
+                    }}
+                    className="text-xs text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 transition cursor-pointer"
+                  >
+                    Remove 3D Model
+                  </button>
+                )}
+              </div>
               <div className="w-full">
                  <Garment3DViewer 
                     url={displayData.model3dUrl} 
@@ -3981,13 +4060,21 @@ export function TechPackEditor() {
                 <Button onClick={async () => {
                   try {
                     setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
+                    isDirtyRef.current = true;
+                    if (id && id !== 'draft') {
+                      await updateDoc(doc(db, 'techPacks', id), {
+                        "model3dUrl": scan.url,
+                        "techPack.model3dUrl": scan.url
+                      });
+                    }
                     await updateDoc(doc(db, `users/${user?.uid}/pendingScans`, scan.id), { status: 'claimed' });
                     setShowScansInbox(false);
                     pushLog(`Linked Mobile 3D Scan (${scan.mode})`, 'image');
-                  } catch (e) {
-                    alert("Failed to claim scan.");
+                  } catch (e: any) {
+                    console.error("Failed to claim scan:", e);
+                    alert("Failed to claim scan: " + (e?.message || String(e)));
                   }
-                }} size="sm" className="bg-blue-600">
+                }} size="sm" className="bg-blue-600 cursor-pointer">
                   Attach
                 </Button>
               </div>
