@@ -1742,7 +1742,7 @@ export function TechPackEditor() {
       sizes: {}
     });
     setData(newData);
-    pushLog('Added new measurement point');
+    pushLog('Added new measurement point', 'measurement');
   };
 
   const removeMeasurement = (index: number) => {
@@ -1756,7 +1756,7 @@ export function TechPackEditor() {
         ...prev,
         measurements: currentMeasurements
       }));
-      pushLog(`Removed measurement: ${removedName}`);
+      pushLog(`Removed measurement: ${removedName}`, 'measurement');
     }
   };
 
@@ -1780,7 +1780,7 @@ export function TechPackEditor() {
       ...prev,
       measurements: currentMeasurements
     }));
-    pushLog(`Reordered measurement: ${moved.point || moved.id || 'measurement'}`);
+    pushLog(`Reordered measurement: ${moved.point || moved.id || 'measurement'}`, 'measurement');
   };
 
   const ensureDetailModules = () => {
