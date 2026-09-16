@@ -115,6 +115,7 @@ interface GarmentAnnotatorProps {
   onSaveErasedImage?: (imgUrl: string) => Promise<void>;
   defaultGarmentType?: string;
   techPackId?: string;
+  hoveredMeasurementId?: string | null;
 }
 
 export function GarmentAnnotator({ 
@@ -128,7 +129,8 @@ export function GarmentAnnotator({
   onSaveMannequinImage,
   onSaveErasedImage,
   defaultGarmentType,
-  techPackId
+  techPackId,
+  hoveredMeasurementId
 }: GarmentAnnotatorProps) {
   const { user, profile } = useAuth();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -704,10 +706,10 @@ export function GarmentAnnotator({
             className={`select-none bg-white rounded-2xl border relative overflow-hidden group flex-1 min-h-0 ${
               isDrawingMode || isDroppingPin ? 'border-blue-500 ring-4 ring-blue-500/20' : 'border-gray-200'
             } ${
-              isFullscreen ? 'shadow-2xl' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
+              isFullscreen ? 'shadow-2xl flex items-center justify-center' : 'aspect-[4/5] print:aspect-auto print:flex-1 print:min-h-0 print:w-full'
             }`}
           >
-            <div className="absolute inset-0 flex items-center justify-center p-2 pointer-events-none">
+            <div className={`absolute inset-0 flex items-center justify-center p-2 pointer-events-none ${isFullscreen ? 'w-full h-full' : ''}`}>
               <div 
                 ref={containerRef}
                 onPointerDown={handlePointerDown}
@@ -715,16 +717,16 @@ export function GarmentAnnotator({
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerUp}
                 style={{ touchAction: 'none' }}
-                className={`relative flex items-center justify-center w-full h-full pointer-events-auto ${isDrawingMode || isDroppingPin ? 'cursor-crosshair' : ''}`}
-            >
-              <img 
-                src={erasedResultImage || imageUrl} 
-                alt="Garment Artboard" 
-                draggable={false}
-                className={`w-full h-full object-contain pointer-events-none transition-all duration-700 ${
-                  isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
-                }`}
-              />
+                className={`relative flex items-center justify-center pointer-events-auto ${isFullscreen ? 'aspect-[4/5] max-h-full max-w-full h-full' : 'w-full h-full'} ${isDrawingMode || isDroppingPin ? 'cursor-crosshair' : ''}`}
+              >
+                <img 
+                  src={erasedResultImage || imageUrl} 
+                  alt="Garment Artboard" 
+                  draggable={false}
+                  className={`w-full h-full object-contain pointer-events-none transition-all duration-700 ${
+                    isBlueprintMode ? 'grayscale contrast-125 brightness-110 sepia-[.1] hue-rotate-180 drop-shadow-[0_0_15px_rgba(0,100,255,0.1)]' : 'mix-blend-multiply'
+                  }`}
+                />
           
           {/* SVG Drawing Layer */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -734,33 +736,44 @@ export function GarmentAnnotator({
               </marker>
             </defs>
 
-            {annotations.map((ann, i) => (
-              <g key={ann.id}>
-                <line 
-                  x1={`${ann.start.x}%`} 
-                  y1={`${ann.start.y}%`} 
-                  x2={`${ann.end.x}%`} 
-                  y2={`${ann.end.y}%`} 
-                  stroke={isBlueprintMode ? "#3b82f6" : "#ef4444"} 
-                  strokeWidth="2.5" 
-                  markerStart="url(#arrow)"
-                  markerEnd="url(#arrow)"
-                  strokeDasharray="4 4"
-                />
-                <foreignObject x={`${(ann.start.x + ann.end.x)/2}%`} y={`${(ann.start.y + ann.end.y)/2}%`} width="1" height="1" className="overflow-visible pointer-events-auto">
-                  <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 group/badge cursor-pointer">
-                    <div className={`px-2 py-0.5 rounded shadow-sm text-[10px] font-bold tracking-wider whitespace-nowrap ${
-                      isBlueprintMode ? 'bg-blue-600 text-white' : 'bg-red-500 text-white'
-                    }`}>
-                      {ann.label}
+            {annotations
+              .filter(ann => {
+                if (isDrawingMode) return true;
+                if (isFullscreen && selectedMeasurement && (ann.label === selectedMeasurement || ann.label.toLowerCase() === selectedMeasurement.toLowerCase())) return true;
+                if (hoveredMeasurementId) {
+                  const target = hoveredMeasurementId.trim().toLowerCase();
+                  const label = (ann.label || '').trim().toLowerCase();
+                  return label === target;
+                }
+                return false;
+              })
+              .map((ann, i) => (
+                <g key={ann.id}>
+                  <line 
+                    x1={`${ann.start.x}%`} 
+                    y1={`${ann.start.y}%`} 
+                    x2={`${ann.end.x}%`} 
+                    y2={`${ann.end.y}%`} 
+                    stroke={isBlueprintMode ? "#3b82f6" : "#ef4444"} 
+                    strokeWidth="2.5" 
+                    markerStart="url(#arrow)"
+                    markerEnd="url(#arrow)"
+                    strokeDasharray="4 4"
+                  />
+                  <foreignObject x={`${(ann.start.x + ann.end.x)/2}%`} y={`${(ann.start.y + ann.end.y)/2}%`} width="1" height="1" className="overflow-visible pointer-events-auto">
+                    <div className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 group/badge cursor-pointer">
+                      <div className={`px-2 py-0.5 rounded shadow-sm text-[10px] font-bold tracking-wider whitespace-nowrap ${
+                        isBlueprintMode ? 'bg-blue-600 text-white' : 'bg-red-500 text-white'
+                      }`}>
+                        {ann.label}
+                      </div>
+                      <button onClick={(e) => removeAnnotation(ann.id, e)} className="opacity-0 group-hover/badge:opacity-100 bg-black/80 text-white p-1 rounded-full transition-opacity hover:bg-black">
+                        <Trash2 size={10} />
+                      </button>
                     </div>
-                    <button onClick={(e) => removeAnnotation(ann.id, e)} className="opacity-0 group-hover/badge:opacity-100 bg-black/80 text-white p-1 rounded-full transition-opacity hover:bg-black">
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                </foreignObject>
-              </g>
-            ))}
+                  </foreignObject>
+                </g>
+              ))}
 
             {currentStart && currentMouse && (
               <line 

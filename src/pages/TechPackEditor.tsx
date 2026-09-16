@@ -265,6 +265,7 @@ export function TechPackEditor() {
   const isUploadingPhotosRef = useRef(false);
   const [draggedMeasurementIdx, setDraggedMeasurementIdx] = useState<number | null>(null);
   const [dragOverMeasurementIdx, setDragOverMeasurementIdx] = useState<number | null>(null);
+  const [hoveredMeasurementId, setHoveredMeasurementId] = useState<string | null>(null);
   const initialPackNameRef = useRef<string>('');
   const initialPropertyRef = useRef<Record<string, string>>({});
   const initialMeasurementRef = useRef<Record<string, string>>({});
@@ -2428,6 +2429,7 @@ export function TechPackEditor() {
                         onSaveErasedImage={handleSaveErasedImage}
                         defaultGarmentType={displayData?.properties?.category || displayData?.properties?.garmentType}
                         techPackId={id}
+                        hoveredMeasurementId={hoveredMeasurementId}
                       />
                       <div className="hidden print:block text-center text-[10px] uppercase font-bold text-gray-500 mt-2 shrink-0">Garment Detail</div>
                     </div>
@@ -3110,6 +3112,13 @@ export function TechPackEditor() {
                             onDragEnd={() => {
                               setDragOverMeasurementIdx(null);
                               setDraggedMeasurementIdx(null);
+                            }}
+                            onMouseEnter={() => {
+                              const hoverId = m.id || m.point || (i + 1).toString();
+                              setHoveredMeasurementId(hoverId);
+                            }}
+                            onMouseLeave={() => {
+                              setHoveredMeasurementId(null);
                             }}
                             className={`group/row border-b border-gray-100 hover:bg-gray-50 transition-colors relative ${
                               isDragging ? 'opacity-30 bg-gray-100' : ''
