@@ -62,21 +62,50 @@ The JSON should have the exact following structure matching our official Tech Pa
   },
   "bom": [
     { "category": "Fabric", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
-    { "category": "Wash", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
+    { "category": "Fabric Finish", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
+    { "category": "Fabric Dye", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
     { "category": "Trims", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" },
     { "category": "Labels", "component": "string", "positioning": "string", "comment": "string", "supplier": "string" }
   ],
   "measurements": [
     { "id": "string (e.g. BW003)", "point": "string", "description": "string (very clear, layperson-friendly instruction on exactly how and where to measure, e.g. 'Measure flat straight across the chest, 1 inch below the armhole seam from edge to edge.')", "value": "string", "tolMinus": "string", "tolPlus": "string" }
   ],
-  "callouts": "string (A detailed, systematic outline formatting the garment's construction from beginning to end. e.g., '1. Cutting & Prep\\n - Detail...\\n2. Body Assembly\\n - Detail...'. Ensure \\n are used for breaks. Must be a single large string.)"
+  "callouts": "string (A concise, high-level overview of quick notes summarizing what is seen about the garment. E.g. key visual characteristics, silhouette & fit, collar/neckline style, fabric finish/drape, and notable styling highlights. Format as clean bullet points separated by \\n. Keep it quick, clear, and overview-level rather than step-by-step factory sewing instructions. Must be a single string.)"
 }
 
 Carefully identify the specific style, silhouette, and features of the product in the image to populate the \`properties\` accurately.
 For \`bom\`, accurately guess the materials, washes, hardware, trims, and labels required to construct this specific product.
 For \`measurements\`, use the provided geometric anchors to mathematically triangulate and scale the exact proportions. VERY IMPORTANT: ALL measurements outputted MUST be strictly in Centimeters (cm). If the provided anchors are explicitly non-metric (e.g in inches), you MUST mathematically convert them to cm first before rendering the JSON.
-Provide a comprehensive list of all standard apparel points of measure (POM) for this specific garment type. For a hoodie or sweatshirt, you MUST include: Chest Width, Body Length, Shoulder Width, Sleeve Length, Bottom Hem Opening, Hood Height, Hood Width, Neck Opening/Width, Front Neck Drop, Back Neck Drop, Armhole Height (Straight/Curve), Cuff Height, Bottom Hem Height, and Kangaroo Pocket Dimensions. A professional, production-ready tech pack MUST contain a rich list of 12 to 18 detailed measurements (cm only) using standard technical IDs (like BW001, LEN246, SLV426, HGT121, WID001, etc.). For the \`description\` field of every measurement, write a very clear, step-by-step instruction on exactly how to take that measurement on the physical garment. DO NOT use technical industry jargon (like "sweep", "POM", etc.) that is confusing to non-designers.
-For \`callouts\`, write a comprehensive, systematic outline detailing how the product is constructed from beginning to end (e.g., proper sequence from Cutting => Assembly => Finishing). Use rigorous bullet points and line breaks.`;
+
+MANDATORY STANDARD POINTS OF MEASURE (POM):
+The tech pack MUST ALWAYS start with the following 17 standard measurements in this exact order:
+1. "Front Body Length (HPS)" (id: "FL001")
+2. "Back Body Length (HPS)" (id: "BL001")
+3. "Chest Width" (id: "CW001")
+4. "Waist" (id: "WS001")
+5. "Bottom / Hem Opening" (id: "HM001")
+6. "Bottom Hem / Cuff Height" (id: "HH001")
+7. "Shoulder Seam Length" (id: "SS001")
+8. "Shoulder Width" (id: "SW001")
+9. "Armhole Height (Straight)" (id: "AH001")
+10. "Sleeve Length" (id: "SL001")
+11. "Bicep Width" (id: "BW001")
+12. "Sleeve / Cuff Opening" (id: "CO001")
+13. "Cuff Height" (id: "CH001")
+14. "Neck Width / Opening" (id: "NW001")
+15. "Collar Width" (id: "CW002")
+16. "Front Neck Drop" (id: "FD001")
+17. "Back Neck Drop" (id: "BD001")
+
+ADDITIONAL GARMENT-SPECIFIC MEASUREMENTS:
+After these 17 standard measurements above, identify and append any garment-specific measurements recognized on the product. For example:
+- If the garment has a hood (hoodie, hooded jacket): append "Hood Height" (HD001), "Hood Width" (HD002), and hood drawstring/opening measurements.
+- If the garment has a kangaroo or front pocket: append "Pocket Height" (PK001), "Pocket Width" (PK002), and "Pocket Opening" (PK003).
+- If the garment has a zipper, placket, or button closure: append "Placket Length" / "Zipper Length".
+- If the garment has slits or vents: append "Side Slit Height".
+
+For the \`description\` field of every measurement, write a very clear, step-by-step instruction on exactly how to take that measurement on the physical garment. DO NOT use technical industry jargon (like "sweep", "POM", etc.) that is confusing to non-designers.
+For \`callouts\`, provide a concise set of quick notes summarizing the visual design and garment overview as observed from the image (e.g. silhouette, overall fit, collar/neckline construction, sleeve style, fabric appearance, and key styling accents). Do NOT write an overly detailed factory sewing or assembly manual; keep it to straightforward, high-level overview bullet points.`;
 
     const parts: any[] = [prompt, frontPart];
     if (backPart) {

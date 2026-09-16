@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
@@ -255,10 +255,12 @@ export function TechPackEditor() {
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
   const [galleryScanSessionId, setGalleryScanSessionId] = useState<string | null>(null);
+  const [activeBOMPhotoIndex, setActiveBOMPhotoIndex] = useState<number | null>(null);
   const annotatorRef = useRef<HTMLDivElement>(null);
   const isFirstLoad = useRef(true);
   const lastSavedJsonRef = useRef<string>('');
   const isSavingRef = useRef(false);
+  const isDirtyRef = useRef(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const isUploadingPhotosRef = useRef(false);
   const [draggedMeasurementIdx, setDraggedMeasurementIdx] = useState<number | null>(null);
@@ -365,6 +367,10 @@ export function TechPackEditor() {
     }
     if (isTechPackLocked) {
       alert("🔒 This Tech Pack is locked. Click the Lock button in the top bar to unlock and make edits.");
+      return true;
+    }
+    if (!canEdit) {
+      alert("🔒 Team editing for this Tech Pack is currently locked. An administrator or the creator can unlock it using the lock icon in the top bar.");
       return true;
     }
     return false;
@@ -546,12 +552,13 @@ export function TechPackEditor() {
     });
   };
 
-  const isCreator = !displayData?.userId || user?.uid === displayData?.userId;
+  const isAdmin = profile?.role === 'admin';
+  const isCreator = !displayData?.userId || user?.uid === displayData?.userId || isAdmin;
   const isTechPackLocked = Boolean(data?.isLocked || (data as any)?.techPack?.isLocked);
-  const canEdit = (isCreator || (displayData?.isTeamEditable !== false)) && !isTechPackLocked && !isTranslated;
+  const canEdit = (isCreator || (displayData?.isTeamEditable !== false) || isAdmin) && !isTechPackLocked && !isTranslated;
 
   const toggleTeamEditable = () => {
-    if (!isCreator) return;
+    if (!isCreator && !isAdmin) return;
     const isLocking = displayData?.isTeamEditable ?? true;
     pushLog(isLocking ? 'Locked Team Editing' : 'Unlocked Team Editing', 'security');
     setData((prev: any) => ({ ...prev, isTeamEditable: !isLocking }));
@@ -1161,7 +1168,7 @@ export function TechPackEditor() {
             return;
           }
 
-          // 3. Ignore if user is actively typing in an input
+          // 3. Ignore if user is actively typing in an input OR has local unsaved modifications
           const isInputFocused = () => {
             if (typeof document === 'undefined') return false;
             const activeEl = document.activeElement;
@@ -1170,13 +1177,14 @@ export function TechPackEditor() {
             return tag === 'INPUT' || tag === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable;
           };
 
-          if (isInputFocused()) {
-            if (packInfo.activityLog) {
-              setData((prev: any) => ({
-                ...prev,
-                activityLog: packInfo.activityLog
-              }));
-            }
+          if (isInputFocused() || isDirtyRef.current) {
+            setData((prev: any) => ({
+              ...prev,
+              ...(packInfo.activityLog ? { activityLog: packInfo.activityLog } : {}),
+              ...(packInfo.isLocked !== undefined ? { isLocked: !!packInfo.isLocked } : {}),
+              ...(packInfo.isTeamEditable !== undefined ? { isTeamEditable: packInfo.isTeamEditable } : {})
+            }));
+            setIsLoading(false);
             return;
           }
 
@@ -1356,6 +1364,7 @@ export function TechPackEditor() {
           displayData.activityLog || [],
           displayData.isTeamEditable ?? true
         );
+        isDirtyRef.current = false;
       } catch (err) {
         console.error("Debounced auto-save error:", err);
       } finally {
@@ -1550,6 +1559,15 @@ export function TechPackEditor() {
       } else if (techPackDataToSave.detailImage?.startsWith('data:')) {
         techPackDataToSave.detailImage = await uploadBase64Image(techPackDataToSave.detailImage, user.uid);
       }
+
+      if (techPackDataToSave.bom?.length) {
+        for (let i = 0; i < techPackDataToSave.bom.length; i++) {
+          if (techPackDataToSave.bom[i].image && techPackDataToSave.bom[i].image.startsWith('data:')) {
+            techPackDataToSave.bom[i].image = await uploadBase64Image(techPackDataToSave.bom[i].image, user.uid);
+          }
+        }
+      }
+
       if (!techPackDataToSave.images) techPackDataToSave.images = {};
       techPackDataToSave.images.original = imageUrl;
       techPackDataToSave.images.annotated = finalAnnotatedUrl;
@@ -1588,6 +1606,7 @@ export function TechPackEditor() {
         finalActivityLog,
         displayData.isTeamEditable ?? true
       );
+      isDirtyRef.current = false;
       
       lastSavedJsonRef.current = getNormalizedStateHash(
         sanitizedTechPackData,
@@ -1702,6 +1721,7 @@ export function TechPackEditor() {
 
   const updateMeasurement = (index: number, field: string, value: string) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (field === 'value') {
        const baseSize = newData.properties?.baseSize || 'M';
@@ -1721,6 +1741,7 @@ export function TechPackEditor() {
 
   const addMeasurement = () => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.measurements) newData.measurements = [];
 
@@ -1748,6 +1769,7 @@ export function TechPackEditor() {
 
   const removeMeasurement = (index: number) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const currentMeasurements = [...(displayData.measurements || data.measurements || [])];
     if (!currentMeasurements[index]) return;
     const removedName = currentMeasurements[index]?.point || currentMeasurements[index]?.id || 'measurement';
@@ -1763,6 +1785,7 @@ export function TechPackEditor() {
 
   const moveMeasurement = (fromIndex: number, toIndex: number) => {
     if (checkReadonly() || isTechPackLocked) return;
+    isDirtyRef.current = true;
     const currentMeasurements = [...(displayData.measurements || data.measurements || [])];
     if (
       fromIndex < 0 || 
@@ -1805,6 +1828,7 @@ export function TechPackEditor() {
 
   const updateDetailModuleStr = (modIndex: number, field: string, value: string) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex][field] = value;
@@ -1813,6 +1837,7 @@ export function TechPackEditor() {
 
   const updateDetailModuleVal = (modIndex: number, field: string, value: any) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex][field] = value;
@@ -1821,6 +1846,7 @@ export function TechPackEditor() {
 
   const updateDetailDesc = (modIndex: number, index: number, description: string) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details[index].description = description;
@@ -1829,6 +1855,7 @@ export function TechPackEditor() {
 
   const updateDetailObj = (modIndex: number, index: number, detailObj: DetailItem) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details[index] = detailObj;
@@ -1837,6 +1864,7 @@ export function TechPackEditor() {
 
   const addDetailToMod = (modIndex: number) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     const details = newData.detailModules[modIndex].details || [];
@@ -1849,6 +1877,7 @@ export function TechPackEditor() {
 
   const removeDetail = (modIndex: number, index: number) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules[modIndex].details.splice(index, 1);
@@ -1860,6 +1889,7 @@ export function TechPackEditor() {
 
   const addDetailModule = () => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     if (!newData.detailModules) newData.detailModules = ensureDetailModules();
     newData.detailModules.push({ title: 'Detail Closeups', subtitle: 'Button & Hardware Details', detailImage: '', details: [] });
@@ -1875,6 +1905,7 @@ export function TechPackEditor() {
 
   const updateBOM = (index: number, field: string, value: string) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const currentBOM = [...getBOMList(data)];
     if (!currentBOM[index]) {
       currentBOM[index] = { category: 'FABRIC', component: '', positioning: '', comment: '', supplier: '' };
@@ -1890,6 +1921,7 @@ export function TechPackEditor() {
 
   const addBOMItem = (category: string = 'FABRIC') => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const currentBOM = [...getBOMList(data)];
     currentBOM.push({
       category: category || 'FABRIC',
@@ -1907,6 +1939,7 @@ export function TechPackEditor() {
 
   const removeBOMItem = (index: number) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const currentBOM = [...getBOMList(data)];
     if (!currentBOM[index]) return;
     const removedName = currentBOM[index]?.component || currentBOM[index]?.material || currentBOM[index]?.category || 'item';
@@ -1922,6 +1955,7 @@ export function TechPackEditor() {
 
   const moveBOMItem = (fromIndex: number, toIndex: number) => {
     if (checkReadonly() || isTechPackLocked) return;
+    isDirtyRef.current = true;
     const currentBOM = [...getBOMList(data)];
     if (
       fromIndex < 0 || 
@@ -1944,6 +1978,7 @@ export function TechPackEditor() {
 
   const updateConstruction = (val: string) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     const newData = { ...data };
     newData.callouts = val;
     setData(newData);
@@ -1951,6 +1986,7 @@ export function TechPackEditor() {
 
   const updateProperty = (field: string, value: any) => {
     if (checkReadonly()) return;
+    isDirtyRef.current = true;
     setData((prev: any) => {
       if (!prev) return prev;
       return {
@@ -2128,12 +2164,12 @@ export function TechPackEditor() {
               </Button>
             )}
 
-            {isCreator && (
+            {(isCreator || isAdmin) && (
               <Button 
                  onClick={toggleTeamEditable} 
                  variant="secondary" 
                  className={`w-9 h-9 p-0 flex items-center justify-center shrink-0 rounded-xl ${displayData?.isTeamEditable === false ? 'text-red-600 bg-red-50 border-red-200' : 'text-gray-600'}`}
-                 title={displayData?.isTeamEditable === false ? "Team editing locked" : "Team editing unlocked"}
+                 title={displayData?.isTeamEditable === false ? "Team editing locked (Click to unlock)" : "Team editing unlocked (Click to lock)"}
               >
                  {displayData?.isTeamEditable === false ? <Lock size={15} /> : <Unlock size={15} />}
               </Button>
@@ -2794,6 +2830,88 @@ export function TechPackEditor() {
                      </div>
                     );
                   })()}
+
+                  {/* Extracted Color Swatches Row */}
+                  {(() => {
+                    const colorways: any[] = displayData?.properties?.dominantColorways || [];
+                    if (!colorways || colorways.length === 0) return null;
+
+                    // Convert CIE L*a*b* to Hex RGB fallback
+                    const labToHex = (lab?: number[]) => {
+                      if (!lab || lab.length < 3) return '#888888';
+                      const [L, a, b] = lab;
+                      const y = (L + 16) / 116;
+                      const x = a / 500 + y;
+                      const z = y - b / 200;
+
+                      const fn = (t: number) => t > 0.206897 ? Math.pow(t, 3) : (t - 16 / 116) / 7.787;
+                      const X = 95.047 * fn(x);
+                      const Y = 100.000 * fn(y);
+                      const Z = 108.883 * fn(z);
+
+                      let r = X * 0.032406 + Y * -0.015372 + Z * -0.004986;
+                      let g = X * -0.009689 + Y * 0.018758 + Z * 0.000415;
+                      let bl = X * 0.000557 + Y * -0.002040 + Z * 0.010570;
+
+                      const gamma = (c: number) => {
+                        const clamped = Math.max(0, Math.min(1, c / 100));
+                        return clamped > 0.0031308 ? 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055 : 12.92 * clamped;
+                      };
+
+                      const R = Math.round(gamma(r) * 255);
+                      const G = Math.round(gamma(g) * 255);
+                      const B = Math.round(gamma(bl) * 255);
+
+                      return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1).toUpperCase()}`;
+                    };
+
+                    return (
+                      <div className="mt-3 pt-2.5 border-t border-gray-100 print:mt-2">
+                        <div className="flex items-center justify-between mb-1.5 px-0.5">
+                          <span className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
+                            Color Swatches ({colorways.length})
+                          </span>
+                          {!isTechPackLocked && !isTranslated && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExtractedColorways(displayData?.properties?.dominantColorways || []);
+                                setRecolorBaseImage(imageUrl);
+                                setColorwayTab('generate');
+                                setShowColorwayModal(true);
+                              }}
+                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline transition-all print:hidden"
+                            >
+                              <span>Manage Colors</span>
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-hide py-0.5">
+                          {colorways.map((cw: any, idx: number) => {
+                            const swatchColor = cw.hex || labToHex(cw.lab);
+                            return (
+                              <div
+                                key={cw.id || cw.name || idx}
+                                className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-xl shrink-0 shadow-xs hover:border-gray-300 transition-all cursor-default group"
+                                title={cw.name ? `${cw.name} (${swatchColor})` : swatchColor}
+                              >
+                                <span
+                                  className="w-4 h-4 rounded-full border border-black/15 shadow-xs shrink-0 group-hover:scale-110 transition-transform"
+                                  style={{ backgroundColor: swatchColor }}
+                                />
+                                <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
+                                  {cw.name || 'Unnamed Color'}
+                                </span>
+                                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider">
+                                  {swatchColor}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-8 aspect-[4/5] w-full">
@@ -2840,11 +2958,12 @@ export function TechPackEditor() {
 
                   <div className="print-force-new-page">
                     <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 print-header-avoid">
-                      <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Construction Details</h3>
+                      <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">Notes</h3>
                     </div>
                     <div className="text-xs print:text-[10px] text-gray-700 w-full block">
                       <RichTextCallouts 
                         className="w-full bg-transparent outline-none leading-relaxed min-h-[150px] print:columns-2 print:gap-14"
+                        placeholder="Add quick notes or garment overview here..."
                         readOnly={!canEdit}
                         value={
                           typeof displayData.callouts === 'string' 
@@ -2856,7 +2975,7 @@ export function TechPackEditor() {
                         onChange={(val: string) => updateConstruction(val)}
                         onBlur={(val: string) => {
                           if (initialConstructionRef.current !== val) {
-                            pushLog('Updated Construction Details', 'general');
+                            pushLog('Updated Notes', 'general');
                             initialConstructionRef.current = val;
                           }
                         }}
@@ -3161,6 +3280,7 @@ export function TechPackEditor() {
                         <th className="px-2 py-1 font-medium">Positioning</th>
                         <th className="px-2 py-1 font-medium">Comment</th>
                         <th className="px-2 py-1 font-medium">Supplier</th>
+                        <th className="px-1.5 py-1 font-medium w-14 text-center">Photo</th>
                         {!isTechPackLocked && (
                           <th className="px-1 py-1 font-medium w-20 text-center print:hidden">Actions</th>
                         )}
@@ -3175,7 +3295,7 @@ export function TechPackEditor() {
                                disabled={isTechPackLocked}
                                className="w-full bg-transparent outline-none font-semibold text-gray-900 uppercase text-xs print:text-[10px] tracking-wider leading-tight placeholder:normal-case placeholder:font-normal placeholder:text-gray-400" 
                                value={f.category || ''} 
-                               placeholder="e.g. FABRIC"
+                               placeholder="e.g. FABRIC" 
                                onFocus={(e) => { initialBOMRef.current[`${i}_cat`] = e.target.value; }}
                                onBlur={(e) => {
                                  if (initialBOMRef.current[`${i}_cat`] !== undefined && initialBOMRef.current[`${i}_cat`] !== e.target.value) {
@@ -3241,6 +3361,29 @@ export function TechPackEditor() {
                                onChange={e => updateBOM(i, 'supplier', e.target.value)} 
                              />
                           </td>
+                          <td className="px-1.5 py-2 align-middle text-center w-14">
+                            {f.image ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveBOMPhotoIndex(i)}
+                                className="inline-flex items-center justify-center p-1 rounded-lg border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-all shadow-2xs group/btn cursor-pointer"
+                                title="View/Change Item Photo"
+                              >
+                                <LucideImage size={14} className="group-hover/btn:scale-110 transition-transform" />
+                              </button>
+                            ) : !isTechPackLocked ? (
+                              <button
+                                type="button"
+                                onClick={() => setActiveBOMPhotoIndex(i)}
+                                className="inline-flex items-center justify-center p-1 rounded-lg border border-dashed border-gray-200 hover:border-gray-400 bg-transparent hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-all cursor-pointer opacity-50 group-hover/bom-row:opacity-100"
+                                title="Add Photo to Item"
+                              >
+                                <Camera size={13} />
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-gray-300 font-mono">-</span>
+                            )}
+                          </td>
                           {!isTechPackLocked && (
                             <td className="px-1 py-2 align-middle text-center print:hidden w-20">
                               <div className="flex items-center justify-center gap-0.5 opacity-60 group-hover/bom-row:opacity-100 transition-opacity">
@@ -3280,7 +3423,7 @@ export function TechPackEditor() {
                       ))}
                       {getBOMList(displayData).length === 0 && (
                         <tr>
-                          <td colSpan={!isTechPackLocked ? 6 : 5} className="py-8 text-center text-gray-400 italic text-xs">
+                          <td colSpan={!isTechPackLocked ? 7 : 6} className="py-8 text-center text-gray-400 italic text-xs">
                             No BOM items added yet. Click &quot;+ Add Item&quot; to begin.
                           </td>
                         </tr>
@@ -3292,8 +3435,8 @@ export function TechPackEditor() {
                     <option value="TRIMS" />
                     <option value="LABELS" />
                     <option value="HARDWARE" />
-                    <option value="WASH" />
-                    <option value="PACKAGING" />
+                    <option value="FABRIC FINISH" />
+                    <option value="FABRIC DYE" />
                     <option value="THREAD" />
                     <option value="EMBROIDERY / PRINT" />
                     <option value="LINING" />
@@ -3310,7 +3453,7 @@ export function TechPackEditor() {
                           <span>Add Item</span>
                         </button>
                         <span className="text-[11px] text-gray-400 ml-1">Quick add:</span>
-                        {['FABRIC', 'TRIMS', 'LABELS', 'HARDWARE', 'WASH', 'PACKAGING'].map(cat => (
+                        {['FABRIC', 'TRIMS', 'LABELS', 'HARDWARE', 'FABRIC FINISH', 'FABRIC DYE'].map(cat => (
                           <button
                             key={cat}
                             type="button"
@@ -4220,6 +4363,106 @@ export function TechPackEditor() {
             </div>
           </div>
         </Modal>
+
+        {/* BOM Item Photo Pop-up Modal */}
+        {activeBOMPhotoIndex !== null && (() => {
+          const bomList = getBOMList(displayData);
+          const activeItem = bomList[activeBOMPhotoIndex];
+          if (!activeItem) return null;
+          const itemName = activeItem.component || activeItem.material || activeItem.category || 'BOM Item';
+
+          return (
+            <Modal
+              isOpen={true}
+              onClose={() => setActiveBOMPhotoIndex(null)}
+              title={`${itemName} - Material & Trim Photo`}
+              maxWidth="max-w-xl"
+            >
+              <div className="p-6 flex flex-col items-center">
+                {activeItem.image ? (
+                  <div className="w-full flex flex-col items-center gap-4">
+                    <div className="w-full max-h-[420px] rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 flex items-center justify-center p-3 shadow-inner">
+                      <img
+                        src={activeItem.image}
+                        alt={itemName}
+                        className="max-w-full max-h-[380px] object-contain rounded-xl shadow-xs"
+                      />
+                    </div>
+                    {!isTechPackLocked && (
+                      <div className="flex items-center gap-3 w-full">
+                        <label className="flex-1 py-2.5 px-4 bg-white border border-gray-200 hover:border-gray-400 text-gray-800 text-xs font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs hover:bg-gray-50">
+                          <Upload size={14} />
+                          <span>Replace Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                try {
+                                  const base64 = await compressImageFile(e.target.files[0], 1600);
+                                  updateBOM(activeBOMPhotoIndex, 'image', base64);
+                                  pushLog(`Updated photo for BOM item "${itemName}"`, 'bom');
+                                } catch (err) {
+                                  console.error("Error updating BOM item photo:", err);
+                                  alert("Could not process the selected image.");
+                                }
+                              }
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to remove the photo for "${itemName}"?`)) {
+                              updateBOM(activeBOMPhotoIndex, 'image', '');
+                              pushLog(`Removed photo for BOM item "${itemName}"`, 'bom');
+                            }
+                          }}
+                          className="py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                        >
+                          <Trash2 size={14} />
+                          <span>Remove Photo</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full flex flex-col items-center text-center py-6">
+                    <label className="w-full max-w-md h-56 rounded-2xl border-2 border-dashed border-gray-300 hover:border-black flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-all p-6 group bg-gray-50/40">
+                      <div className="w-14 h-14 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-black group-hover:scale-105 transition-all mb-3">
+                        <Camera size={26} />
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 group-hover:text-black">
+                        Upload Photo for {itemName}
+                      </span>
+                      <span className="text-xs text-gray-500 mt-1 max-w-xs">
+                        Add a swatch close-up, fabric texture, trim spec, or packaging reference image
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            try {
+                              const base64 = await compressImageFile(e.target.files[0], 1600);
+                              updateBOM(activeBOMPhotoIndex, 'image', base64);
+                              pushLog(`Added photo for BOM item "${itemName}"`, 'bom');
+                            } catch (err) {
+                              console.error("Error uploading BOM photo:", err);
+                              alert("Could not process the selected image.");
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </Modal>
+          );
+        })()}
      </div>
   );
 }
