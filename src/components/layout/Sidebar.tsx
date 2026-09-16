@@ -108,11 +108,11 @@ export function Sidebar({
         </button>
 
       </div>
-
-      {isSettingsOpen && (
-        <CompanySettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      )}
     </aside>
+
+    {isSettingsOpen && (
+      <CompanySettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    )}
   </>
   );
 }
