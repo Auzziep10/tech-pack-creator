@@ -811,16 +811,75 @@ export function TechPackEditor() {
   };
 
   const handleVectorize = async () => {
+    if (checkReadonly() || isTechPackLocked) return;
     setIsVectorizing(true);
+    isDirtyRef.current = true;
     try {
       const { vectorizeGarmentImage } = await import('../services/nanobananaService');
-      const newImageUrl = await vectorizeGarmentImage(imageUrl);
-      setGalleryImages(prev => {
-        const newGallery = [newImageUrl, ...prev];
-        setData((d: any) => ({ ...d, gallery: newGallery }));
-        return newGallery;
-      });
-      setImageUrl(newImageUrl);
+      const base64Vector = await vectorizeGarmentImage(imageUrl);
+
+      let uploadedUrl = base64Vector;
+      if (user && base64Vector.startsWith('data:')) {
+        uploadedUrl = await uploadBase64Image(base64Vector, user.uid);
+      }
+
+      const newGallery = [uploadedUrl, ...galleryImages.filter(img => img !== uploadedUrl)];
+      setGalleryImages(newGallery);
+      setImageUrl(uploadedUrl);
+
+      const updatedData = {
+        ...data,
+        gallery: newGallery,
+        images: {
+          ...(data?.images || {}),
+          original: uploadedUrl
+        }
+      };
+      setData(updatedData);
+
+      // Immediately save to Firestore to prevent realtime listener overwrite race condition
+      if (id && id !== 'draft' && user) {
+        setIsSaving(true);
+        isSavingRef.current = true;
+        try {
+          const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+          delete sanitizedData.userId;
+          delete sanitizedData.isTeamEditable;
+          delete sanitizedData.activityLog;
+
+          const visibleGallery = newGallery.filter(img => !hiddenGalleryImages.includes(img));
+          const mainImageToSave = isTechPackLocked && hiddenGalleryImages.includes(uploadedUrl)
+            ? (visibleGallery[0] || uploadedUrl || '')
+            : (uploadedUrl || visibleGallery[0] || '');
+
+          lastSavedJsonRef.current = getNormalizedStateHash(
+            sanitizedData,
+            packName,
+            mainImageToSave,
+            newGallery,
+            hiddenGalleryImages
+          );
+
+          await saveTechPack(
+            user.uid,
+            profile?.companyId || user.uid,
+            packName,
+            mainImageToSave,
+            sanitizedData,
+            user.email || 'Unknown',
+            id,
+            displayData.activityLog || [],
+            displayData.isTeamEditable ?? true
+          );
+          isDirtyRef.current = false;
+        } catch (saveErr) {
+          console.error("Auto-save after vectorization failed:", saveErr);
+        } finally {
+          setIsSaving(false);
+          isSavingRef.current = false;
+        }
+      }
+
       pushLog(`Generated Vector Blueprint successfully`, 'image');
     } catch (e: any) {
       alert("Nano Banana Vectorization failed: " + e.message);
@@ -981,7 +1040,9 @@ export function TechPackEditor() {
   };
 
   const handleExpandMeasurements = async () => {
+    if (checkReadonly() || isTechPackLocked) return;
     setIsExpandingPOMs(true);
+    isDirtyRef.current = true;
     try {
       const { expandMeasurements } = await import('../services/nanobananaService');
       const newPOMs = await expandMeasurements(
@@ -993,20 +1054,53 @@ export function TechPackEditor() {
       );
       
       if (newPOMs && newPOMs.length > 0) {
-        setData((prev: any) => {
-          const currentMs = prev.measurements || [];
-          // Avoid duplicate IDs or names (case-insensitive)
-          const filteredNew = newPOMs.filter((nm: any) => 
-            !currentMs.some((cm: any) => cm.id === nm.id || cm.point?.toLowerCase() === nm.point?.toLowerCase())
+        const currentMs = data.measurements || displayData?.measurements || [];
+        // Avoid duplicate IDs or names (case-insensitive)
+        const filteredNew = newPOMs.filter((nm: any) => 
+          !currentMs.some((cm: any) => cm.id === nm.id || cm.point?.toLowerCase() === nm.point?.toLowerCase())
+        );
+        if (filteredNew.length === 0) {
+          alert("No additional measurements could be found that aren't already listed.");
+          return;
+        }
+        const updatedMs = [...currentMs, ...filteredNew];
+        const updatedData = { ...data, measurements: updatedMs };
+        setData(updatedData);
+
+        if (id && id !== 'draft' && user) {
+          const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+          delete sanitizedData.userId;
+          delete sanitizedData.isTeamEditable;
+          delete sanitizedData.activityLog;
+
+          const visibleGallery = galleryImages.filter(img => !hiddenGalleryImages.includes(img));
+          const mainImageToSave = isTechPackLocked && hiddenGalleryImages.includes(imageUrl)
+            ? (visibleGallery[0] || imageUrl || '')
+            : (imageUrl || visibleGallery[0] || '');
+
+          lastSavedJsonRef.current = getNormalizedStateHash(
+            sanitizedData,
+            packName,
+            mainImageToSave,
+            galleryImages,
+            hiddenGalleryImages
           );
-          if (filteredNew.length === 0) {
-            alert("No additional measurements could be found that aren't already listed.");
-            return prev;
-          }
-          const updated = [...currentMs, ...filteredNew];
-          pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`, 'measurement');
-          return { ...prev, measurements: updated };
-        });
+
+          await saveTechPack(
+            user.uid,
+            profile?.companyId || user.uid,
+            packName,
+            mainImageToSave,
+            sanitizedData,
+            user.email || 'Unknown',
+            id,
+            displayData.activityLog || [],
+            displayData.isTeamEditable ?? true
+          );
+          isDirtyRef.current = false;
+        }
+
+        pushLog(`Generated and appended ${filteredNew.length} new measurements successfully`, 'measurement');
       } else {
         alert("Could not generate new measurements for this garment type.");
       }
@@ -1018,7 +1112,9 @@ export function TechPackEditor() {
   };
 
   const handleGenerateCoreSpecs = async () => {
+    if (checkReadonly() || isTechPackLocked) return;
     setIsGeneratingCoreSpecs(true);
+    isDirtyRef.current = true;
     try {
       const { generateCoreSpecs } = await import('../services/nanobananaService');
       const corePOMs = await generateCoreSpecs(
@@ -1029,52 +1125,85 @@ export function TechPackEditor() {
       );
 
       if (corePOMs && corePOMs.length > 0) {
-        setData((prev: any) => {
-          const currentMs = [...(prev.measurements || [])];
-          
-          const chestIndex = currentMs.findIndex((m: any) => {
-            const name = (m.point || '').toLowerCase();
-            return (name.includes('chest') || name.includes('bust')) && !name.includes('pocket') && !name.includes('height');
-          });
-          const waistIndex = currentMs.findIndex((m: any) => {
-            const name = (m.point || '').toLowerCase();
-            return name.includes('waist') && !name.includes('height');
-          });
-          const hemIndex = currentMs.findIndex((m: any) => {
-            const name = (m.point || '').toLowerCase();
-            return name.includes('hem') && !name.includes('height') && !name.includes('rib') && !name.includes('cuff');
-          });
-          const sleeveIndex = currentMs.findIndex((m: any) => {
-            const name = (m.point || '').toLowerCase();
-            return name.includes('sleeve') && !name.includes('cuff') && !name.includes('height') && !name.includes('width') && !name.includes('opening') && !name.includes('rib');
-          });
-
-          corePOMs.forEach((coreM: any) => {
-            let targetIndex = -1;
-            if (coreM.id === 'CH001') targetIndex = chestIndex;
-            else if (coreM.id === 'WS001') targetIndex = waistIndex;
-            else if (coreM.id === 'HM001') targetIndex = hemIndex;
-            else if (coreM.id === 'SL001') targetIndex = sleeveIndex;
-
-            if (targetIndex !== -1) {
-              currentMs[targetIndex] = {
-                ...currentMs[targetIndex],
-                value: coreM.value,
-                description: coreM.description || currentMs[targetIndex].description
-              };
-            } else {
-              currentMs.push({
-                ...coreM,
-                sizes: {
-                  [displayData?.properties?.baseSize || 'M']: coreM.value
-                }
-              });
-            }
-          });
-
-          pushLog(`Successfully updated/generated core matching measurements`, 'measurement');
-          return { ...prev, measurements: currentMs };
+        const currentMs = [...(data.measurements || displayData?.measurements || [])];
+        
+        const chestIndex = currentMs.findIndex((m: any) => {
+          const name = (m.point || '').toLowerCase();
+          return (name.includes('chest') || name.includes('bust')) && !name.includes('pocket') && !name.includes('height');
         });
+        const waistIndex = currentMs.findIndex((m: any) => {
+          const name = (m.point || '').toLowerCase();
+          return name.includes('waist') && !name.includes('height');
+        });
+        const hemIndex = currentMs.findIndex((m: any) => {
+          const name = (m.point || '').toLowerCase();
+          return name.includes('hem') && !name.includes('height') && !name.includes('rib') && !name.includes('cuff');
+        });
+        const sleeveIndex = currentMs.findIndex((m: any) => {
+          const name = (m.point || '').toLowerCase();
+          return name.includes('sleeve') && !name.includes('cuff') && !name.includes('height') && !name.includes('width') && !name.includes('opening') && !name.includes('rib');
+        });
+
+        corePOMs.forEach((coreM: any) => {
+          let targetIndex = -1;
+          if (coreM.id === 'CH001') targetIndex = chestIndex;
+          else if (coreM.id === 'WS001') targetIndex = waistIndex;
+          else if (coreM.id === 'HM001') targetIndex = hemIndex;
+          else if (coreM.id === 'SL001') targetIndex = sleeveIndex;
+
+          if (targetIndex !== -1) {
+            currentMs[targetIndex] = {
+              ...currentMs[targetIndex],
+              value: coreM.value,
+              description: coreM.description || currentMs[targetIndex].description
+            };
+          } else {
+            currentMs.push({
+              ...coreM,
+              sizes: {
+                [displayData?.properties?.baseSize || 'M']: coreM.value
+              }
+            });
+          }
+        });
+
+        const updatedData = { ...data, measurements: currentMs };
+        setData(updatedData);
+
+        if (id && id !== 'draft' && user) {
+          const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+          delete sanitizedData.userId;
+          delete sanitizedData.isTeamEditable;
+          delete sanitizedData.activityLog;
+
+          const visibleGallery = galleryImages.filter(img => !hiddenGalleryImages.includes(img));
+          const mainImageToSave = isTechPackLocked && hiddenGalleryImages.includes(imageUrl)
+            ? (visibleGallery[0] || imageUrl || '')
+            : (imageUrl || visibleGallery[0] || '');
+
+          lastSavedJsonRef.current = getNormalizedStateHash(
+            sanitizedData,
+            packName,
+            mainImageToSave,
+            galleryImages,
+            hiddenGalleryImages
+          );
+
+          await saveTechPack(
+            user.uid,
+            profile?.companyId || user.uid,
+            packName,
+            mainImageToSave,
+            sanitizedData,
+            user.email || 'Unknown',
+            id,
+            displayData.activityLog || [],
+            displayData.isTeamEditable ?? true
+          );
+          isDirtyRef.current = false;
+        }
+
+        pushLog(`Successfully updated/generated core matching measurements`, 'measurement');
       } else {
         alert("Could not generate core measurements.");
       }
@@ -1086,11 +1215,13 @@ export function TechPackEditor() {
   };
 
   const handleClarifyInstructions = async () => {
+    if (checkReadonly() || isTechPackLocked) return;
     if (!displayData?.measurements?.length) {
       alert("No measurements found to clarify.");
       return;
     }
     setIsClarifying(true);
+    isDirtyRef.current = true;
     try {
       const { clarifyMeasurements } = await import('../services/nanobananaService');
       const clarified = await clarifyMeasurements(
@@ -1099,17 +1230,51 @@ export function TechPackEditor() {
       );
 
       if (clarified && clarified.length > 0) {
-        setData((prev: any) => {
-          const currentMs = (prev.measurements || []).map((m: any) => {
-            const match = clarified.find((c: any) => c.id === m.id || c.point?.toLowerCase() === m.point?.toLowerCase());
-            if (match && match.description) {
-              return { ...m, description: match.description };
-            }
-            return m;
-          });
-          pushLog("Clarified measurement instructions successfully", 'measurement');
-          return { ...prev, measurements: currentMs };
+        const currentMs = (data.measurements || displayData.measurements || []).map((m: any) => {
+          const match = clarified.find((c: any) => c.id === m.id || c.point?.toLowerCase() === m.point?.toLowerCase());
+          if (match && match.description) {
+            return { ...m, description: match.description };
+          }
+          return m;
         });
+
+        const updatedData = { ...data, measurements: currentMs };
+        setData(updatedData);
+
+        if (id && id !== 'draft' && user) {
+          const sanitizedData = JSON.parse(JSON.stringify(updatedData));
+          delete sanitizedData.userId;
+          delete sanitizedData.isTeamEditable;
+          delete sanitizedData.activityLog;
+
+          const visibleGallery = galleryImages.filter(img => !hiddenGalleryImages.includes(img));
+          const mainImageToSave = isTechPackLocked && hiddenGalleryImages.includes(imageUrl)
+            ? (visibleGallery[0] || imageUrl || '')
+            : (imageUrl || visibleGallery[0] || '');
+
+          lastSavedJsonRef.current = getNormalizedStateHash(
+            sanitizedData,
+            packName,
+            mainImageToSave,
+            galleryImages,
+            hiddenGalleryImages
+          );
+
+          await saveTechPack(
+            user.uid,
+            profile?.companyId || user.uid,
+            packName,
+            mainImageToSave,
+            sanitizedData,
+            user.email || 'Unknown',
+            id,
+            displayData.activityLog || [],
+            displayData.isTeamEditable ?? true
+          );
+          isDirtyRef.current = false;
+        }
+
+        pushLog("Clarified measurement instructions successfully", 'measurement');
       } else {
         alert("Failed to clarify measurement instructions.");
       }
