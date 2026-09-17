@@ -104,6 +104,7 @@ export function SharedTechPack() {
   const [imageUrl, setImageUrl] = useState('');
   const [packName, setPackName] = useState('Untitled Garment');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [hiddenGalleryImages, setHiddenGalleryImages] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'techpack' | 'linesheet'>('techpack');
   const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>('cm');
   const [activeSizeTab, setActiveSizeTab] = useState<string>('M');
@@ -145,6 +146,14 @@ export function SharedTechPack() {
         const initialBaseSize = p.properties?.baseSize || 'M';
         setActiveSizeTab(initialBaseSize);
 
+        const hiddenImgs: string[] = p.hiddenGalleryImages || (docData as any).hiddenGalleryImages || [];
+        setHiddenGalleryImages(hiddenImgs);
+
+        const checkHidden = (url: string) => {
+          if (!url) return false;
+          return hiddenImgs.includes(url) || hiddenImgs.some(h => h && (h === url || decodeURIComponent(h) === decodeURIComponent(url)));
+        };
+
         const initialImg = p.images?.original || docData.imageUrl || '';
         const docGallery: string[] = p.gallery || [];
         const combined = [...docGallery];
@@ -155,8 +164,15 @@ export function SharedTechPack() {
           combined.unshift(initialImg);
         }
 
-        setGalleryImages(combined);
-        setImageUrl((prev) => (prev && combined.includes(prev) ? prev : (initialImg || combined[0] || '')));
+        // Strictly filter out any images that are hidden
+        const visibleGallery = combined.filter(img => !checkHidden(img));
+        setGalleryImages(visibleGallery);
+
+        const coverImg = (initialImg && !checkHidden(initialImg))
+          ? initialImg
+          : (visibleGallery[0] || '');
+
+        setImageUrl((prev) => (prev && visibleGallery.includes(prev) && !checkHidden(prev) ? prev : coverImg));
       } else {
         setPackData(null);
         setData(null);
@@ -245,6 +261,11 @@ export function SharedTechPack() {
     ? data.translations[activeLanguage]
     : data;
 
+  const isImgHidden = (url: string) => {
+    if (!url) return false;
+    return hiddenGalleryImages.includes(url) || hiddenGalleryImages.some(h => h && (h === url || decodeURIComponent(h) === decodeURIComponent(url)));
+  };
+
   const ensureDetailModules = () => {
     if (!displayData) return [];
     let mods = displayData.detailModules;
@@ -260,7 +281,15 @@ export function SharedTechPack() {
         mods = [];
       }
     }
-    return mods;
+    return mods.map((mod: any) => {
+      const allImages: string[] = mod.images || (mod.detailImage ? [mod.detailImage] : []);
+      const visibleImages = allImages.filter((img: string) => !isImgHidden(img));
+      return {
+        ...mod,
+        images: visibleImages,
+        detailImage: visibleImages[0] || ''
+      };
+    });
   };
 
   const dModules = ensureDetailModules();
@@ -452,6 +481,8 @@ export function SharedTechPack() {
                               measurements={displayData.measurements || []}
                               isLocked={true}
                               defaultGarmentType={displayData?.properties?.category || 'Garment'}
+                              galleryImages={galleryImages}
+                              onSelectImage={(img) => setImageUrl(img)}
                             />
                           ) : (
                             <div className="aspect-[4/5] bg-gray-50 flex flex-col items-center justify-center p-8 text-gray-400">
@@ -792,7 +823,11 @@ export function SharedTechPack() {
 
                     {/* Line Sheet Garment Photo */}
                     <div className="w-full flex justify-center mb-8">
-                      {imageUrl ? (
+                      {displayData?.lineSheetImage && !isImgHidden(displayData.lineSheetImage) ? (
+                        <div className="w-[85%] max-w-[500px] aspect-[4/5] rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center p-4">
+                          <img src={displayData.lineSheetImage} alt={packName} className="w-full h-full object-contain" />
+                        </div>
+                      ) : imageUrl ? (
                         <div className="w-[85%] max-w-[500px] aspect-[4/5] rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 flex items-center justify-center p-4">
                           <img src={imageUrl} alt={packName} className="w-full h-full object-contain" />
                         </div>
