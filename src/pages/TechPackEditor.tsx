@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
+import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
@@ -271,6 +272,7 @@ export function TechPackEditor() {
   const [isExtractingColors, setIsExtractingColors] = useState(false);
   const [isVectorizing, setIsVectorizing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [showColorwayModal, setShowColorwayModal] = useState(false);
   const [colorwayMockupImage, setColorwayMockupImage] = useState<string | null>(null);
   const [extractedColorways, setExtractedColorways] = useState<any[]>([]);
@@ -2160,6 +2162,20 @@ export function TechPackEditor() {
                 <span>Export</span>
               </div>
             </Button>
+
+            {id && id !== 'draft' && (
+              <Button 
+                onClick={() => setShowShareModal(true)} 
+                variant="secondary"
+                className="px-3.5 h-9 shadow-sm shrink-0 bg-white text-gray-800 hover:bg-gray-50 border border-gray-200 transition-colors text-xs font-bold rounded-xl"
+                title="Share Read-Only Link"
+              >
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <Share2 size={14} className="text-gray-600" />
+                  <span>Share</span>
+                </div>
+              </Button>
+            )}
 
             <Button onClick={handleSyncToWovn} isLoading={isSyncing} className="px-3.5 h-9 shadow-sm shrink-0 bg-blue-600 text-white hover:bg-blue-700 transition-colors text-xs font-bold rounded-xl">
               <div className="flex items-center gap-1.5 font-semibold">
@@ -4756,6 +4772,15 @@ export function TechPackEditor() {
             </Modal>
           );
         })()}
+
+        {id && (
+          <ShareModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            packId={id}
+            packName={packName}
+          />
+        )}
      </div>
   );
 }

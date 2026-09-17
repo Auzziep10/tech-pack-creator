@@ -9,6 +9,7 @@ import { QuickCameraScanner } from './pages/QuickCameraScanner';
 import { SinglePhotoScanner } from './pages/SinglePhotoScanner';
 import { ComboLineSheet } from './pages/ComboLineSheet';
 import { Login } from './pages/Login';
+import { SharedTechPack } from './pages/SharedTechPack';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -26,6 +27,8 @@ function App() {
           <Route path="/scan/:sessionId" element={<MobileScanner />} />
           <Route path="/single-scan/:sessionId" element={<SinglePhotoScanner />} />
           <Route path="/detail-camera/:sessionId" element={<QuickCameraScanner />} />
+          <Route path="/shared/:id" element={<SharedTechPack />} />
+          <Route path="/share/:id" element={<SharedTechPack />} />
           
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/create" element={<ProtectedRoute><CreateTechPack /></ProtectedRoute>} />

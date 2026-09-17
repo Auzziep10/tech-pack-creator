@@ -15,7 +15,8 @@ import {
   FolderOpen,
   Lock,
   Copy,
-  Loader2
+  Loader2,
+  Share2
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -41,6 +42,7 @@ import { writeBatch, doc, deleteDoc, getDoc, onSnapshot } from 'firebase/firesto
 import { getCompanyGarmentQueue, deleteQueueItem } from '../services/wovnService';
 import { WovnImportModal } from '../components/ui/WovnImportModal';
 import { FolderModal } from '../components/ui/FolderModal';
+import { ShareModal } from '../components/ui/ShareModal';
 
 const formatName = (email?: string | null) => {
   if (!email) return 'Teammate';
@@ -59,6 +61,7 @@ export function Dashboard() {
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [isDuplicatingBatch, setIsDuplicatingBatch] = useState(false);
+  const [shareModalPack, setShareModalPack] = useState<{ id: string; name: string } | null>(null);
   
   // Folders State - synced with URL search query ?folder=
   const [folders, setFolders] = useState<FolderData[]>([]);
@@ -787,6 +790,15 @@ export function Dashboard() {
         onSubmit={handleCreateFolderSubmit}
       />
 
+      {shareModalPack && (
+        <ShareModal
+          isOpen={!!shareModalPack}
+          onClose={() => setShareModalPack(null)}
+          packId={shareModalPack.id}
+          packName={shareModalPack.name}
+        />
+      )}
+
       {loading ? (
         <div className="py-20 flex justify-center text-gray-400">Loading...</div>
       ) : visibleFolders.length === 0 && visibleGarments.length === 0 ? (
@@ -1026,7 +1038,20 @@ export function Dashboard() {
                   )}
 
                   {!isSelectMode && (
-                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+                    <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+                      {/* Share Button */}
+                      <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (pack.id) setShareModalPack({ id: pack.id, name: pack.name });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-all bg-white/95 backdrop-blur-sm shadow-sm hover:bg-black hover:text-white text-gray-700 p-1.5 rounded-full border border-gray-200 hover:border-black cursor-pointer"
+                        title="Share Tech Pack Link"
+                      >
+                        <Share2 size={13} />
+                      </button>
+
                       {/* Duplicate Button */}
                       <button
                         type="button"
@@ -1075,7 +1100,19 @@ export function Dashboard() {
               </div>
               <div className="p-5 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="font-bold text-gray-900 group-hover:text-black transition-colors text-lg truncate">{pack.name}</h3>
+                  <h3 className="font-bold text-gray-900 group-hover:text-black transition-colors text-lg truncate flex-1 mr-2">{pack.name}</h3>
+                  {!isSelectMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (pack.id) setShareModalPack({ id: pack.id, name: pack.name });
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg shrink-0 cursor-pointer"
+                      title="Share Tech Pack"
+                    >
+                      <Share2 size={15} />
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-3">
                   <div className="flex-1 bg-gray-100 h-1.5 rounded-full overflow-hidden">
