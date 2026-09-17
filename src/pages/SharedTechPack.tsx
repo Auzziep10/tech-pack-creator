@@ -266,6 +266,14 @@ export function SharedTechPack() {
     return hiddenGalleryImages.includes(url) || hiddenGalleryImages.some(h => h && (h === url || decodeURIComponent(h) === decodeURIComponent(url)));
   };
 
+  const getBOMList = (source: any = displayData) => {
+    if (Array.isArray(source?.bom)) return source.bom;
+    if (Array.isArray(source?.fabrication)) return source.fabrication;
+    return [];
+  };
+
+  const bomList = getBOMList(displayData);
+
   const ensureDetailModules = () => {
     if (!displayData) return [];
     let mods = displayData.detailModules;
@@ -666,7 +674,7 @@ export function SharedTechPack() {
                     </div>
 
                     {/* Bill of Materials (BOM) Section */}
-                    {displayData.bom && displayData.bom.length > 0 && (
+                    {bomList.length > 0 && (
                       <div className="space-y-2 pt-3">
                         <h3 className="text-base font-serif font-bold text-gray-900 leading-tight">
                           Bill of Materials (BOM)
@@ -675,25 +683,58 @@ export function SharedTechPack() {
                           <table className="w-full text-xs text-left min-w-[500px]">
                             <thead className="text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200 tracking-wider">
                               <tr>
-                                <th className="py-2 px-3 font-bold">Category</th>
-                                <th className="py-2 px-3 font-bold">Item Description</th>
-                                <th className="py-2 px-3 font-bold">Placement</th>
-                                <th className="py-2 px-3 font-bold">Composition</th>
-                                <th className="py-2 px-3 font-bold">Weight / GSM</th>
-                                <th className="py-2 px-3 font-bold">Colorway</th>
+                                <th className="py-2 px-3 font-bold w-28">Category</th>
+                                <th className="py-2 px-3 font-bold">Component</th>
+                                <th className="py-2 px-3 font-bold">Positioning</th>
+                                <th className="py-2 px-3 font-bold">Comment / Notes</th>
+                                <th className="py-2 px-3 font-bold">Supplier</th>
+                                <th className="py-2 px-2 font-bold text-center w-14">Photo</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                              {displayData.bom.map((b: any, bIdx: number) => (
-                                <tr key={bIdx} className="hover:bg-gray-50/70 transition-colors">
-                                  <td className="py-2 px-3 font-medium text-gray-500">{b.category || 'Fabric'}</td>
-                                  <td className="py-2 px-3 font-semibold text-gray-900">{b.item || '-'}</td>
-                                  <td className="py-2 px-3 text-gray-700">{b.placement || '-'}</td>
-                                  <td className="py-2 px-3 text-gray-700">{b.composition || '-'}</td>
-                                  <td className="py-2 px-3 font-mono text-gray-700">{b.weight || '-'}</td>
-                                  <td className="py-2 px-3 text-gray-700">{b.colorway || '-'}</td>
-                                </tr>
-                              ))}
+                              {bomList.map((b: any, bIdx: number) => {
+                                const photo = b.image && !isImgHidden(b.image) ? b.image : null;
+                                return (
+                                  <tr key={bIdx} className="hover:bg-gray-50/70 transition-colors">
+                                    <td className="py-2 px-3 font-medium uppercase text-[11px] text-gray-500 tracking-wide align-top">
+                                      {b.category || 'Fabric'}
+                                    </td>
+                                    <td className="py-2 px-3 font-semibold text-gray-900 align-top">
+                                      {b.component || b.material || b.item || '-'}
+                                    </td>
+                                    <td className="py-2 px-3 text-gray-700 align-top">
+                                      {b.positioning || b.placement || '-'}
+                                    </td>
+                                    <td className="py-2 px-3 text-gray-700 align-top">
+                                      {b.comment || b.notes || b.composition || '-'}
+                                    </td>
+                                    <td className="py-2 px-3 text-gray-600 align-top">
+                                      {b.supplier || '-'}
+                                    </td>
+                                    <td className="py-2 px-2 text-center align-middle">
+                                      {photo ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setLightboxImage(photo);
+                                            setLightboxZoom(1);
+                                          }}
+                                          className="inline-flex items-center justify-center p-0.5 rounded border border-gray-200 hover:border-black bg-white transition-all cursor-pointer group shadow-2xs"
+                                          title="View BOM item photo"
+                                        >
+                                          <img
+                                            src={photo}
+                                            alt={b.component || 'BOM Item'}
+                                            className="w-7 h-7 object-cover rounded group-hover:scale-105 transition-transform"
+                                          />
+                                        </button>
+                                      ) : (
+                                        <span className="text-gray-300 font-mono text-xs">-</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
