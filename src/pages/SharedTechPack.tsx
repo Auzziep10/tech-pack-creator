@@ -628,7 +628,7 @@ export function SharedTechPack() {
                         <table className="w-full text-xs text-left min-w-[500px]">
                           <thead className="text-[10px] text-gray-500 uppercase bg-gray-50 border-b border-gray-200 tracking-wider">
                             <tr>
-                              <th className="py-2.5 px-3 w-10 text-center font-bold">#</th>
+                              <th className="py-2.5 px-3 w-20 text-center font-bold">Dim ID</th>
                               <th className="py-2.5 px-3 font-bold">Point of Measure</th>
                               <th className="py-2.5 px-3 w-28 text-center font-bold">Tolerance (+/-)</th>
                               <th className="py-2.5 px-3 w-24 text-center font-bold bg-gray-100/70 text-black">
