@@ -416,24 +416,108 @@ export function TechPackEditor() {
   }, [displayData?.properties?.baseSize]);
 
   const handleGradeSize = async () => {
+    if (checkReadonly()) return;
     const baseSize = displayData?.properties?.baseSize || 'M';
     if (activeSizeTab === baseSize) return;
     
     setIsGrading(true);
+    isDirtyRef.current = true;
     try {
-      const graded = await gradeSize(displayData.measurements, baseSize, activeSizeTab, displayData?.properties?.category || 'Garment');
+      const currentMeasurements = displayData?.measurements || data?.measurements || [];
+      const graded = await gradeSize(currentMeasurements, baseSize, activeSizeTab, displayData?.properties?.category || 'Garment');
       
-      setData((prev: any) => {
-        const newData = { ...prev };
-        newData.measurements = newData.measurements.map((m: any) => {
-           const gradedM = graded.find((gm: any) => gm.id === m.id);
-           if (gradedM) {
-              m.sizes = { ...(m.sizes || {}), [activeSizeTab]: gradedM.value };
-           }
-           return m;
-        });
-        return newData;
+      const gradedList = Array.isArray(graded)
+        ? graded
+        : (Array.isArray((graded as any)?.measurements) ? (graded as any).measurements : []);
+
+      const updatedMeasurements = (data.measurements || currentMeasurements || []).map((m: any, idx: number) => {
+        const gradedM = gradedList.find((gm: any) => 
+          (gm.id && m.id && String(gm.id).trim().toLowerCase() === String(m.id).trim().toLowerCase()) ||
+          (gm.point && m.point && String(gm.point).trim().toLowerCase() === String(m.point).trim().toLowerCase())
+        ) || gradedList[idx];
+
+        if (gradedM && gradedM.value !== undefined && gradedM.value !== null) {
+          return {
+            ...m,
+            sizes: { ...(m.sizes || {}), [activeSizeTab]: String(gradedM.value) }
+          };
+        }
+        return m;
       });
+
+      const updatedData: any = {
+        ...data,
+        measurements: updatedMeasurements
+      };
+
+      if (data.translations) {
+        updatedData.translations = Object.fromEntries(
+          Object.entries(data.translations).map(([lang, tData]: [string, any]) => [
+            lang,
+            {
+              ...tData,
+              measurements: (tData.measurements || []).map((tm: any, tIdx: number) => {
+                const matchingUpdated = updatedMeasurements.find((um: any) =>
+                  (um.id && tm.id && String(um.id).trim().toLowerCase() === String(tm.id).trim().toLowerCase())
+                ) || updatedMeasurements[tIdx];
+                if (matchingUpdated && matchingUpdated.sizes) {
+                  return {
+                    ...tm,
+                    sizes: { ...(tm.sizes || {}), [activeSizeTab]: matchingUpdated.sizes[activeSizeTab] }
+                  };
+                }
+                return tm;
+              })
+            }
+          ])
+        );
+      }
+
+      setData(updatedData);
+
+      // Immediately save to Firestore to prevent realtime listener overwrite race condition
+      if (id && id !== 'draft' && user) {
+        setIsSaving(true);
+        isSavingRef.current = true;
+        try {
+          const techPackDataToSave = JSON.parse(JSON.stringify(updatedData));
+          delete techPackDataToSave.userId;
+          delete techPackDataToSave.isTeamEditable;
+          delete techPackDataToSave.activityLog;
+
+          const visibleGallery = galleryImages.filter(img => !hiddenGalleryImages.includes(img));
+          const mainImageToSave = isTechPackLocked && hiddenGalleryImages.includes(imageUrl)
+            ? (visibleGallery[0] || imageUrl || '')
+            : (imageUrl || visibleGallery[0] || '');
+
+          lastSavedJsonRef.current = getNormalizedStateHash(
+            techPackDataToSave,
+            packName,
+            mainImageToSave,
+            galleryImages,
+            hiddenGalleryImages
+          );
+
+          await saveTechPack(
+            user.uid,
+            profile?.companyId || user.uid,
+            packName,
+            mainImageToSave,
+            techPackDataToSave,
+            user.email || 'Unknown',
+            id,
+            displayData.activityLog || [],
+            displayData.isTeamEditable ?? true
+          );
+          isDirtyRef.current = false;
+        } catch (saveErr) {
+          console.error("Auto-save after grading failed:", saveErr);
+        } finally {
+          setIsSaving(false);
+          isSavingRef.current = false;
+        }
+      }
+
       pushLog(`Computed size ${activeSizeTab}`, 'measurement');
     } catch (err: any) {
       alert(err.message || "Failed to grade size");
@@ -3268,11 +3352,28 @@ export function TechPackEditor() {
                       </button>
                     ))}
                   </div>
-                  {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (
-                    <Button onClick={handleGradeSize} disabled={isGrading} isLoading={isGrading} size="sm" className="bg-blue-600 shrink-0 text-xs">
-                      <Calculator size={14} className="mr-1 inline-block"/> Compute Size {activeSizeTab}
-                    </Button>
-                  )}
+                  {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (() => {
+                    const isAlreadyComputed = (displayData?.measurements || []).some(
+                      (m: any) => m.sizes?.[activeSizeTab] && String(m.sizes[activeSizeTab]).trim() !== '' && String(m.sizes[activeSizeTab]).trim() !== '0.0' && String(m.sizes[activeSizeTab]).trim() !== '0'
+                    );
+                    return (
+                      <Button 
+                        onClick={handleGradeSize} 
+                        disabled={isGrading || isTechPackLocked} 
+                        isLoading={isGrading} 
+                        size="sm" 
+                        className={`shrink-0 text-xs font-semibold ${
+                          isAlreadyComputed 
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                        title={isAlreadyComputed ? `Measurements for Size ${activeSizeTab} are computed. Click to re-run AI grading.` : `Compute AI grading for Size ${activeSizeTab}`}
+                      >
+                        <Calculator size={14} className="mr-1 inline-block"/> 
+                        {isAlreadyComputed ? `Recompute Size ${activeSizeTab}` : `Compute Size ${activeSizeTab}`}
+                      </Button>
+                    );
+                  })()}
                 </div>
 
                 <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
