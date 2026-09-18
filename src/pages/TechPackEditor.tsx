@@ -7,7 +7,7 @@ import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, uploadGarmentImage, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry } from '../services/dbService';
 import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
@@ -2082,6 +2082,13 @@ export function TechPackEditor() {
                  techPackDataToSave.properties.dominantColorways[i].image = await uploadBase64Image(cwImg, user.uid);
              }
          }
+      }
+
+      if (techPackDataToSave.properties?.wovnLogo && techPackDataToSave.properties.wovnLogo.startsWith('data:')) {
+        techPackDataToSave.properties.wovnLogo = await uploadBase64Image(techPackDataToSave.properties.wovnLogo, user.uid);
+      }
+      if (techPackDataToSave.properties?.clientLogo && techPackDataToSave.properties.clientLogo.startsWith('data:')) {
+        techPackDataToSave.properties.clientLogo = await uploadBase64Image(techPackDataToSave.properties.clientLogo, user.uid);
       }
 
       techPackDataToSave.annotations = displayData.annotations || data.annotations || [];
@@ -4447,36 +4454,57 @@ export function TechPackEditor() {
                        <input className="text-2xl print:text-[22px] font-serif uppercase leading-none mb-1 text-gray-900 bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={displayData?.properties?.season || ''} onChange={e => updateProperty('season', e.target.value)} placeholder="COLLECTION NAME" />
                        <input className="text-xs print:text-[10px] uppercase font-bold text-gray-500 tracking-wider bg-transparent outline-none max-w-xs transition-colors hover:border-gray-200 border-b border-transparent focus:border-black" value={displayData?.properties?.category || ''} onChange={e => updateProperty('category', e.target.value)} placeholder="SUBTITLE - PAGE NO" />
                      </div>
-                     <div className="flex flex-col items-center justify-center -mt-2 group relative">
-                       {displayData?.properties?.wovnLogo ? (
-                         <img src={displayData.properties.wovnLogo} alt="WOVN Logo" className="h-20 print:h-16 object-contain" />
-                       ) : (
-                         <>
-                           <div className="text-5xl font-serif tracking-widest font-black text-black">WOV/N</div>
-                           <div className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
-                         </>
-                       )}
-                       <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity print:hidden rounded-lg">
-                         <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200">Upload WOVN Logo</span>
-                         <input type="file" className="hidden" accept="image/*" onChange={e => {
-                             if(e.target.files && e.target.files[0]) {
-                                const reader = new FileReader();
-                                reader.onload = ev => {
-                                  updateProperty('wovnLogo', ev.target?.result as string);
-                                  pushLog('Uploaded WOVN Studio Logo', 'image');
-                                };
-                                reader.readAsDataURL(e.target.files[0]);
-                             }
-                         }} />
-                       </label>
-                       {displayData?.properties?.wovnLogo && (
-                         <button onClick={(e) => { 
-                           e.preventDefault(); 
-                           updateProperty('wovnLogo', ''); 
-                           pushLog('Removed WOVN Studio Logo', 'image');
-                         }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm"><X size={14}/></button>
-                       )}
-                     </div>
+                      <div className="flex flex-col items-center justify-center -mt-2 group relative">
+                        {displayData?.properties?.wovnLogo ? (
+                          <img src={displayData.properties.wovnLogo} alt="Brand Logo" className="h-20 print:h-16 max-w-[240px] object-contain" />
+                        ) : (
+                          <>
+                            <input
+                              className="text-4xl sm:text-5xl font-serif tracking-widest font-black text-black text-center bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors max-w-xs"
+                              value={displayData?.properties?.brandName !== undefined ? displayData.properties.brandName : 'WOV/N'}
+                              onChange={e => updateProperty('brandName', e.target.value)}
+                              placeholder="BRAND NAME"
+                              title="Click to edit brand name"
+                            />
+                            <input
+                              className="text-xs print:text-[9px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase text-center bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors max-w-xs"
+                              value={displayData?.properties?.brandSubtitle !== undefined ? displayData.properties.brandSubtitle : 'Design Studio'}
+                              onChange={e => updateProperty('brandSubtitle', e.target.value)}
+                              placeholder="STUDIO SUBTITLE"
+                              title="Click to edit subtitle"
+                            />
+                          </>
+                        )}
+                        <label className="absolute inset-0 bg-white/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity print:hidden rounded-lg">
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-gray-100 px-3 py-1.5 rounded-full text-gray-700 shadow-sm border border-gray-200">
+                            {displayData?.properties?.wovnLogo ? 'Change Brand Logo' : 'Upload Brand Logo'}
+                          </span>
+                          <input type="file" className="hidden" accept="image/*" onChange={async e => {
+                              if(e.target.files && e.target.files[0]) {
+                                 const file = e.target.files[0];
+                                 try {
+                                   const storageUrl = await uploadGarmentImage(file, user?.uid || 'editor');
+                                   updateProperty('wovnLogo', storageUrl);
+                                   pushLog('Uploaded Brand Logo', 'image');
+                                 } catch (err) {
+                                   const reader = new FileReader();
+                                   reader.onload = ev => {
+                                     updateProperty('wovnLogo', ev.target?.result as string);
+                                     pushLog('Uploaded Brand Logo', 'image');
+                                   };
+                                   reader.readAsDataURL(file);
+                                 }
+                              }
+                          }} />
+                        </label>
+                        {displayData?.properties?.wovnLogo && (
+                          <button onClick={(e) => { 
+                            e.preventDefault(); 
+                            updateProperty('wovnLogo', ''); 
+                            pushLog('Removed Brand Logo', 'image');
+                          }} className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 print:hidden z-10 p-1 bg-white rounded-full shadow-sm cursor-pointer" title="Remove logo"><X size={14}/></button>
+                        )}
+                      </div>
                      <div className="flex justify-end group relative">
                        {displayData?.properties?.clientLogo ? (
                          <img src={displayData.properties.clientLogo} alt="Client Logo" className="w-20 h-20 print:w-16 print:h-16 object-contain" />

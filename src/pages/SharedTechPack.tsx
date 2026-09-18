@@ -13,12 +13,15 @@ import {
   Sparkles,
   Layers,
   FileText,
-  Palette
+  Palette,
+  Upload,
+  Edit3
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../services/firebase';
-import { subscribeToTechPack, TechPackData } from '../services/dbService';
+import { auth, db } from '../services/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { subscribeToTechPack, TechPackData, uploadGarmentImage } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -190,6 +193,12 @@ export function SharedTechPack() {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxZoom, setLightboxZoom] = useState(1);
 
+  // Line Sheet Branding & Logo State
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [showBrandTextModal, setShowBrandTextModal] = useState(false);
+  const [brandNameInput, setBrandNameInput] = useState('');
+  const [brandSubtitleInput, setBrandSubtitleInput] = useState('');
+
   // Authenticate anonymously if user is not logged in so Firestore reads succeed
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -273,6 +282,82 @@ export function SharedTechPack() {
         }));
         return { ...prev, measurements: newMs, unit: nextUnit };
       });
+    }
+  };
+
+  const handleLineSheetLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+
+    setIsUploadingLogo(true);
+    try {
+      const userId = packData?.userId || auth.currentUser?.uid || 'shared_user';
+      const downloadUrl = await uploadGarmentImage(file, userId);
+
+      const packRef = doc(db, 'techPacks', id);
+      await updateDoc(packRef, {
+        'techPack.properties.wovnLogo': downloadUrl,
+        updatedAt: serverTimestamp()
+      });
+
+      setData((prev: any) => ({
+        ...prev,
+        properties: {
+          ...(prev?.properties || {}),
+          wovnLogo: downloadUrl
+        }
+      }));
+    } catch (err) {
+      console.error("Failed uploading line sheet logo:", err);
+      alert("Failed to upload logo image. Please try another image file.");
+    } finally {
+      setIsUploadingLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveLineSheetLogo = async () => {
+    if (!id) return;
+    try {
+      const packRef = doc(db, 'techPacks', id);
+      await updateDoc(packRef, {
+        'techPack.properties.wovnLogo': '',
+        updatedAt: serverTimestamp()
+      });
+      setData((prev: any) => ({
+        ...prev,
+        properties: {
+          ...(prev?.properties || {}),
+          wovnLogo: ''
+        }
+      }));
+    } catch (err) {
+      console.error("Failed removing line sheet logo:", err);
+    }
+  };
+
+  const handleSaveBrandText = async () => {
+    if (!id) return;
+    try {
+      const packRef = doc(db, 'techPacks', id);
+      const newName = brandNameInput.trim() || 'WOV/N';
+      const newSubtitle = brandSubtitleInput.trim() || 'Design Studio';
+      await updateDoc(packRef, {
+        'techPack.properties.brandName': newName,
+        'techPack.properties.brandSubtitle': newSubtitle,
+        updatedAt: serverTimestamp()
+      });
+      setData((prev: any) => ({
+        ...prev,
+        properties: {
+          ...(prev?.properties || {}),
+          brandName: newName,
+          brandSubtitle: newSubtitle
+        }
+      }));
+      setShowBrandTextModal(false);
+    } catch (err) {
+      console.error("Failed saving brand text:", err);
     }
   };
 
@@ -1009,11 +1094,90 @@ export function SharedTechPack() {
                           {displayData?.properties?.category || 'WHOLESALE SUMMARY'}
                         </span>
                       </div>
-                      <div className="flex flex-col items-center justify-center -mt-2">
-                        <div className="text-4xl sm:text-5xl font-serif tracking-widest font-black text-black">WOV/N</div>
-                        <div className="text-[10px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">Design Studio</div>
+                      {/* Center Brand / Studio Logo Area */}
+                      <div className="flex flex-col items-center justify-center -mt-2 group relative">
+                        {displayData?.properties?.wovnLogo ? (
+                          <div className="relative flex items-center justify-center py-1">
+                            <img
+                              src={displayData.properties.wovnLogo}
+                              alt={displayData?.properties?.brandName || 'Brand Logo'}
+                              className="h-16 sm:h-20 max-w-[240px] object-contain"
+                            />
+                            {/* Remove button on hover */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemoveLineSheetLogo();
+                              }}
+                              className="absolute -top-2 -right-6 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity print:hidden z-10 p-1 bg-white rounded-full shadow-md border border-gray-200 cursor-pointer"
+                              title="Remove custom logo"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <div className="text-4xl sm:text-5xl font-serif tracking-widest font-black text-black leading-none">
+                              {displayData?.properties?.brandName || 'WOV/N'}
+                            </div>
+                            <div className="text-[10px] tracking-[0.4em] font-medium text-gray-500 mt-1 uppercase">
+                              {displayData?.properties?.brandSubtitle || 'Design Studio'}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Interactive Logo Controls (Visible on hover in browser, hidden when printed) */}
+                        <div className="absolute inset-0 bg-white/90 backdrop-blur-xs opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1.5 transition-opacity print:hidden rounded-xl border border-dashed border-gray-300 shadow-sm p-2 z-20">
+                          {isUploadingLogo ? (
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                              <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                              <span>Uploading Logo...</span>
+                            </div>
+                          ) : (
+                            <>
+                              <label
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-black text-white hover:bg-gray-800 text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-sm transition-all"
+                                title="Upload a custom logo image"
+                              >
+                                <Upload size={11} />
+                                <span>{displayData?.properties?.wovnLogo ? 'Change Image' : 'Upload Logo'}</span>
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept="image/*"
+                                  disabled={isUploadingLogo}
+                                  onChange={handleLineSheetLogoUpload}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBrandNameInput(displayData?.properties?.brandName || 'WOV/N');
+                                  setBrandSubtitleInput(displayData?.properties?.brandSubtitle || 'Design Studio');
+                                  setShowBrandTextModal(true);
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] font-bold uppercase tracking-wider cursor-pointer border border-gray-200 shadow-2xs transition-all"
+                                title="Edit brand name & subtitle text"
+                              >
+                                <Edit3 size={11} />
+                                <span>Edit Text</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex justify-end">
+
+                      {/* Right Header Column (Client Logo & Ref) */}
+                      <div className="flex items-center justify-end gap-3">
+                        {displayData?.properties?.clientLogo && (
+                          <img
+                            src={displayData.properties.clientLogo}
+                            alt="Client Logo"
+                            className="w-12 h-12 sm:w-16 sm:h-16 object-contain"
+                          />
+                        )}
                         <div className="text-right">
                           <div className="text-xs font-bold text-gray-900">REF: {displayData?.properties?.style || 'TP-001'}</div>
                           <div className="text-[10px] text-gray-400">{new Date().toLocaleDateString()}</div>
@@ -1113,6 +1277,77 @@ export function SharedTechPack() {
           </div>
         </div>
       </div>
+
+      {/* Brand Text Customization Modal */}
+      <AnimatePresence>
+        {showBrandTextModal && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-200 space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Edit Line Sheet Branding</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">Customize the brand title and studio subtitle.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBrandTextModal(false)}
+                  className="p-1.5 text-gray-400 hover:text-black rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    Brand Name
+                  </label>
+                  <input
+                    type="text"
+                    value={brandNameInput}
+                    onChange={(e) => setBrandNameInput(e.target.value)}
+                    placeholder="e.g. WOV/N, CATALYST, ACME"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-600 mb-1">
+                    Subtitle / Studio
+                  </label>
+                  <input
+                    type="text"
+                    value={brandSubtitleInput}
+                    onChange={(e) => setBrandSubtitleInput(e.target.value)}
+                    placeholder="e.g. Design Studio, Apparel Co., Studio 01"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-black focus:ring-1 focus:ring-black"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowBrandTextModal(false)}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-gray-600 hover:text-black rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={handleSaveBrandText}
+                  className="px-4 py-1.5 bg-black text-white hover:bg-gray-800 text-xs font-bold rounded-xl shadow-sm cursor-pointer"
+                >
+                  Save Branding
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Interactive High-Resolution Photo Lightbox Modal */}
       <AnimatePresence>
