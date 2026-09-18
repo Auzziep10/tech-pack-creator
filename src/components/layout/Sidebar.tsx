@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, PlusCircle, Settings, Layers, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Settings, Layers, LogOut, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { CompanySettingsModal } from '../ui/CompanySettingsModal';
 
@@ -15,10 +15,11 @@ export function Sidebar({
   isMobileOpen?: boolean;
   setIsMobileOpen?: (val: boolean) => void;
 }) {
-  const { logout, profile } = useAuth();
+  const { logout, profile, isCoreAdmin } = useAuth();
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/create', icon: PlusCircle, label: 'Create Tech Pack' },
+    ...(isCoreAdmin ? [{ to: '/admin/inspector', icon: Activity, label: 'Team Diagnostics', badge: 'Admin' }] : []),
   ];
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -88,9 +89,16 @@ export function Sidebar({
               }
             >
               {({ isActive }) => (
-                <div className={`flex items-center text-sm ${isCollapsed ? 'md:justify-center md:gap-0 gap-3' : 'gap-3'}`}>
-                  <link.icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
-                  <span className={isCollapsed ? 'md:hidden truncate' : 'truncate'}>{link.label}</span>
+                <div className={`flex items-center text-sm w-full ${isCollapsed ? 'md:justify-center md:gap-0 gap-3' : 'justify-between gap-3'}`}>
+                  <div className="flex items-center gap-3 truncate">
+                    <link.icon size={18} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
+                    <span className={isCollapsed ? 'md:hidden truncate' : 'truncate'}>{link.label}</span>
+                  </div>
+                  {link.badge && !isCollapsed && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 shrink-0">
+                      {link.badge}
+                    </span>
+                  )}
                 </div>
               )}
             </NavLink>

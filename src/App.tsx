@@ -10,6 +10,7 @@ import { SinglePhotoScanner } from './pages/SinglePhotoScanner';
 import { ComboLineSheet } from './pages/ComboLineSheet';
 import { Login } from './pages/Login';
 import { SharedTechPack } from './pages/SharedTechPack';
+import { TeamInspector } from './pages/TeamInspector';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -34,6 +35,7 @@ function App() {
           <Route path="/create" element={<ProtectedRoute><CreateTechPack /></ProtectedRoute>} />
           <Route path="/pack/:id" element={<ProtectedRoute><TechPackEditor /></ProtectedRoute>} />
           <Route path="/combo-linesheet" element={<ProtectedRoute><ComboLineSheet /></ProtectedRoute>} />
+          <Route path="/admin/inspector" element={<ProtectedRoute><TeamInspector /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

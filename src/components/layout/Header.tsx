@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Bell, Search, LogOut, User, Menu } from 'lucide-react';
+import { Bell, Search, LogOut, User, Menu, Activity } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ProfileSettingsModal } from '../ui/ProfileSettingsModal';
 
 export function Header({ onOpenMobileSidebar }: { onOpenMobileSidebar?: () => void }) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, isCoreAdmin } = useAuth();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -83,6 +83,23 @@ export function Header({ onOpenMobileSidebar }: { onOpenMobileSidebar?: () => vo
              <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-left" onClick={() => { setShowProfile(false); setShowSettingsModal(true); }}>
                <User size={16} className="text-gray-400" /> View Profile
              </button>
+             {isCoreAdmin && (
+               <button
+                 className="w-full flex items-center justify-between px-3 py-2 text-sm text-amber-900 bg-amber-50/70 hover:bg-amber-100/70 rounded-lg transition-colors text-left font-medium mt-1"
+                 onClick={() => {
+                   setShowProfile(false);
+                   navigate('/admin/inspector');
+                 }}
+               >
+                 <div className="flex items-center gap-2">
+                   <Activity size={16} className="text-amber-600" />
+                   <span>Team Diagnostics</span>
+                 </div>
+                 <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                   Admin
+                 </span>
+               </button>
+             )}
              <button onClick={handleSignOut} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left font-medium mt-1">
                <LogOut size={16} /> Sign Out
              </button>

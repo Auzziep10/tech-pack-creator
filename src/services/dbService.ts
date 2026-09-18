@@ -782,4 +782,33 @@ export const addTeamMemberByEmail = async (
   }
 };
 
+export interface CompanyData {
+  id: string;
+  name: string;
+  adminUid?: string;
+  joinCode?: string;
+  members?: string[];
+  pendingInvites?: string[];
+  createdAt?: any;
+  wovnCustomerIds?: string[];
+}
+
+export const getAllCompanies = async (): Promise<CompanyData[]> => {
+  const snap = await getDocs(collection(db, 'companies'));
+  const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as CompanyData[];
+  return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+};
+
+export const getCompanyTechPacks = async (companyId: string): Promise<TechPackData[]> => {
+  if (!companyId) return [];
+  const q = query(collection(db, 'techPacks'), where('companyId', '==', companyId));
+  const snap = await getDocs(q);
+  const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as TechPackData[];
+  return results.sort((a, b) => {
+    const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+    const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+    return timeB - timeA;
+  });
+};
+
 

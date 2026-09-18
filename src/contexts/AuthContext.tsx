@@ -24,11 +24,21 @@ export const isCoreTeamEmail = (email?: string | null): boolean => {
   return CORE_TEAM_EMAILS.includes(clean);
 };
 
+export interface InspectedCompany {
+  id: string;
+  name: string;
+}
+
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
   logout: () => Promise<void>;
+  isCoreAdmin: boolean;
+  inspectedCompany: InspectedCompany | null;
+  effectiveCompanyId: string;
+  setInspectedCompany: (company: InspectedCompany | null) => void;
+  exitInspection: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -36,6 +46,11 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   logout: async () => {},
+  isCoreAdmin: false,
+  inspectedCompany: null,
+  effectiveCompanyId: '',
+  setInspectedCompany: () => {},
+  exitInspection: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -182,10 +197,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const logout = () => signOut(auth);
+  const isCoreAdmin = isCoreTeamEmail(user?.email);
+
+  const [inspectedCompany, setInspectedCompanyState] = useState<InspectedCompany | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('tp_inspected_company');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setInspectedCompany = (company: InspectedCompany | null) => {
+    if (!isCoreAdmin && company) {
+      console.warn("Unauthorized attempt to inspect company");
+      return;
+    }
+    setInspectedCompanyState(company);
+    if (company) {
+      sessionStorage.setItem('tp_inspected_company', JSON.stringify(company));
+    } else {
+      sessionStorage.removeItem('tp_inspected_company');
+    }
+  };
+
+  const exitInspection = () => {
+    setInspectedCompany(null);
+  };
+
+  useEffect(() => {
+    if (!loading && !isCoreAdmin && inspectedCompany) {
+      setInspectedCompany(null);
+    }
+  }, [isCoreAdmin, loading, inspectedCompany]);
+
+  const effectiveCompanyId = (isCoreAdmin && inspectedCompany?.id) || profile?.companyId || '';
+
+  const logout = async () => {
+    sessionStorage.removeItem('tp_inspected_company');
+    await signOut(auth);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        logout,
+        isCoreAdmin,
+        inspectedCompany,
+        effectiveCompanyId,
+        setInspectedCompany,
+        exitInspection
+      }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );

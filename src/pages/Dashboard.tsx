@@ -16,7 +16,8 @@ import {
   Lock,
   Copy,
   Loader2,
-  Share2
+  Share2,
+  Activity
 } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,7 +55,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, profile } = useAuth();
+  const { user, profile, effectiveCompanyId, inspectedCompany, exitInspection } = useAuth();
   const [techPacks, setTechPacks] = useState<TechPackData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -149,12 +150,12 @@ export function Dashboard() {
   };
 
   useEffect(() => {
-    if (user && profile?.companyId) {
-      const unsubFolders = subscribeToCompanyFolders(profile.companyId, (foldersData) => {
+    if (user && effectiveCompanyId) {
+      const unsubFolders = subscribeToCompanyFolders(effectiveCompanyId, (foldersData) => {
         setFolders(foldersData);
       });
 
-      const unsubPacks = subscribeToUserAndCompanyTechPacks(profile.companyId, async (data) => {
+      const unsubPacks = subscribeToUserAndCompanyTechPacks(effectiveCompanyId, async (data) => {
         setTechPacks(data);
         setLoading(false);
 
@@ -194,7 +195,7 @@ export function Dashboard() {
       });
 
       // Fetch company doc for wovn integration
-      const unsubscribeCompany = onSnapshot(doc(db, 'companies', profile.companyId), snap => {
+      const unsubscribeCompany = onSnapshot(doc(db, 'companies', effectiveCompanyId), snap => {
         if (snap.exists()) {
           const data = snap.data();
           let ids: string[] = data.wovnCustomerIds || [];
@@ -203,7 +204,7 @@ export function Dashboard() {
           }
           setWovnCustomerIds(ids);
           if (ids.length > 0) {
-            loadQueue(profile.companyId);
+            loadQueue(effectiveCompanyId);
           } else {
             setQueueItems([]);
           }
@@ -216,7 +217,7 @@ export function Dashboard() {
         unsubscribeCompany();
       };
     }
-  }, [user, profile]);
+  }, [user, effectiveCompanyId]);
 
   const handleDelete = async (e: React.MouseEvent, packId?: string) => {
     e.stopPropagation(); // prevent card click
@@ -240,7 +241,7 @@ export function Dashboard() {
 
     try {
       setDuplicatingId(pack.id);
-      const companyId = profile?.companyId || user.uid;
+      const companyId = effectiveCompanyId || user.uid;
       const targetFolder = pack.folderId || (activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null);
       await duplicateTechPack(
         pack.id,
@@ -261,7 +262,7 @@ export function Dashboard() {
     if (selectedPacks.length === 0 || !user) return;
     try {
       setIsDuplicatingBatch(true);
-      const companyId = profile?.companyId || user.uid;
+      const companyId = effectiveCompanyId || user.uid;
       const targetFolder = activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null;
       for (const packId of selectedPacks) {
         await duplicateTechPack(
@@ -284,23 +285,23 @@ export function Dashboard() {
 
   // Folder Operations
   const handleCreateFolderSubmit = async (data: { name?: string; folderId?: string | null; parentId?: string | null }) => {
-    if (!profile?.companyId || !user?.uid) return;
+    if (!effectiveCompanyId || !user?.uid) return;
     if (folderModalState.mode === 'create') {
       if (!data.name) return;
       const targetParentId = data.parentId !== undefined ? data.parentId : (activeFolderId !== 'ALL' && activeFolderId !== 'UNASSIGNED' ? activeFolderId : null);
-      const newId = await createFolder(user.uid, profile.companyId, data.name, targetParentId);
-      await loadFolders(profile.companyId);
+      const newId = await createFolder(user.uid, effectiveCompanyId, data.name, targetParentId);
+      await loadFolders(effectiveCompanyId);
       setActiveFolderId(newId);
     } else if (folderModalState.mode === 'rename') {
       if (!data.name || !folderModalState.targetFolderObj?.id) return;
       await updateFolder(folderModalState.targetFolderObj.id, data.name);
-      await loadFolders(profile.companyId);
+      await loadFolders(effectiveCompanyId);
     } else if (folderModalState.mode === 'move') {
       let destFolderId = data.folderId;
       if (data.name) {
         // Created a brand new folder during move dialog
-        destFolderId = await createFolder(user.uid, profile.companyId, data.name, data.parentId || null);
-        await loadFolders(profile.companyId);
+        destFolderId = await createFolder(user.uid, effectiveCompanyId, data.name, data.parentId || null);
+        await loadFolders(effectiveCompanyId);
       }
       if (folderModalState.targetPackIds && folderModalState.targetPackIds.length > 0) {
         await moveTechPacksToFolder(folderModalState.targetPackIds, destFolderId || null);
@@ -312,11 +313,11 @@ export function Dashboard() {
   };
 
   const handleDeleteFolder = async (folder: FolderData) => {
-    if (!folder.id || !profile?.companyId) return;
+    if (!folder.id || !effectiveCompanyId) return;
     if (window.confirm(`Delete folder "${folder.name}"? Subfolders and garments inside will be moved up.`)) {
       try {
         await deleteFolder(folder.id);
-        await loadFolders(profile.companyId);
+        await loadFolders(effectiveCompanyId);
         if (activeFolderId === folder.id) {
           setActiveFolderId(folder.parentId || 'ALL');
         }
@@ -455,7 +456,7 @@ export function Dashboard() {
       if (draggedFolderId === destId) return;
       try {
         await updateFolderParent(draggedFolderId, destId);
-        if (profile?.companyId) await loadFolders(profile.companyId);
+        if (effectiveCompanyId) await loadFolders(effectiveCompanyId);
       } catch (err) {
         console.error("Error moving folder:", err);
       }
@@ -479,7 +480,7 @@ export function Dashboard() {
       if (draggedFolderId === destId) return;
       try {
         await updateFolderParent(draggedFolderId, destId);
-        if (profile?.companyId) await loadFolders(profile.companyId);
+        if (effectiveCompanyId) await loadFolders(effectiveCompanyId);
       } catch (err) {
         console.error("Error moving folder:", err);
       }
@@ -589,6 +590,41 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-full overflow-x-hidden">
+      {inspectedCompany && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-amber-500/15 text-amber-800">
+              <Activity size={20} />
+            </span>
+            <div>
+              <div className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <span>Diagnostics Mode Active</span>
+                <span className="text-[10px] font-mono bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded font-bold">
+                  {inspectedCompany.id}
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Viewing workspace, folders, and tech packs belonging to <strong>{inspectedCompany.name}</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => navigate('/admin/inspector')}
+              className="text-xs bg-white text-gray-800 hover:bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl font-bold transition-all shadow-2xs cursor-pointer"
+            >
+              Switch Team
+            </button>
+            <button
+              onClick={exitInspection}
+              className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-xl font-bold transition-all shadow-2xs cursor-pointer"
+            >
+              Exit to My Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-4xl font-serif text-gray-900">Tech Pack Pipeline</h1>
@@ -774,7 +810,7 @@ export function Dashboard() {
         onClose={() => setIsWovnModalOpen(false)} 
         wovnCustomerIds={wovnCustomerIds}
         onImportComplete={() => {
-          if (profile?.companyId) loadQueue(profile.companyId);
+          if (effectiveCompanyId) loadQueue(effectiveCompanyId);
         }}
       />
 
