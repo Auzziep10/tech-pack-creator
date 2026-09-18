@@ -363,12 +363,12 @@ const EditableColorSwatch = ({
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl shrink-0 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all group"
+      className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 hover:border-gray-300 rounded-xl shadow-2xs hover:shadow-xs transition-all group shrink-0"
       title={cw.name ? `${cw.name} (${activeColor})` : activeColor}
     >
       <label className="relative shrink-0 cursor-pointer block" title="Click to open color picker">
         <span
-          className="w-5 h-5 rounded-full border border-black/20 shadow-xs block group-hover:scale-110 group-hover:ring-2 group-hover:ring-blue-400 transition-all cursor-pointer"
+          className="w-4 h-4 rounded-full border border-black/20 shadow-2xs block group-hover:scale-110 group-hover:ring-2 group-hover:ring-blue-400 transition-all cursor-pointer"
           style={{ backgroundColor: activeColor }}
         />
         {!isTechPackLocked && !isTranslated && (
@@ -387,7 +387,7 @@ const EditableColorSwatch = ({
           type="text"
           value={cw.name || ''}
           placeholder="Color name..."
-          className="text-xs font-semibold text-gray-800 bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors min-w-[70px] max-w-[140px]"
+          className="text-xs font-semibold text-gray-800 bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors min-w-[50px] max-w-[105px]"
           onChange={(e) => {
             const newName = e.target.value;
             const updated = [...colorways];
@@ -416,7 +416,7 @@ const EditableColorSwatch = ({
           onKeyDown={handleHexKeyDown}
           placeholder="#HEX"
           maxLength={9}
-          className="text-[11px] font-mono text-gray-500 hover:text-gray-900 focus:text-black bg-gray-50/60 hover:bg-gray-100/80 focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded px-1.5 py-0.5 w-[72px] outline-none uppercase transition-all tracking-wider font-semibold cursor-text text-center"
+          className="text-[10px] font-mono text-gray-500 hover:text-gray-900 focus:text-black bg-gray-50/80 hover:bg-gray-100 focus:bg-white border border-gray-200/70 focus:border-black rounded px-1 py-0.5 w-[62px] outline-none uppercase transition-all tracking-wider font-semibold cursor-text text-center"
           title="Click to edit HEX color code (e.g. #1D4ED8)"
         />
       ) : (
@@ -438,7 +438,7 @@ const EditableColorSwatch = ({
           className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 rounded transition-opacity cursor-pointer ml-0.5"
           title="Delete swatch"
         >
-          <Trash2 size={12} />
+          <Trash2 size={11} />
         </button>
       )}
     </div>
@@ -3494,7 +3494,7 @@ export function TechPackEditor() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin py-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5 py-1 max-h-56 overflow-y-auto scrollbar-thin">
                           {colorways.map((cw: any, idx: number) => (
                             <EditableColorSwatch
                               key={cw.id || idx}
@@ -3511,9 +3511,9 @@ export function TechPackEditor() {
                             <button
                               type="button"
                               onClick={() => handleAddSwatch()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-600 hover:text-black hover:border-gray-400 hover:bg-gray-50 text-xs font-semibold transition-all shrink-0 cursor-pointer shadow-2xs"
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-gray-300 text-gray-600 hover:text-black hover:border-gray-400 hover:bg-gray-50 text-xs font-semibold transition-all shrink-0 cursor-pointer shadow-2xs"
                             >
-                              <Plus size={13} className="text-gray-400" />
+                              <Plus size={12} className="text-gray-400" />
                               <span>+ Add Swatch</span>
                             </button>
                           )}

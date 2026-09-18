@@ -12,7 +12,8 @@ import {
   RotateCcw,
   Sparkles,
   Layers,
-  FileText
+  FileText,
+  Palette
 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -21,6 +22,81 @@ import { subscribeToTechPack, TechPackData } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator } from '../components/editor/DetailAnnotator';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const COLOR_NAME_TO_HEX: Record<string, string> = {
+  black: '#000000',
+  white: '#FFFFFF',
+  navy: '#1E293B',
+  grey: '#64748B',
+  gray: '#64748B',
+  'charcoal grey': '#374151',
+  'charcoal gray': '#374151',
+  charcoal: '#374151',
+  red: '#DC2626',
+  blue: '#2563EB',
+  green: '#16A34A',
+  yellow: '#CA8A04',
+  beige: '#D4B996',
+  brown: '#78350F',
+  olive: '#4D5D43',
+  khaki: '#C3B091',
+  burgundy: '#800020',
+  cream: '#FFFDD0',
+  tan: '#D2B48C',
+  orange: '#EA580C',
+  purple: '#9333EA',
+  pink: '#EC4899',
+  teal: '#0D9488',
+  oat: '#CFC9BD',
+  bone: '#E5E2D9',
+  'light smoke': '#BEBCBD',
+  sandstone: '#A49B8E',
+  taupe: '#8B8589',
+  sage: '#9CAF88',
+  slate: '#708090',
+  rust: '#B7410E',
+  camel: '#C19A6B',
+  indigo: '#4B0082',
+  forest: '#065F46',
+  sand: '#D0C9B6'
+};
+
+const labToHex = (lab?: number[]) => {
+  if (!lab || lab.length < 3) return '';
+  const [L, a, b] = lab;
+  const y = (L + 16) / 116;
+  const x = a / 500 + y;
+  const z = y - b / 200;
+
+  const fn = (t: number) => t > 0.206897 ? Math.pow(t, 3) : (t - 16 / 116) / 7.787;
+  const X = 95.047 * fn(x);
+  const Y = 100.000 * fn(y);
+  const Z = 108.883 * fn(z);
+
+  let r = X * 0.032406 + Y * -0.015372 + Z * -0.004986;
+  let g = X * -0.009689 + Y * 0.018758 + Z * 0.000415;
+  let bl = X * 0.000557 + Y * -0.002040 + Z * 0.010570;
+
+  const gamma = (c: number) => {
+    const clamped = Math.max(0, Math.min(1, c / 100));
+    return clamped > 0.0031308 ? 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055 : 12.92 * clamped;
+  };
+
+  const R = Math.round(gamma(r) * 255);
+  const G = Math.round(gamma(g) * 255);
+  const B = Math.round(gamma(bl) * 255);
+
+  return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1).toUpperCase()}`;
+};
+
+const resolveHex = (cw: any) => {
+  if (cw?.hex && cw.hex.startsWith('#')) return cw.hex;
+  const fromLab = labToHex(cw?.lab);
+  if (fromLab) return fromLab;
+  const nameKey = (cw?.name || '').trim().toLowerCase();
+  if (COLOR_NAME_TO_HEX[nameKey]) return COLOR_NAME_TO_HEX[nameKey];
+  return '#1A1A1A';
+};
 
 const forceDownload = async (url: string, filename: string) => {
   try {
@@ -560,6 +636,64 @@ export function SharedTechPack() {
                             </div>
                           </div>
                         )}
+
+                        {/* Color Swatches & Variations */}
+                        {(() => {
+                          let colorways: any[] = 
+                            displayData?.properties?.dominantColorways || 
+                            data?.properties?.dominantColorways || 
+                            (packData as any)?.techPack?.properties?.dominantColorways || 
+                            (packData as any)?.dominantColorways || 
+                            [];
+
+                          // Fallback to synthesize from colorsText if no array is stored
+                          if ((!colorways || colorways.length === 0) && displayData?.properties?.colorsText) {
+                            const raw = String(displayData.properties.colorsText).trim();
+                            if (raw && raw !== 'N/A') {
+                              colorways = raw.split(',').map((s: string) => s.trim()).filter(Boolean).map((name: string, i: number) => ({
+                                id: `synth_${i}`,
+                                name,
+                                hex: COLOR_NAME_TO_HEX[name.toLowerCase()] || '#808080'
+                              }));
+                            }
+                          }
+
+                          if (!colorways || colorways.length === 0) return null;
+
+                          return (
+                            <div className="pt-2 border-t border-gray-100">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Palette size={12} className="text-gray-500" />
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">
+                                  Color Swatches ({colorways.length})
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {colorways.map((cw: any, idx: number) => {
+                                  const swatchColor = resolveHex(cw);
+                                  return (
+                                    <div
+                                      key={cw.id || idx}
+                                      className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50/80 hover:bg-white border border-gray-200/90 rounded-xl shadow-2xs transition-all"
+                                      title={cw.name ? `${cw.name} (${swatchColor})` : swatchColor}
+                                    >
+                                      <span
+                                        className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-2xs block shrink-0"
+                                        style={{ backgroundColor: swatchColor }}
+                                      />
+                                      <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
+                                        {cw.name || 'Color'}
+                                      </span>
+                                      <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider font-semibold">
+                                        {swatchColor}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Print-Only Gallery Layout */}
@@ -816,25 +950,50 @@ export function SharedTechPack() {
                 )}
 
                 {/* Colorways Section */}
-                {displayData?.properties?.dominantColorways && displayData.properties.dominantColorways.length > 0 && (
-                  <div className="pt-6 border-t border-gray-200 mt-6">
-                    <h3 className="text-base font-serif font-bold text-gray-900 mb-3">
-                      Colorways & Swatches
-                    </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                      {displayData.properties.dominantColorways.map((cw: any, cwIdx: number) => (
-                        <div key={cwIdx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-2 text-center">
-                          <div
-                            className="w-12 h-12 rounded-full border border-gray-200 shadow-xs"
-                            style={{ backgroundColor: cw.hex || '#1f2937' }}
-                          />
-                          <span className="text-xs font-bold text-gray-900 truncate w-full">{cw.name || 'Color'}</span>
-                          {cw.hex && <span className="text-[10px] font-mono text-gray-400 uppercase">{cw.hex}</span>}
-                        </div>
-                      ))}
+                {(() => {
+                  let colorways: any[] = 
+                    displayData?.properties?.dominantColorways || 
+                    data?.properties?.dominantColorways || 
+                    (packData as any)?.techPack?.properties?.dominantColorways || 
+                    (packData as any)?.dominantColorways || 
+                    [];
+
+                  if ((!colorways || colorways.length === 0) && displayData?.properties?.colorsText) {
+                    const raw = String(displayData.properties.colorsText).trim();
+                    if (raw && raw !== 'N/A') {
+                      colorways = raw.split(',').map(s => s.trim()).filter(Boolean).map((name: string, i: number) => ({
+                        id: `synth_${i}`,
+                        name,
+                        hex: COLOR_NAME_TO_HEX[name.toLowerCase()] || '#808080'
+                      }));
+                    }
+                  }
+
+                  if (!colorways || colorways.length === 0) return null;
+
+                  return (
+                    <div className="pt-6 border-t border-gray-200 mt-6 page-break-avoid">
+                      <h3 className="text-base font-serif font-bold text-gray-900 mb-3">
+                        Colorways & Swatches
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                        {colorways.map((cw: any, cwIdx: number) => {
+                          const swatchColor = resolveHex(cw);
+                          return (
+                            <div key={cwIdx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-2 text-center">
+                              <div
+                                className="w-10 h-10 rounded-full border border-black/15 shadow-xs"
+                                style={{ backgroundColor: swatchColor }}
+                              />
+                              <span className="text-xs font-bold text-gray-900 truncate w-full">{cw.name || 'Color'}</span>
+                              <span className="text-[10px] font-mono text-gray-400 uppercase">{swatchColor}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             ) : (
               /* Wholesale Line Sheet Mode */
@@ -898,6 +1057,55 @@ export function SharedTechPack() {
                         <span className="text-xs font-bold text-gray-900">XS - 3XL</span>
                       </div>
                     </div>
+
+                    {/* Line Sheet Swatches */}
+                    {(() => {
+                      let colorways: any[] = 
+                        displayData?.properties?.dominantColorways || 
+                        data?.properties?.dominantColorways || 
+                        (packData as any)?.techPack?.properties?.dominantColorways || 
+                        (packData as any)?.dominantColorways || 
+                        [];
+
+                      if ((!colorways || colorways.length === 0) && displayData?.properties?.colorsText) {
+                        const raw = String(displayData.properties.colorsText).trim();
+                        if (raw && raw !== 'N/A') {
+                          colorways = raw.split(',').map(s => s.trim()).filter(Boolean).map((name: string, i: number) => ({
+                            id: `synth_${i}`,
+                            name,
+                            hex: COLOR_NAME_TO_HEX[name.toLowerCase()] || '#808080'
+                          }));
+                        }
+                      }
+
+                      if (!colorways || colorways.length === 0) return null;
+
+                      return (
+                        <div className="mt-4 p-3.5 bg-gray-50/70 border border-gray-200 rounded-xl">
+                          <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider block mb-2 text-center sm:text-left">
+                            Available Colorways ({colorways.length})
+                          </span>
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                            {colorways.map((cw: any, idx: number) => {
+                              const swatchColor = resolveHex(cw);
+                              return (
+                                <div
+                                  key={cw.id || idx}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-gray-200 rounded-lg shadow-2xs"
+                                >
+                                  <span
+                                    className="w-3.5 h-3.5 rounded-full border border-black/15 shadow-2xs block shrink-0"
+                                    style={{ backgroundColor: swatchColor }}
+                                  />
+                                  <span className="text-xs font-semibold text-gray-900">{cw.name || 'Color'}</span>
+                                  <span className="text-[10px] font-mono text-gray-400 uppercase">{swatchColor}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
