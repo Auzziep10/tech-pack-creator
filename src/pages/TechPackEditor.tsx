@@ -71,6 +71,56 @@ const COLOR_NAME_TO_HEX: Record<string, string> = {
   sand: '#D0C9B6'
 };
 
+// Convert CIE L*a*b* to Hex RGB fallback
+const labToHex = (lab?: number[]) => {
+  if (!lab || lab.length < 3) return '';
+  const [L, a, b] = lab;
+  const y = (L + 16) / 116;
+  const x = a / 500 + y;
+  const z = y - b / 200;
+
+  const fn = (t: number) => t > 0.206897 ? Math.pow(t, 3) : (t - 16 / 116) / 7.787;
+  const X = 95.047 * fn(x);
+  const Y = 100.000 * fn(y);
+  const Z = 108.883 * fn(z);
+
+  let r = X * 0.032406 + Y * -0.015372 + Z * -0.004986;
+  let g = X * -0.009689 + Y * 0.018758 + Z * 0.000415;
+  let bl = X * 0.000557 + Y * -0.002040 + Z * 0.010570;
+
+  const gamma = (c: number) => {
+    const clamped = Math.max(0, Math.min(1, c / 100));
+    return clamped > 0.0031308 ? 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055 : 12.92 * clamped;
+  };
+
+  const R = Math.round(gamma(r) * 255);
+  const G = Math.round(gamma(g) * 255);
+  const B = Math.round(gamma(bl) * 255);
+
+  return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1).toUpperCase()}`;
+};
+
+const resolveHex = (cw: any) => {
+  if (cw.hex && cw.hex.startsWith('#')) return cw.hex;
+  const fromLab = labToHex(cw.lab);
+  if (fromLab) return fromLab;
+  const nameKey = (cw.name || '').trim().toLowerCase();
+  if (COLOR_NAME_TO_HEX[nameKey]) return COLOR_NAME_TO_HEX[nameKey];
+  return '#1A1A1A';
+};
+
+const normalizeHexInput = (val: string): string | null => {
+  let s = val.trim();
+  if (!s) return null;
+  if (!s.startsWith('#')) s = '#' + s;
+  if (/^#[0-9A-Fa-f]{6}$/.test(s)) return s.toUpperCase();
+  if (/^#[0-9A-Fa-f]{3}$/.test(s)) {
+    const r = s[1], g = s[2], b = s[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return null;
+};
+
 const STANDARD_SEAMS = [
   // Hems
   { name: 'Coverstitch', type: 'Hem', svg: svgToDataUri('<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg"><path d="M 20,40 L 160,40 A 10,10 0 0 1 170,50 A 10,10 0 0 1 160,60 L 100,60" fill="none" stroke="#1f2937" stroke-width="3" /><line x1="120" y1="30" x2="120" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /><line x1="140" y1="30" x2="140" y2="70" stroke="#ef4444" stroke-width="3" stroke-dasharray="5,4" /><path d="M 120,60 C 130,70 130,70 140,60" fill="none" stroke="#ef4444" stroke-width="2" /></svg>') },
@@ -233,6 +283,166 @@ const detectUnitFromMeasurements = (measurements: any[]): 'in' | 'cm' | null => 
     }
   }
   return null;
+};
+
+const EditableColorSwatch = ({
+  cw,
+  idx,
+  colorways,
+  isTechPackLocked,
+  isTranslated,
+  updateProperty,
+  pushLog
+}: {
+  cw: any;
+  idx: number;
+  colorways: any[];
+  isTechPackLocked: boolean;
+  isTranslated: boolean;
+  updateProperty: (field: string, value: any) => void;
+  pushLog: (msg: string, cat?: any) => void;
+}) => {
+  const currentResolved = resolveHex(cw);
+  const [hexInput, setHexInput] = useState(cw.hex || currentResolved);
+  const [isEditingHex, setIsEditingHex] = useState(false);
+
+  useEffect(() => {
+    if (!isEditingHex) {
+      setHexInput(cw.hex || currentResolved);
+    }
+  }, [cw.hex, currentResolved, isEditingHex]);
+
+  const validNormalized = normalizeHexInput(hexInput);
+  const activeColor = validNormalized || currentResolved;
+
+  const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setHexInput(val);
+    const valid = normalizeHexInput(val);
+    if (valid) {
+      const updated = [...colorways];
+      updated[idx] = { ...updated[idx], hex: valid };
+      updateProperty('dominantColorways', updated);
+    }
+  };
+
+  const handleHexBlur = () => {
+    setIsEditingHex(false);
+    const valid = normalizeHexInput(hexInput);
+    if (valid) {
+      setHexInput(valid);
+      const updated = [...colorways];
+      if (updated[idx].hex !== valid) {
+        updated[idx] = { ...updated[idx], hex: valid };
+        updateProperty('dominantColorways', updated);
+        pushLog(`Updated color swatch hex to ${valid}`, 'property');
+      }
+    } else {
+      setHexInput(cw.hex || currentResolved);
+    }
+  };
+
+  const handleHexKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    } else if (e.key === 'Escape') {
+      setHexInput(cw.hex || currentResolved);
+      setIsEditingHex(false);
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  const handleColorPickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newHex = e.target.value.toUpperCase();
+    setHexInput(newHex);
+    const updated = [...colorways];
+    updated[idx] = { ...updated[idx], hex: newHex };
+    updateProperty('dominantColorways', updated);
+    pushLog(`Updated color swatch to ${newHex}`, 'property');
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl shrink-0 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all group"
+      title={cw.name ? `${cw.name} (${activeColor})` : activeColor}
+    >
+      <label className="relative shrink-0 cursor-pointer block" title="Click to open color picker">
+        <span
+          className="w-5 h-5 rounded-full border border-black/20 shadow-xs block group-hover:scale-110 group-hover:ring-2 group-hover:ring-blue-400 transition-all cursor-pointer"
+          style={{ backgroundColor: activeColor }}
+        />
+        {!isTechPackLocked && !isTranslated && (
+          <input
+            type="color"
+            value={activeColor.startsWith('#') && activeColor.length === 7 ? activeColor : '#1D4ED8'}
+            onChange={handleColorPickerChange}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer rounded-full"
+            title="Choose color"
+          />
+        )}
+      </label>
+
+      {!isTechPackLocked && !isTranslated ? (
+        <input
+          type="text"
+          value={cw.name || ''}
+          placeholder="Color name..."
+          className="text-xs font-semibold text-gray-800 bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors min-w-[70px] max-w-[140px]"
+          onChange={(e) => {
+            const newName = e.target.value;
+            const updated = [...colorways];
+            updated[idx] = { ...updated[idx], name: newName };
+            updateProperty('dominantColorways', updated);
+            const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
+            updateProperty('colorsText', newNames);
+          }}
+          onBlur={(e) => {
+            pushLog(`Updated color swatch name to "${e.target.value}"`, 'property');
+          }}
+        />
+      ) : (
+        <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
+          {cw.name || 'Unnamed Color'}
+        </span>
+      )}
+
+      {!isTechPackLocked && !isTranslated ? (
+        <input
+          type="text"
+          value={hexInput}
+          onFocus={() => setIsEditingHex(true)}
+          onChange={handleHexChange}
+          onBlur={handleHexBlur}
+          onKeyDown={handleHexKeyDown}
+          placeholder="#HEX"
+          maxLength={9}
+          className="text-[11px] font-mono text-gray-500 hover:text-gray-900 focus:text-black bg-gray-50/60 hover:bg-gray-100/80 focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded px-1.5 py-0.5 w-[72px] outline-none uppercase transition-all tracking-wider font-semibold cursor-text text-center"
+          title="Click to edit HEX color code (e.g. #1D4ED8)"
+        />
+      ) : (
+        <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider select-none px-1">
+          {activeColor}
+        </span>
+      )}
+
+      {!isTechPackLocked && !isTranslated && (
+        <button
+          type="button"
+          onClick={() => {
+            const updated = colorways.filter((_: any, i: number) => i !== idx);
+            updateProperty('dominantColorways', updated);
+            const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
+            updateProperty('colorsText', newNames);
+            pushLog(`Removed color swatch "${cw.name || activeColor}"`, 'property');
+          }}
+          className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 rounded transition-opacity cursor-pointer ml-0.5"
+          title="Delete swatch"
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
+    </div>
+  );
 };
 
 export function TechPackEditor() {
@@ -3160,44 +3370,6 @@ export function TechPackEditor() {
                   {(() => {
                     const colorways: any[] = displayData?.properties?.dominantColorways || [];
 
-                    // Convert CIE L*a*b* to Hex RGB fallback
-                    const labToHex = (lab?: number[]) => {
-                      if (!lab || lab.length < 3) return '';
-                      const [L, a, b] = lab;
-                      const y = (L + 16) / 116;
-                      const x = a / 500 + y;
-                      const z = y - b / 200;
-
-                      const fn = (t: number) => t > 0.206897 ? Math.pow(t, 3) : (t - 16 / 116) / 7.787;
-                      const X = 95.047 * fn(x);
-                      const Y = 100.000 * fn(y);
-                      const Z = 108.883 * fn(z);
-
-                      let r = X * 0.032406 + Y * -0.015372 + Z * -0.004986;
-                      let g = X * -0.009689 + Y * 0.018758 + Z * 0.000415;
-                      let bl = X * 0.000557 + Y * -0.002040 + Z * 0.010570;
-
-                      const gamma = (c: number) => {
-                        const clamped = Math.max(0, Math.min(1, c / 100));
-                        return clamped > 0.0031308 ? 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055 : 12.92 * clamped;
-                      };
-
-                      const R = Math.round(gamma(r) * 255);
-                      const G = Math.round(gamma(g) * 255);
-                      const B = Math.round(gamma(bl) * 255);
-
-                      return `#${((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1).toUpperCase()}`;
-                    };
-
-                    const resolveHex = (cw: any) => {
-                      if (cw.hex && cw.hex.startsWith('#')) return cw.hex;
-                      const fromLab = labToHex(cw.lab);
-                      if (fromLab) return fromLab;
-                      const nameKey = (cw.name || '').trim().toLowerCase();
-                      if (COLOR_NAME_TO_HEX[nameKey]) return COLOR_NAME_TO_HEX[nameKey];
-                      return '#1A1A1A';
-                    };
-
                     const handleAddSwatch = (defaultName?: string, defaultHex?: string) => {
                       const name = defaultName || `Colorway ${colorways.length + 1}`;
                       const hex = defaultHex || '#1D4ED8';
@@ -3323,78 +3495,18 @@ export function TechPackEditor() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin py-0.5">
-                          {colorways.map((cw: any, idx: number) => {
-                            const swatchColor = resolveHex(cw);
-                            return (
-                              <div
-                                key={cw.id || idx}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-xl shrink-0 shadow-2xs hover:border-gray-300 hover:shadow-xs transition-all group"
-                                title={cw.name ? `${cw.name} (${swatchColor})` : swatchColor}
-                              >
-                                <label className="relative cursor-pointer shrink-0" title="Click to change color">
-                                  <span
-                                    className="w-5 h-5 rounded-full border border-black/20 shadow-xs block group-hover:scale-110 group-hover:ring-2 group-hover:ring-blue-400 transition-all"
-                                    style={{ backgroundColor: swatchColor }}
-                                  />
-                                  {!isTechPackLocked && !isTranslated && (
-                                    <input
-                                      type="color"
-                                      value={swatchColor.startsWith('#') && swatchColor.length === 7 ? swatchColor : '#1D4ED8'}
-                                      onChange={(e) => {
-                                        const newHex = e.target.value;
-                                        const updated = [...colorways];
-                                        updated[idx] = { ...updated[idx], hex: newHex };
-                                        updateProperty('dominantColorways', updated);
-                                      }}
-                                      className="absolute inset-0 opacity-0 w-0 h-0 cursor-pointer pointer-events-none"
-                                    />
-                                  )}
-                                </label>
-                                {(!isTechPackLocked && !isTranslated) ? (
-                                  <input
-                                    type="text"
-                                    value={cw.name || ''}
-                                    placeholder="Color name..."
-                                    className="text-xs font-semibold text-gray-800 bg-transparent outline-none border-b border-transparent hover:border-gray-300 focus:border-black transition-colors min-w-[70px] max-w-[140px]"
-                                    onChange={(e) => {
-                                      const newName = e.target.value;
-                                      const updated = [...colorways];
-                                      updated[idx] = { ...updated[idx], name: newName };
-                                      updateProperty('dominantColorways', updated);
-                                      const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
-                                      updateProperty('colorsText', newNames);
-                                    }}
-                                    onBlur={(e) => {
-                                      pushLog(`Updated color swatch name to "${e.target.value}"`, 'property');
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-xs font-semibold text-gray-800 whitespace-nowrap">
-                                    {cw.name || 'Unnamed Color'}
-                                  </span>
-                                )}
-                                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider select-none">
-                                  {swatchColor}
-                                </span>
-                                {!isTechPackLocked && !isTranslated && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const updated = colorways.filter((_: any, i: number) => i !== idx);
-                                      updateProperty('dominantColorways', updated);
-                                      const newNames = updated.map((c: any) => c.name).filter(Boolean).join(', ');
-                                      updateProperty('colorsText', newNames);
-                                      pushLog(`Removed color swatch "${cw.name || swatchColor}"`, 'property');
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 rounded transition-opacity cursor-pointer ml-0.5"
-                                    title="Delete swatch"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
+                          {colorways.map((cw: any, idx: number) => (
+                            <EditableColorSwatch
+                              key={cw.id || idx}
+                              cw={cw}
+                              idx={idx}
+                              colorways={colorways}
+                              isTechPackLocked={isTechPackLocked}
+                              isTranslated={isTranslated}
+                              updateProperty={updateProperty}
+                              pushLog={pushLog}
+                            />
+                          ))}
                           {!isTechPackLocked && !isTranslated && (
                             <button
                               type="button"
