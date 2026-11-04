@@ -19,6 +19,7 @@ import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
 import { gradeSize, translateTechPack } from '../services/geminiService';
+import { exportMeasurementsToCsv } from '../utils/csvExporter';
 
 const forceDownload = async (url: string, filename: string) => {
   try {
@@ -2622,6 +2623,30 @@ export function TechPackEditor() {
               </div>
             )}
 
+            <Button
+              onClick={() => {
+                pushLog('Exported Measurements to CSV', 'export');
+                exportMeasurementsToCsv({
+                  packName,
+                  clientName:
+                    displayData?.properties?.designer ||
+                    displayData?.properties?.brandName ||
+                    'WOVN',
+                  baseSize: displayData?.properties?.baseSize || 'M',
+                  unit: globalUnit,
+                  measurements: displayData?.measurements || [],
+                });
+              }}
+              variant="secondary"
+              className="px-3.5 h-9 shadow-sm shrink-0 bg-white text-gray-800 hover:bg-gray-50 border border-gray-200 transition-colors text-xs font-bold rounded-xl"
+              title="Export Measurements & Grading to CSV"
+            >
+              <div className="flex items-center gap-1.5 font-semibold">
+                <Download size={14} className="text-gray-600" />
+                <span>Export CSV</span>
+              </div>
+            </Button>
+
             <Button onClick={() => { pushLog(`Exported ${viewMode === 'linesheet' ? 'Line Sheet' : 'Tech Pack'} to PDF`, 'export'); handleExport(); }} className="px-3.5 h-9 shadow-sm shrink-0 bg-black text-white hover:bg-gray-800 transition-colors text-xs font-bold rounded-xl">
               <div className="flex items-center gap-1.5 font-semibold">
                 <Download size={14} />
@@ -3618,6 +3643,27 @@ export function TechPackEditor() {
                         <span>Add Measurement</span>
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pushLog('Exported Measurements to CSV', 'export');
+                        exportMeasurementsToCsv({
+                          packName,
+                          clientName:
+                            displayData?.properties?.designer ||
+                            displayData?.properties?.brandName ||
+                            'WOVN',
+                          baseSize: displayData?.properties?.baseSize || 'M',
+                          unit: globalUnit,
+                          measurements: displayData?.measurements || [],
+                        });
+                      }}
+                      className="text-[10px] font-sans font-bold bg-white hover:bg-black hover:text-white border border-gray-200 text-gray-700 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-xs flex items-center gap-1 print:hidden cursor-pointer"
+                      title="Export Measurements & Grading to CSV"
+                    >
+                      <Download size={12} />
+                      <span>Export CSV</span>
+                    </button>
                     <button onClick={toggleUnit} className="text-[10px] font-sans font-bold bg-gray-100 border border-gray-200 hover:border-gray-300 hover:bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-sm">
                       TO {globalUnit === 'in' ? 'CM' : 'INCHES'}
                     </button>

@@ -24,6 +24,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { subscribeToTechPack, TechPackData, uploadGarmentImage } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator } from '../components/editor/DetailAnnotator';
+import { exportMeasurementsToCsv } from '../utils/csvExporter';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const COLOR_NAME_TO_HEX: Record<string, string> = {
@@ -576,6 +577,28 @@ export function SharedTechPack() {
               </div>
             )}
 
+            {/* Export CSV Button */}
+            <Button
+              onClick={() =>
+                exportMeasurementsToCsv({
+                  packName,
+                  clientName:
+                    displayData?.properties?.designer ||
+                    displayData?.properties?.brandName ||
+                    'WOVN',
+                  baseSize: displayData?.properties?.baseSize || 'M',
+                  unit: globalUnit,
+                  measurements: displayData?.measurements || [],
+                })
+              }
+              variant="secondary"
+              className="px-3.5 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-800 text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer"
+              title="Export Measurements & Grading to CSV"
+            >
+              <Download size={14} />
+              <span>Export CSV</span>
+            </Button>
+
             {/* Export / Print PDF Button */}
             <Button
               onClick={handleExport}
@@ -839,9 +862,31 @@ export function SharedTechPack() {
                   <div className="col-span-12 lg:col-span-7 print:w-full space-y-4">
                     <div className="space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-2">
-                        <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">
-                          Measurements <span className="text-xs font-sans text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span>
-                        </h3>
+                        <div className="flex items-center gap-2.5">
+                          <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">
+                            Measurements <span className="text-xs font-sans text-gray-400 font-normal">({globalUnit === 'in' ? 'inches' : 'cm'})</span>
+                          </h3>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              exportMeasurementsToCsv({
+                                packName,
+                                clientName:
+                                  displayData?.properties?.designer ||
+                                  displayData?.properties?.brandName ||
+                                  'WOVN',
+                                baseSize: displayData?.properties?.baseSize || 'M',
+                                unit: globalUnit,
+                                measurements: displayData?.measurements || [],
+                              })
+                            }
+                            className="text-[10px] font-sans font-bold bg-white hover:bg-black hover:text-white border border-gray-200 text-gray-700 px-2.5 py-1 rounded-lg uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1 print:hidden cursor-pointer"
+                            title="Export Measurements & Grading to CSV"
+                          >
+                            <Download size={12} />
+                            <span>Export CSV</span>
+                          </button>
+                        </div>
                         {/* Size Switcher Tabs */}
                         <div className="flex bg-gray-100 p-1 rounded-xl overflow-x-auto max-w-full">
                           {SIZES.map((size) => (
