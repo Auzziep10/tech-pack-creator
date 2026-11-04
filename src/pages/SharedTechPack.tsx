@@ -188,6 +188,8 @@ export function SharedTechPack() {
   const [globalUnit, setGlobalUnit] = useState<'in' | 'cm'>('cm');
   const [activeSizeTab, setActiveSizeTab] = useState<string>('M');
   const [activeLanguage, setActiveLanguage] = useState('English');
+  const [hoveredMeasurementId, setHoveredMeasurementId] = useState<string | null>(null);
+  const [hoveredPreviewImage, setHoveredPreviewImage] = useState<string | null>(null);
 
   // Photo Lightbox state
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -222,7 +224,11 @@ export function SharedTechPack() {
       if (docData) {
         setPackData(docData);
         const p = docData.techPack || {};
-        setData(p);
+        const packAnnotations = p.annotations || (docData as any).annotations || [];
+        setData({
+          ...p,
+          annotations: packAnnotations
+        });
         setPackName(docData.name || 'Untitled Garment');
 
         const initialUnit = p.unit || 'cm';
@@ -421,6 +427,15 @@ export function SharedTechPack() {
   const displayData = activeLanguage !== 'English' && data?.translations?.[activeLanguage]
     ? data.translations[activeLanguage]
     : data;
+
+  const packAnnotations =
+    displayData?.annotations ||
+    data?.annotations ||
+    (packData as any)?.techPack?.annotations ||
+    (packData as any)?.annotations ||
+    [];
+
+  const effectiveImageUrl = hoveredPreviewImage || imageUrl;
 
   const isImgHidden = (url: string) => {
     if (!url) return false;
@@ -644,12 +659,15 @@ export function SharedTechPack() {
                         
                         {/* Garment Spec Image with Callouts */}
                         <div className="bg-white rounded-2xl print-image-wrapper relative group/mainimg border border-gray-100 overflow-hidden shadow-sm">
-                          {imageUrl ? (
+                          {effectiveImageUrl ? (
                             <GarmentAnnotator
-                              imageUrl={imageUrl}
+                              imageUrl={effectiveImageUrl}
                               measurements={displayData.measurements || []}
                               isLocked={true}
                               defaultGarmentType={displayData?.properties?.category || 'Garment'}
+                              techPackId={id}
+                              hoveredMeasurementId={hoveredMeasurementId}
+                              annotations={packAnnotations}
                               galleryImages={galleryImages}
                               onSelectImage={(img) => setImageUrl(img)}
                             />
@@ -864,12 +882,56 @@ export function SharedTechPack() {
                               const displayTol = m.tolerance || (m.tolPlus ? `+${m.tolPlus} / -${m.tolMinus || m.tolPlus}` : '0.5');
 
                               return (
-                                <tr key={m.id || index} className="hover:bg-gray-50/70 transition-colors">
+                                <tr
+                                  key={m.id || index}
+                                  onMouseEnter={() => {
+                                    const origM = data?.measurements?.[index];
+                                    const hoverId = m.id || origM?.id || m.point || origM?.point || m.name || (index + 1).toString();
+
+                                    const targetId = (m.id || origM?.id || '').trim().toLowerCase();
+                                    const targetPoint = (m.point || m.name || '').trim().toLowerCase();
+                                    const origTargetPoint = (origM?.point || origM?.name || '').trim().toLowerCase();
+                                    const targetIdx = (index + 1).toString();
+
+                                    const matchingAnns = packAnnotations.filter((a: any) => {
+                                      const aLabel = (a.label || '').trim().toLowerCase();
+                                      const aMeasId = (a.measurementId || '').trim().toLowerCase();
+                                      const aPoint = (a.pointName || '').trim().toLowerCase();
+                                      return (
+                                        (targetId && (aLabel === targetId || aMeasId === targetId)) ||
+                                        (targetPoint && (aPoint === targetPoint || aLabel === targetPoint)) ||
+                                        (origTargetPoint && (aPoint === origTargetPoint || aLabel === origTargetPoint)) ||
+                                        (aLabel === targetIdx)
+                                      );
+                                    });
+
+                                    const matchingAnn = matchingAnns.find((a: any) => a.imageUrl === imageUrl) || matchingAnns[0];
+                                    setHoveredMeasurementId(matchingAnn?.measurementId || matchingAnn?.label || hoverId);
+
+                                    if (matchingAnn && matchingAnn.imageUrl) {
+                                      setHoveredPreviewImage(matchingAnn.imageUrl);
+                                    }
+                                  }}
+                                  onMouseLeave={() => {
+                                    setHoveredMeasurementId(null);
+                                    setHoveredPreviewImage(null);
+                                  }}
+                                  className="hover:bg-gray-50/70 transition-colors"
+                                >
                                   <td className="py-2 px-3 text-center font-bold text-gray-400">
                                     {m.id || index + 1}
                                   </td>
                                   <td className="py-2 px-3 font-medium text-gray-800">
-                                    {m.name || m.description || 'Measurement Point'}
+                                    {(m.point || m.name) ? (
+                                      <div>
+                                        <div className="font-semibold text-gray-900 leading-tight">{m.point || m.name}</div>
+                                        {m.description && (
+                                          <div className="text-gray-500 text-xs leading-tight mt-0.5">{m.description}</div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      m.description || 'Measurement Point'
+                                    )}
                                   </td>
                                   <td className="py-2 px-3 text-center font-mono text-gray-500">
                                     {displayTol}

@@ -837,9 +837,11 @@ export function GarmentAnnotator({
                       }`}>
                         {ann.label}
                       </div>
-                      <button onClick={(e) => removeAnnotation(ann.id, e)} className="opacity-0 group-hover/badge:opacity-100 bg-black/80 text-white p-1 rounded-full transition-opacity hover:bg-black">
-                        <Trash2 size={10} />
-                      </button>
+                      {!isLocked && (
+                        <button onClick={(e) => removeAnnotation(ann.id, e)} className="opacity-0 group-hover/badge:opacity-100 bg-black/80 text-white p-1 rounded-full transition-opacity hover:bg-black">
+                          <Trash2 size={10} />
+                        </button>
+                      )}
                     </div>
                   </foreignObject>
                 </g>
