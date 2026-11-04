@@ -24,7 +24,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { subscribeToTechPack, TechPackData, uploadGarmentImage } from '../services/dbService';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator } from '../components/editor/DetailAnnotator';
-import { exportMeasurementsToCsv } from '../utils/csvExporter';
+import { exportMeasurementsToCsv, computeGradedValueForSize } from '../utils/csvExporter';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const COLOR_NAME_TO_HEX: Record<string, string> = {
@@ -923,7 +923,7 @@ export function SharedTechPack() {
                               const baseSize = displayData?.properties?.baseSize || 'M';
                               const displayVal = activeSizeTab === baseSize
                                 ? (m.value || '-')
-                                : (m.sizes?.[activeSizeTab] || m.value || '-');
+                                : (computeGradedValueForSize(m, baseSize, activeSizeTab, globalUnit) || m.sizes?.[activeSizeTab] || m.value || '-');
                               const displayTol = m.tolerance || (m.tolPlus ? `+${m.tolPlus} / -${m.tolMinus || m.tolPlus}` : '0.5');
 
                               return (

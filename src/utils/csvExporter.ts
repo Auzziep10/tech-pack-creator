@@ -1,6 +1,6 @@
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+export const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 
-const DEFAULT_POM_NAMES: Record<string, string> = {
+export const DEFAULT_POM_NAMES: Record<string, string> = {
   FL001: 'Front length',
   BL001: 'Back length',
   CW001: 'Chest width',
@@ -25,8 +25,8 @@ const DEFAULT_POM_NAMES: Record<string, string> = {
   PK003: 'Pocket opening',
 };
 
-// Standard grading increments in cm per size step
-const DEFAULT_GRADING_CM: Record<string, number> = {
+// Standard Column E grading increments in cm per size step
+export const DEFAULT_GRADING_CM: Record<string, number> = {
   FL001: 2,
   BL001: 2,
   CW001: 2.5,
@@ -51,7 +51,7 @@ const DEFAULT_GRADING_CM: Record<string, number> = {
   PK003: 0.5,
 };
 
-const parseNumericValue = (val: any): number | null => {
+export const parseNumericValue = (val: any): number | null => {
   if (val === null || val === undefined) return null;
   const str = String(val).trim().replace(/,/g, '.');
   if (!str) return null;
@@ -74,17 +74,25 @@ const parseNumericValue = (val: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
-const inferGradingStep = (m: any, unit: 'in' | 'cm'): number => {
-  if (m.grading !== undefined && m.grading !== null && String(m.grading).trim() !== '') {
+export const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
+  if (m?.grading !== undefined && m?.grading !== null && String(m.grading).trim() !== '') {
     const parsed = parseNumericValue(m.grading);
     if (parsed !== null) return parsed;
   }
 
-  const idUpper = String(m.id || '').trim().toUpperCase();
-  let cmStep: number | undefined = DEFAULT_GRADING_CM[idUpper];
+  const idUpper = String(m?.id || '').trim().toUpperCase();
+  const pointText = `${m?.point || ''} ${m?.name || ''}`.toLowerCase();
+
+  // Handle CH001 disambiguation: in core specs CH001 may be "Chest Width" (2.5), otherwise "Sleeve hem height / Cuff Height" (0)
+  let cmStep: number | undefined;
+  if (idUpper === 'CH001' && (pointText.includes('chest') || pointText.includes('bust'))) {
+    cmStep = 2.5;
+  } else {
+    cmStep = DEFAULT_GRADING_CM[idUpper];
+  }
 
   if (cmStep === undefined) {
-    const text = `${m.point || ''} ${m.name || ''} ${m.description || ''}`.toLowerCase();
+    const text = `${pointText} ${m?.description || ''}`.toLowerCase();
     if (
       text.includes('hem height') ||
       text.includes('cuff height') ||
@@ -92,7 +100,8 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm'): number => {
       text.includes('collar width') ||
       text.includes('collar height') ||
       text.includes('back neck drop') ||
-      text.includes('rib height')
+      text.includes('rib height') ||
+      text.includes('fold height')
     ) {
       cmStep = 0;
     } else if (
@@ -134,6 +143,64 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm'): number => {
     return Number((cmStep / 2.54).toFixed(2));
   }
   return cmStep;
+};
+
+export const computeGradedValueForSize = (
+  m: any,
+  baseSize: string = 'M',
+  targetSize: string = 'M',
+  unit: 'in' | 'cm' = 'cm'
+): string => {
+  const normalizedBase = SIZES.includes(String(baseSize).toUpperCase())
+    ? String(baseSize).toUpperCase()
+    : 'M';
+  const normalizedTarget = SIZES.includes(String(targetSize).toUpperCase())
+    ? String(targetSize).toUpperCase()
+    : 'M';
+
+  const baseNum = parseNumericValue(m?.value);
+  if (baseNum === null) {
+    return m?.value || '';
+  }
+
+  const baseIdx = SIZES.indexOf(normalizedBase);
+  const targetIdx = SIZES.indexOf(normalizedTarget);
+
+  if (targetIdx === baseIdx) {
+    return baseNum.toFixed(1);
+  }
+
+  const gradingStep = inferGradingStep(m, unit);
+  const computed = Math.max(0, baseNum + (targetIdx - baseIdx) * gradingStep);
+  return computed.toFixed(1);
+};
+
+export const computeSizeSpreadForMeasurement = (
+  m: any,
+  baseSize: string = 'M',
+  unit: 'in' | 'cm' = 'cm'
+): Record<string, string> => {
+  const spread: Record<string, string> = {};
+  for (const sz of SIZES) {
+    spread[sz] = computeGradedValueForSize(m, baseSize, sz, unit);
+  }
+  return spread;
+};
+
+export const computeSizeSpreadForAllMeasurements = (
+  measurements: any[],
+  baseSize: string = 'M',
+  unit: 'in' | 'cm' = 'cm'
+): any[] => {
+  return (measurements || []).map((m: any) => {
+    const gradingStep = inferGradingStep(m, unit);
+    const sizes = computeSizeSpreadForMeasurement(m, baseSize, unit);
+    return {
+      ...m,
+      grading: String(gradingStep),
+      sizes,
+    };
+  });
 };
 
 const formatTolerance = (m: any): string => {
@@ -185,7 +252,6 @@ export function exportMeasurementsToCsv({
   measurements = [],
 }: ExportCsvOptions): void {
   const normalizedBase = SIZES.includes(baseSize.toUpperCase()) ? baseSize.toUpperCase() : 'M';
-  const baseIdx = SIZES.indexOf(normalizedBase);
 
   const rows: string[][] = [];
 
@@ -206,7 +272,7 @@ export function exportMeasurementsToCsv({
     ...sizeHeaders,
   ]);
 
-  // Data Rows
+  // Data Rows — strictly computed from Base using Column E grading model
   measurements.forEach((m: any, idx: number) => {
     const dimId = m.id || `M${String(idx + 1).padStart(2, '0')}`;
     const idUpper = String(dimId).trim().toUpperCase();
@@ -215,29 +281,10 @@ export function exportMeasurementsToCsv({
     const measurementMethod = m.description || '';
     const tolerance = formatTolerance(m);
     const gradingStep = inferGradingStep(m, unit);
-    const baseNum = parseNumericValue(m.value);
 
-    const sizeValues = SIZES.map((sz, szIdx) => {
-      if (sz === normalizedBase) {
-        if (baseNum !== null) return baseNum.toFixed(1);
-        return m.value || '';
-      }
-
-      // Check if an explicit graded value exists for this size
-      const explicitVal = m.sizes?.[sz];
-      const explicitNum = parseNumericValue(explicitVal);
-      if (explicitNum !== null && explicitNum > 0) {
-        return explicitNum.toFixed(1);
-      }
-
-      // Otherwise calculate from base measurement + grading increment
-      if (baseNum !== null) {
-        const computed = baseNum + (szIdx - baseIdx) * gradingStep;
-        return Math.max(0, computed).toFixed(1);
-      }
-
-      return '';
-    });
+    const sizeValues = SIZES.map((sz) =>
+      computeGradedValueForSize(m, normalizedBase, sz, unit)
+    );
 
     rows.push([
       dimId,

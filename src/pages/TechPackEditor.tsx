@@ -18,8 +18,13 @@ import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { Garment3DViewer } from '../components/editor/Garment3DViewer';
-import { gradeSize, translateTechPack } from '../services/geminiService';
-import { exportMeasurementsToCsv } from '../utils/csvExporter';
+import { translateTechPack } from '../services/geminiService';
+import {
+  exportMeasurementsToCsv,
+  computeGradedValueForSize,
+  computeSizeSpreadForMeasurement,
+  computeSizeSpreadForAllMeasurements,
+} from '../utils/csvExporter';
 
 const forceDownload = async (url: string, filename: string) => {
   try {
@@ -634,27 +639,12 @@ export function TechPackEditor() {
     setIsGrading(true);
     isDirtyRef.current = true;
     try {
-      const currentMeasurements = displayData?.measurements || data?.measurements || [];
-      const graded = await gradeSize(currentMeasurements, baseSize, activeSizeTab, displayData?.properties?.category || 'Garment');
-      
-      const gradedList = Array.isArray(graded)
-        ? graded
-        : (Array.isArray((graded as any)?.measurements) ? (graded as any).measurements : []);
-
-      const updatedMeasurements = (data.measurements || currentMeasurements || []).map((m: any, idx: number) => {
-        const gradedM = gradedList.find((gm: any) => 
-          (gm.id && m.id && String(gm.id).trim().toLowerCase() === String(m.id).trim().toLowerCase()) ||
-          (gm.point && m.point && String(gm.point).trim().toLowerCase() === String(m.point).trim().toLowerCase())
-        ) || gradedList[idx];
-
-        if (gradedM && gradedM.value !== undefined && gradedM.value !== null) {
-          return {
-            ...m,
-            sizes: { ...(m.sizes || {}), [activeSizeTab]: String(gradedM.value) }
-          };
-        }
-        return m;
-      });
+      const currentMeasurements = data?.measurements || displayData?.measurements || [];
+      const updatedMeasurements = computeSizeSpreadForAllMeasurements(
+        currentMeasurements,
+        baseSize,
+        globalUnit
+      );
 
       const updatedData: any = {
         ...data,
@@ -674,7 +664,8 @@ export function TechPackEditor() {
                 if (matchingUpdated && matchingUpdated.sizes) {
                   return {
                     ...tm,
-                    sizes: { ...(tm.sizes || {}), [activeSizeTab]: matchingUpdated.sizes[activeSizeTab] }
+                    grading: matchingUpdated.grading,
+                    sizes: { ...(tm.sizes || {}), ...matchingUpdated.sizes }
                   };
                 }
                 return tm;
@@ -2240,7 +2231,9 @@ export function TechPackEditor() {
     if (field === 'value') {
        const baseSize = newData.properties?.baseSize || 'M';
        if (activeSizeTab === baseSize) {
-          newData.measurements[index].value = value;
+          const updatedM = { ...newData.measurements[index], value };
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+          newData.measurements[index] = updatedM;
        } else {
           newData.measurements[index].sizes = { 
              ...(newData.measurements[index].sizes || {}), 
