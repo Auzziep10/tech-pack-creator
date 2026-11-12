@@ -17,13 +17,16 @@ import {
   Loader2,
   Briefcase,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Mail,
+  Send,
+  Trash2
 } from 'lucide-react';
 import { useAuth, UserProfile } from '../../contexts/AuthContext';
 import { db } from '../../services/firebase';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { fetchAllWovnCustomers } from '../../services/wovnService';
-import { getCompanyUsers, updateUserRole, joinCompanyByCode, addTeamMemberByEmail } from '../../services/dbService';
+import { getCompanyUsers, updateUserRole, joinCompanyByCode, addTeamMemberByEmail, sendInvitePasswordEmail, removePendingInvite } from '../../services/dbService';
 import { Button } from './Button';
 import { Input } from './Input';
 
@@ -51,9 +54,12 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
   // Team Management State
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [pendingInvites, setPendingInvites] = useState<string[]>([]);
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
 
   // Add Member by Email State
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'staff' | 'viewer'>('staff');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -88,6 +94,7 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
             const data = snap.data();
             setJoinCode(data.joinCode || '');
             setCompanyName(data.name || '');
+            setPendingInvites(Array.isArray(data.pendingInvites) ? data.pendingInvites : []);
             
             let ids: string[] = data.wovnCustomerIds || [];
             if (data.wovnCustomerId && !ids.includes(data.wovnCustomerId)) {
@@ -177,6 +184,18 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
     }
   };
 
+  const refreshTeamState = async (companyId: string) => {
+    const [companyMembers, companySnap] = await Promise.all([
+      getCompanyUsers(companyId),
+      getDoc(doc(db, 'companies', companyId)),
+    ]);
+    setUsers(companyMembers);
+    if (companySnap.exists()) {
+      const data = companySnap.data();
+      setPendingInvites(Array.isArray(data.pendingInvites) ? data.pendingInvites : []);
+    }
+  };
+
   const handleAddMemberByEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim() || !profile.companyId) return;
@@ -184,15 +203,55 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
     setInviteError('');
     setInviteSuccess('');
     try {
-      const res = await addTeamMemberByEmail(profile.companyId, inviteEmail.trim());
+      const res = await addTeamMemberByEmail(profile.companyId, inviteEmail.trim(), inviteRole);
       setInviteSuccess(res.message);
       setInviteEmail('');
-      const companyMembers = await getCompanyUsers(profile.companyId);
-      setUsers(companyMembers);
+      await refreshTeamState(profile.companyId);
     } catch (err: any) {
-      setInviteError(err.message || 'Failed to add member.');
+      setInviteError(err.message || 'Failed to invite member.');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const handleSendSavedInvite = async (savedEmail: string) => {
+    if (!profile.companyId) return;
+    setResendingEmail(savedEmail);
+    setInviteError('');
+    setInviteSuccess('');
+    try {
+      const res = await addTeamMemberByEmail(profile.companyId, savedEmail, 'staff');
+      setInviteSuccess(res.message);
+      await refreshTeamState(profile.companyId);
+    } catch (err: any) {
+      setInviteError(err.message || 'Failed to send invite email.');
+    } finally {
+      setResendingEmail(null);
+    }
+  };
+
+  const handleRemoveSavedInvite = async (savedEmail: string) => {
+    if (!profile.companyId) return;
+    try {
+      await removePendingInvite(profile.companyId, savedEmail);
+      setPendingInvites(prev => prev.filter(e => e !== savedEmail));
+    } catch (err: any) {
+      setInviteError(err.message || 'Failed to remove saved invite.');
+    }
+  };
+
+  const handleResendInviteEmail = async (targetEmail?: string | null) => {
+    if (!targetEmail) return;
+    setResendingEmail(targetEmail);
+    setInviteError('');
+    setInviteSuccess('');
+    try {
+      await sendInvitePasswordEmail(targetEmail);
+      setInviteSuccess(`Password setup email re-sent to ${targetEmail}!`);
+    } catch (err: any) {
+      setInviteError(err.message || 'Failed to resend invite email.');
+    } finally {
+      setResendingEmail(null);
     }
   };
 
@@ -567,10 +626,10 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                     <div className="bg-gray-50/60 border border-gray-200/80 rounded-2xl p-4 sm:p-5">
                       <form onSubmit={handleAddMemberByEmail} className="space-y-3">
                         <label className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                          <UserPlus size={15} /> Add Teammate by Email
+                          <UserPlus size={15} /> Invite Teammate by Email
                         </label>
                         <p className="text-xs text-gray-500">
-                          Invite a colleague directly. If they have an existing account, they will be merged into this workspace immediately.
+                          Sends an email link so new teammates can create their own password and log straight into this workspace. Existing accounts are merged immediately.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2">
                           <input
@@ -580,13 +639,24 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                             placeholder="colleague@example.com"
                             className="flex-1 px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-1 focus:ring-black"
                           />
+                          <select
+                            value={inviteRole}
+                            onChange={(e) => setInviteRole(e.target.value as 'admin' | 'staff' | 'viewer')}
+                            className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none focus:ring-1 focus:ring-black shrink-0"
+                            title="Role for invited teammate"
+                          >
+                            <option value="staff">Staff (Read & Write)</option>
+                            <option value="viewer">Viewer (View-Only)</option>
+                            <option value="admin">Admin (Full Control)</option>
+                          </select>
                           <Button 
                             type="submit" 
                             disabled={inviteLoading || !inviteEmail.trim()} 
                             isLoading={inviteLoading}
-                            className="bg-black text-white px-5 py-2 shrink-0 text-xs font-bold rounded-xl"
+                            className="bg-black text-white px-5 py-2 shrink-0 text-xs font-bold rounded-xl flex items-center gap-1.5"
                           >
-                            {inviteLoading ? 'Adding...' : 'Add to Team'}
+                            <Send size={13} />
+                            {inviteLoading ? 'Sending...' : 'Send Invite'}
                           </Button>
                         </div>
                         {inviteSuccess && (
@@ -600,6 +670,52 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                           </div>
                         )}
                       </form>
+                    </div>
+                  )}
+
+                  {/* Legacy Saved Invites (e.g. saved before email sending was enabled) */}
+                  {profile.role === 'admin' && pendingInvites.length > 0 && (
+                    <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                          <Mail size={14} /> Saved Invites (Email Not Sent Yet)
+                        </h4>
+                        <span className="text-[11px] font-semibold text-amber-700">
+                          Click "Send Invite Email" to deliver their password setup link
+                        </span>
+                      </div>
+                      <div className="divide-y divide-amber-200/60 bg-white border border-amber-200/80 rounded-xl overflow-hidden">
+                        {pendingInvites.map((savedEmail) => (
+                          <div key={savedEmail} className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+                            <span className="text-xs font-mono font-medium text-gray-800 truncate">
+                              {savedEmail}
+                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                disabled={resendingEmail === savedEmail}
+                                onClick={() => handleSendSavedInvite(savedEmail)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black text-white hover:bg-gray-800 disabled:opacity-50 text-xs font-bold transition-colors"
+                              >
+                                {resendingEmail === savedEmail ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Send size={12} />
+                                )}
+                                Send Invite Email
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSavedInvite(savedEmail)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                                title="Remove saved invite"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -629,13 +745,18 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                                   {getInitials(u.name, u.email)}
                                 </div>
                                 <div className="flex flex-col min-w-0">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="text-xs sm:text-sm font-bold text-gray-900 truncate">
                                       {u.name || 'Unnamed Member'}
                                     </span>
                                     {isSelf && (
                                       <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded">
                                         You
+                                      </span>
+                                    )}
+                                    {u.invitePending && (
+                                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                        Invite Sent · Pending Login
                                       </span>
                                     )}
                                   </div>
@@ -645,8 +766,24 @@ export function CompanySettingsModal({ isOpen, onClose }: CompanySettingsModalPr
                                 </div>
                               </div>
 
-                              {/* Role Selector / Pill */}
-                              <div className="shrink-0">
+                              {/* Resend Invite + Role Selector / Pill */}
+                              <div className="shrink-0 flex items-center gap-2">
+                                {profile.role === 'admin' && !isSelf && u.invitePending && u.email && (
+                                  <button
+                                    type="button"
+                                    disabled={resendingEmail === u.email}
+                                    onClick={() => handleResendInviteEmail(u.email)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-[11px] font-semibold text-gray-700 transition-colors disabled:opacity-50"
+                                    title="Resend password setup email"
+                                  >
+                                    {resendingEmail === u.email ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <Mail size={12} />
+                                    )}
+                                    <span className="hidden sm:inline">Resend Email</span>
+                                  </button>
+                                )}
                                 {profile.role === 'admin' && !isSelf ? (
                                   <select
                                     value={u.role || 'staff'}

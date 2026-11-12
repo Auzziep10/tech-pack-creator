@@ -1,6 +1,8 @@
-import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc, arrayUnion } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
+import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { auth, db, storage, firebaseConfig } from './firebase';
 
 export interface FolderData {
   id?: string;
@@ -735,16 +737,51 @@ export const joinCompanyByCode = async (
   return { success: true, companyName: targetData.name || 'Team Workspace' };
 };
 
+export const sendInvitePasswordEmail = async (email: string): Promise<void> => {
+  const cleanEmail = email.trim().toLowerCase();
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  if (origin) {
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail, {
+        url: `${origin}/login?email=${encodeURIComponent(cleanEmail)}&invited=1`,
+      });
+      return;
+    } catch (err: any) {
+      const fallbackCodes = [
+        'auth/unauthorized-continue-uri',
+        'auth/invalid-continue-uri',
+        'auth/missing-continue-uri',
+      ];
+      if (!fallbackCodes.includes(err?.code)) {
+        throw err;
+      }
+      console.warn('Continue URI not authorized in Firebase; falling back to default password setup email.', err?.code);
+    }
+  }
+
+  await sendPasswordResetEmail(auth, cleanEmail);
+};
+
+export const removePendingInvite = async (companyId: string, email: string): Promise<void> => {
+  const cleanEmail = email.trim().toLowerCase();
+  const companyRef = doc(db, 'companies', companyId);
+  await updateDoc(companyRef, {
+    pendingInvites: arrayRemove(cleanEmail),
+  });
+};
+
 export const addTeamMemberByEmail = async (
   targetCompanyId: string,
-  email: string
+  email: string,
+  role: 'admin' | 'staff' | 'viewer' = 'staff'
 ): Promise<{ success: boolean; message: string; type: 'added' | 'invited' }> => {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes('@')) {
     throw new Error('Please enter a valid email address.');
   }
 
-  // Check if user already registered in the system
+  // Check if user already has a profile in Firestore
   const usersRef = collection(db, 'users');
   const q = query(usersRef, where('email', '==', cleanEmail));
   const snap = await getDocs(q);
@@ -752,8 +789,17 @@ export const addTeamMemberByEmail = async (
   if (!snap.empty) {
     const userDoc = snap.docs[0];
     const userData = userDoc.data();
+
     if (userData.companyId === targetCompanyId) {
-      throw new Error('This user is already a member of your team.');
+      if (userData.invitePending) {
+        await sendInvitePasswordEmail(cleanEmail);
+        return {
+          success: true,
+          message: `Re-sent password setup email to ${cleanEmail}! Please ask them to check their inbox (and spam folder).`,
+          type: 'invited',
+        };
+      }
+      throw new Error('This user is already an active member of your team.');
     }
 
     await mergeUserIntoCompany(
@@ -763,23 +809,66 @@ export const addTeamMemberByEmail = async (
       userData.companyId || 'default_company',
       targetCompanyId
     );
-    return {
-      success: true,
-      message: `${userData.name || cleanEmail} has been added! Their existing projects were seamlessly merged into a dedicated folder on your dashboard.`,
-      type: 'added'
-    };
-  } else {
-    // User hasn't registered yet -> record pending invite
-    const companyRef = doc(db, 'companies', targetCompanyId);
-    await updateDoc(companyRef, {
-      pendingInvites: arrayUnion(cleanEmail)
+    if (role !== 'viewer') {
+      await updateUserRole(userData.uid, role);
+    }
+    await updateDoc(doc(db, 'companies', targetCompanyId), {
+      pendingInvites: arrayRemove(cleanEmail),
     });
+
     return {
       success: true,
-      message: `Invite saved for ${cleanEmail}. When they register, they will automatically join your company workspace.`,
-      type: 'invited'
+      message: `${userData.name || cleanEmail} already has an account and was added to your workspace immediately!`,
+      type: 'added',
     };
   }
+
+  // Provision a Firebase Auth account via an isolated in-memory app so the admin stays signed in
+  const secondaryAppName = `InviteWorker-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+  const secondaryAuth = initializeAuth(secondaryApp, { persistence: inMemoryPersistence });
+
+  try {
+    const tempPassword = `${crypto.randomUUID()}!Aa9`;
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, tempPassword);
+    const defaultName = cleanEmail.split('@')[0];
+
+    await setDoc(doc(db, 'users', cred.user.uid), {
+      uid: cred.user.uid,
+      email: cleanEmail,
+      name: defaultName,
+      companyId: targetCompanyId,
+      role,
+      invitePending: true,
+      invitedAt: serverTimestamp(),
+    });
+
+    await updateDoc(doc(db, 'companies', targetCompanyId), {
+      members: arrayUnion(cred.user.uid),
+      pendingInvites: arrayRemove(cleanEmail),
+    });
+  } catch (err: any) {
+    if (err?.code === 'auth/email-already-in-use') {
+      // Auth user exists without a Firestore profile yet; keep pendingInvites so first login links them
+      await updateDoc(doc(db, 'companies', targetCompanyId), {
+        pendingInvites: arrayUnion(cleanEmail),
+      });
+    } else {
+      throw err;
+    }
+  } finally {
+    await signOut(secondaryAuth).catch(() => {});
+    await deleteApp(secondaryApp).catch(() => {});
+  }
+
+  // Trigger Firebase's built-in password creation email
+  await sendInvitePasswordEmail(cleanEmail);
+
+  return {
+    success: true,
+    message: `Invitation email sent to ${cleanEmail}! They will receive a link to create their password and log straight into your workspace.`,
+    type: 'invited',
+  };
 };
 
 export interface CompanyData {

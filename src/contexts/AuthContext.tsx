@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 
 export interface UserProfile {
@@ -9,6 +9,8 @@ export interface UserProfile {
   name?: string;
   companyId: string;
   role?: 'admin' | 'staff' | 'viewer';
+  invitePending?: boolean;
+  invitedAt?: any;
 }
 
 const CORE_TEAM_EMAILS = [
@@ -104,8 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const pendingQuery = query(collection(db, 'companies'), where('pendingInvites', 'array-contains', cleanEmail));
                 const pendingSnap = await getDocs(pendingQuery);
                 if (!pendingSnap.empty) {
-                  companyId = pendingSnap.docs[0].id;
-                  role = 'viewer'; // Team invitees start as view-only until owner promotes to staff
+                  const targetDoc = pendingSnap.docs[0];
+                  companyId = targetDoc.id;
+                  role = 'staff';
+                  await updateDoc(targetDoc.ref, {
+                    pendingInvites: arrayRemove(cleanEmail),
+                    members: arrayUnion(u.uid),
+                  });
                 }
               }
 
@@ -139,6 +146,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             let needsUpdate = false;
             const updatedData = { ...data };
 
+            if (data.invitePending) {
+              updatedData.invitePending = false;
+              needsUpdate = true;
+            }
+
             if (isCore) {
               // Core Catalyst team members always belong to default_company with admin full access
               if (data.companyId !== 'default_company' || data.role !== 'admin') {
@@ -148,7 +160,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 await ensureDefaultCompanyDoc();
               }
             } else {
-              if (!data.companyId) {
+              if (cleanEmail) {
+                const pendingQuery = query(collection(db, 'companies'), where('pendingInvites', 'array-contains', cleanEmail));
+                const pendingSnap = await getDocs(pendingQuery);
+                if (!pendingSnap.empty) {
+                  const targetDoc = pendingSnap.docs[0];
+                  if (updatedData.companyId !== targetDoc.id) {
+                    updatedData.companyId = targetDoc.id;
+                    updatedData.role = updatedData.role || 'staff';
+                    needsUpdate = true;
+                  }
+                  await updateDoc(targetDoc.ref, {
+                    pendingInvites: arrayRemove(cleanEmail),
+                    members: arrayUnion(u.uid),
+                  });
+                }
+              }
+              if (!updatedData.companyId) {
                 const companyDocRef = doc(collection(db, 'companies'));
                 const newJoinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
                 await setDoc(companyDocRef, {
@@ -162,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 updatedData.role = 'admin';
                 needsUpdate = true;
               }
-              if (!data.role) {
+              if (!updatedData.role) {
                 updatedData.role = 'admin';
                 needsUpdate = true;
               }
