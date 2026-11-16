@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2 } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2, Crop } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
@@ -18,6 +18,7 @@ import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { Garment3DViewer, ScanPreview3D } from '../components/editor/Garment3DViewer';
+import { ScanMeshEditorModal } from '../components/editor/ScanMeshEditorModal';
 import { translateTechPack } from '../services/geminiService';
 import {
   exportMeasurementsToCsv,
@@ -1492,6 +1493,11 @@ export function TechPackEditor() {
   const [scansTab, setScansTab] = useState<'pending' | 'claimed'>('pending');
   const [selectedPreviewScanId, setSelectedPreviewScanId] = useState<string | null>(null);
   const [stagedLocal3DFile, setStagedLocal3DFile] = useState<{ file: File; objectUrl: string } | null>(null);
+  const [editing3DTarget, setEditing3DTarget] = useState<{
+    url: string;
+    formatHint?: string;
+    sourceScan?: any;
+  } | null>(null);
   const [isUploading3D, setIsUploading3D] = useState(false);
   const [deletingScanId, setDeletingScanId] = useState<string | null>(null);
   const scanFileInputRef = useRef<HTMLInputElement>(null);
@@ -1651,6 +1657,33 @@ export function TechPackEditor() {
       console.error('Failed to claim scan:', e);
       alert('Failed to attach scan: ' + (e?.message || String(e)));
     }
+  };
+
+  const handleSaveEdited3DModel = async (glbFile: File) => {
+    if (!user) return;
+    const { url } = await upload3DScanFile(glbFile, user.uid, user.email || undefined);
+    setData((prev: any) => ({ ...prev, model3dUrl: url }));
+    isDirtyRef.current = true;
+    if (id && id !== 'draft') {
+      await updateDoc(doc(db, 'techPacks', id), {
+        model3dUrl: url,
+        'techPack.model3dUrl': url,
+      });
+    }
+    const sourceScan = editing3DTarget?.sourceScan;
+    if (sourceScan && sourceScan.status !== 'claimed') {
+      const targetUid = sourceScan.ownerUid || user.uid;
+      await updateDoc(doc(db, `users/${targetUid}/pendingScans`, sourceScan.id), {
+        status: 'claimed',
+      }).catch(() => {});
+    }
+    if (stagedLocal3DFile?.objectUrl) {
+      URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+      setStagedLocal3DFile(null);
+    }
+    setEditing3DTarget(null);
+    setShowScansInbox(false);
+    pushLog('Edited & Attached Cleaned 3D Scan', 'image');
   };
 
   const handleDeleteScan = async (scan: any) => {
@@ -4377,28 +4410,42 @@ export function TechPackEditor() {
               <div className="flex items-center justify-between pl-2 pr-2 mb-4">
                 <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">3D AR Mesh Viewer</h3>
                 {!isTechPackLocked && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (!confirm("Are you sure you want to remove the 3D model from this tech pack?")) return;
-                      setData((prev: any) => {
-                        const copy = { ...prev };
-                        delete copy.model3dUrl;
-                        return copy;
-                      });
-                      isDirtyRef.current = true;
-                      if (id && id !== 'draft') {
-                        updateDoc(doc(db, 'techPacks', id), {
-                          "model3dUrl": deleteField(),
-                          "techPack.model3dUrl": deleteField()
-                        }).catch(console.error);
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing3DTarget({
+                          url: displayData.model3dUrl,
+                        })
                       }
-                      pushLog('Removed 3D Model', 'image');
-                    }}
-                    className="text-xs text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 transition cursor-pointer"
-                  >
-                    Remove 3D Model
-                  </button>
+                      className="inline-flex items-center gap-1.5 text-xs text-gray-700 hover:text-black font-bold px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition cursor-pointer"
+                    >
+                      <Crop size={13} />
+                      Edit / Crop 3D Model
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (!confirm("Are you sure you want to remove the 3D model from this tech pack?")) return;
+                        setData((prev: any) => {
+                          const copy = { ...prev };
+                          delete copy.model3dUrl;
+                          return copy;
+                        });
+                        isDirtyRef.current = true;
+                        if (id && id !== 'draft') {
+                          updateDoc(doc(db, 'techPacks', id), {
+                            "model3dUrl": deleteField(),
+                            "techPack.model3dUrl": deleteField()
+                          }).catch(console.error);
+                        }
+                        pushLog('Removed 3D Model', 'image');
+                      }}
+                      className="text-xs text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded hover:bg-red-50 transition cursor-pointer"
+                    >
+                      Remove 3D Model
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="w-full">
@@ -5113,8 +5160,22 @@ export function TechPackEditor() {
                           disabled={isUploading3D}
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl"
                         >
-                          {isUploading3D ? 'Uploading & Attaching...' : 'Upload & Attach to Tech Pack'}
+                          {isUploading3D ? 'Uploading & Attaching...' : 'Upload & Attach'}
                         </Button>
+                        <button
+                          type="button"
+                          disabled={isUploading3D}
+                          onClick={() =>
+                            setEditing3DTarget({
+                              url: stagedLocal3DFile.objectUrl,
+                              formatHint: stagedLocal3DFile.file.name,
+                            })
+                          }
+                          className="px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors"
+                        >
+                          <Crop size={14} />
+                          Crop / Edit
+                        </button>
                       </div>
                     </>
                   ) : previewScan ? (
@@ -5167,14 +5228,29 @@ export function TechPackEditor() {
                         formatHint={previewScan.fileName}
                       />
 
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
                         <Button
                           type="button"
                           onClick={() => handleAttachScan(previewScan)}
                           className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer"
                         >
-                          Attach Previewed Scan to Tech Pack
+                          Attach Scan
                         </Button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditing3DTarget({
+                              url: previewScan.url,
+                              formatHint: previewScan.fileName,
+                              sourceScan: previewScan,
+                            })
+                          }
+                          className="px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Crop out mannequin or erase unwanted scan parts before attaching"
+                        >
+                          <Crop size={14} />
+                          Crop / Edit Scan
+                        </button>
                         <button
                           type="button"
                           disabled={deletingScanId === previewScan.id || deletingScanId === 'all'}
@@ -5202,6 +5278,16 @@ export function TechPackEditor() {
           );
         })()}
       </Modal>
+
+      {editing3DTarget && (
+        <ScanMeshEditorModal
+          isOpen={Boolean(editing3DTarget)}
+          onClose={() => setEditing3DTarget(null)}
+          sourceUrl={editing3DTarget.url}
+          formatHint={editing3DTarget.formatHint}
+          onSaveEditedFile={handleSaveEdited3DModel}
+        />
+      )}
 
       <TechPackHistoryDrawer 
         isOpen={showHistory} 
