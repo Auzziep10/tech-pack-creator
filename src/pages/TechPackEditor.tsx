@@ -5228,11 +5228,11 @@ export function TechPackEditor() {
                         formatHint={previewScan.fileName}
                       />
 
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 pt-1">
                         <Button
                           type="button"
                           onClick={() => handleAttachScan(previewScan)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer"
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl cursor-pointer whitespace-nowrap"
                         >
                           Attach Scan
                         </Button>
@@ -5245,17 +5245,17 @@ export function TechPackEditor() {
                               sourceScan: previewScan,
                             })
                           }
-                          className="px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-3 py-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-800 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
                           title="Crop out mannequin or erase unwanted scan parts before attaching"
                         >
                           <Crop size={14} />
-                          Crop / Edit Scan
+                          Crop / Edit
                         </button>
                         <button
                           type="button"
                           disabled={deletingScanId === previewScan.id || deletingScanId === 'all'}
                           onClick={() => handleDeleteScan(previewScan)}
-                          className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 text-gray-600 hover:text-red-600 text-xs font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                          className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 text-gray-600 hover:text-red-600 text-xs font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
                           title="Delete this scan"
                         >
                           <Trash2 size={14} />

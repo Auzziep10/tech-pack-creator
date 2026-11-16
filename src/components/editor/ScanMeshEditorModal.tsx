@@ -1120,7 +1120,7 @@ export function ScanMeshEditorModal({
           {/* Interactive 3D Canvas Area */}
           <div
             ref={canvasWrapRef}
-            className={`flex-1 relative bg-[#f1f3f6] select-none min-h-[320px] ${
+            className={`flex-1 min-w-0 relative bg-[#f1f3f6] select-none min-h-[320px] ${
               activeTool === 'boxCut'
                 ? 'cursor-crosshair'
                 : activeTool === 'brush' || activeTool === 'island'
@@ -1235,7 +1235,7 @@ export function ScanMeshEditorModal({
           </div>
 
           {/* Right Control Panel */}
-          <aside className="w-full lg:w-88 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-200 bg-white p-4 sm:p-5 overflow-y-auto space-y-5">
+          <aside className="w-full lg:w-80 xl:w-[340px] shrink-0 border-t lg:border-t-0 lg:border-l border-gray-200 bg-white p-4 sm:p-5 overflow-y-auto space-y-4">
             {/* Tool Switcher */}
             <div className="space-y-2">
               <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
@@ -1245,53 +1245,53 @@ export function ScanMeshEditorModal({
                 <button
                   type="button"
                   onClick={() => handleSwitchTool('crop')}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left ${
+                  className={`flex items-center gap-2 px-2.5 py-2.5 rounded-xl text-xs font-bold border transition-all text-left min-w-0 ${
                     activeTool === 'crop'
-                      ? 'bg-black text-white border-black shadow-xs'
+                      ? 'bg-black text-white border-black shadow-sm'
                       : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <Crop size={15} className="shrink-0" />
-                  <span>3D Crop Box</span>
+                  <Crop size={14} className="shrink-0" />
+                  <span className="truncate">3D Crop Box</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSwitchTool('brush')}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left ${
+                  className={`flex items-center gap-2 px-2.5 py-2.5 rounded-xl text-xs font-bold border transition-all text-left min-w-0 ${
                     activeTool === 'brush'
-                      ? 'bg-black text-white border-black shadow-xs'
+                      ? 'bg-black text-white border-black shadow-sm'
                       : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <Eraser size={15} className="shrink-0" />
-                  <span>Eraser Brush</span>
+                  <Eraser size={14} className="shrink-0" />
+                  <span className="truncate">Eraser Brush</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSwitchTool('boxCut')}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left ${
+                  className={`flex items-center gap-2 px-2.5 py-2.5 rounded-xl text-xs font-bold border transition-all text-left min-w-0 ${
                     activeTool === 'boxCut'
-                      ? 'bg-black text-white border-black shadow-xs'
+                      ? 'bg-black text-white border-black shadow-sm'
                       : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <SquareDashedMousePointer size={15} className="shrink-0" />
-                  <span>Box Cutout</span>
+                  <SquareDashedMousePointer size={14} className="shrink-0" />
+                  <span className="truncate">Box Cutout</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleSwitchTool('island')}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-all text-left ${
+                  className={`flex items-center gap-2 px-2.5 py-2.5 rounded-xl text-xs font-bold border transition-all text-left min-w-0 ${
                     activeTool === 'island'
-                      ? 'bg-black text-white border-black shadow-xs'
+                      ? 'bg-black text-white border-black shadow-sm'
                       : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                   }`}
                 >
-                  <Wand2 size={15} className="shrink-0" />
-                  <span>Delete Part</span>
+                  <Wand2 size={14} className="shrink-0" />
+                  <span className="truncate">Delete Part</span>
                 </button>
 
                 <button
@@ -1299,11 +1299,11 @@ export function ScanMeshEditorModal({
                   onClick={() => handleSwitchTool('orbit')}
                   className={`col-span-2 flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                     activeTool === 'orbit'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                       : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                   }`}
                 >
-                  <Move3d size={15} />
+                  <Move3d size={14} className="shrink-0" />
                   <span>Rotate / Inspect Camera</span>
                 </button>
               </div>
@@ -1503,10 +1503,10 @@ export function ScanMeshEditorModal({
             onClick={handleSave}
             isLoading={isSaving}
             disabled={isLoading || Boolean(loadError) || isSaving}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-xs"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-sm whitespace-nowrap"
           >
-            <Check size={15} className="mr-1.5" />
-            {isSaving ? 'Saving Cleaned 3D Model...' : saveButtonLabel}
+            {!isSaving && <Check size={15} className="mr-1.5 shrink-0" />}
+            <span>{isSaving ? 'Saving Cleaned 3D Model...' : saveButtonLabel}</span>
           </Button>
         </footer>
       </div>
