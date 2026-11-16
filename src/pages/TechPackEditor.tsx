@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2 } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
@@ -17,7 +17,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../services/firebase';
 import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
-import { Garment3DViewer } from '../components/editor/Garment3DViewer';
+import { Garment3DViewer, ScanPreview3D } from '../components/editor/Garment3DViewer';
 import { translateTechPack } from '../services/geminiService';
 import {
   exportMeasurementsToCsv,
@@ -1490,12 +1490,36 @@ export function TechPackEditor() {
   const [allWorkspaceScans, setAllWorkspaceScans] = useState<any[]>([]);
   const [showScansInbox, setShowScansInbox] = useState(false);
   const [scansTab, setScansTab] = useState<'pending' | 'claimed'>('pending');
+  const [selectedPreviewScanId, setSelectedPreviewScanId] = useState<string | null>(null);
+  const [stagedLocal3DFile, setStagedLocal3DFile] = useState<{ file: File; objectUrl: string } | null>(null);
   const [isUploading3D, setIsUploading3D] = useState(false);
   const [deletingScanId, setDeletingScanId] = useState<string | null>(null);
   const scanFileInputRef = useRef<HTMLInputElement>(null);
 
   const pendingScans = allWorkspaceScans.filter((s: any) => s.status !== 'claimed');
   const claimedScans = allWorkspaceScans.filter((s: any) => s.status === 'claimed');
+  const activeTabScans = scansTab === 'pending' ? pendingScans : claimedScans;
+
+  useEffect(() => {
+    if (!showScansInbox) return;
+    if (stagedLocal3DFile) return;
+
+    const currentExists = activeTabScans.some(
+      (s: any) => `${s.ownerUid || 'me'}_${s.id}` === selectedPreviewScanId
+    );
+    if (!currentExists) {
+      const first = activeTabScans[0];
+      setSelectedPreviewScanId(first ? `${first.ownerUid || 'me'}_${first.id}` : null);
+    }
+  }, [showScansInbox, scansTab, allWorkspaceScans, stagedLocal3DFile, selectedPreviewScanId]);
+
+  useEffect(() => {
+    return () => {
+      if (stagedLocal3DFile?.objectUrl) {
+        URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+      }
+    };
+  }, [stagedLocal3DFile]);
 
   useEffect(() => {
     if (!user) {
@@ -1568,14 +1592,23 @@ export function TechPackEditor() {
     };
   }, [user, profile?.name, effectiveCompanyId]);
 
-  const handleDirect3DFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStageLocal3DFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !user) return;
+    if (!file) return;
 
+    if (stagedLocal3DFile?.objectUrl) {
+      URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setStagedLocal3DFile({ file, objectUrl });
+  };
+
+  const handleConfirmStagedLocalUpload = async () => {
+    if (!stagedLocal3DFile || !user) return;
     setIsUploading3D(true);
     try {
-      const { url, fileName } = await upload3DScanFile(file, user.uid, user.email || undefined);
+      const { url, fileName } = await upload3DScanFile(stagedLocal3DFile.file, user.uid, user.email || undefined);
       setData((prev: any) => ({ ...prev, model3dUrl: url }));
       isDirtyRef.current = true;
       if (id && id !== 'draft') {
@@ -1584,6 +1617,8 @@ export function TechPackEditor() {
           'techPack.model3dUrl': url,
         });
       }
+      URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+      setStagedLocal3DFile(null);
       setShowScansInbox(false);
       pushLog(`Uploaded & Attached 3D Model (${fileName})`, 'image');
     } catch (err: any) {
@@ -1591,6 +1626,30 @@ export function TechPackEditor() {
       alert('Failed to upload 3D scan: ' + (err?.message || String(err)));
     } finally {
       setIsUploading3D(false);
+    }
+  };
+
+  const handleAttachScan = async (scan: any) => {
+    try {
+      setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
+      isDirtyRef.current = true;
+      if (id && id !== 'draft') {
+        await updateDoc(doc(db, 'techPacks', id), {
+          model3dUrl: scan.url,
+          'techPack.model3dUrl': scan.url,
+        });
+      }
+      const targetUid = scan.ownerUid || user?.uid;
+      if (targetUid && scan.status !== 'claimed') {
+        await updateDoc(doc(db, `users/${targetUid}/pendingScans`, scan.id), {
+          status: 'claimed',
+        });
+      }
+      setShowScansInbox(false);
+      pushLog(`Linked Mobile 3D Scan (${scan.mode || '3d'})`, 'image');
+    } catch (e: any) {
+      console.error('Failed to claim scan:', e);
+      alert('Failed to attach scan: ' + (e?.message || String(e)));
     }
   };
 
@@ -4815,174 +4874,333 @@ export function TechPackEditor() {
       </div>
 
       {/* Mobile Scans Inbox Modal */}
-      <Modal isOpen={showScansInbox} onClose={() => setShowScansInbox(false)} title="Mobile Scans Inbox">
-        <div className="space-y-4 max-h-[68vh] overflow-y-auto pr-1 pb-2">
-          <p className="text-sm text-gray-500">
-            3D scans synced by anyone in your workspace via the companion app appear below (newest first), or upload a 3D file directly from your computer.
-          </p>
+      <Modal
+        isOpen={showScansInbox}
+        onClose={() => {
+          if (stagedLocal3DFile?.objectUrl) {
+            URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+            setStagedLocal3DFile(null);
+          }
+          setShowScansInbox(false);
+        }}
+        title="Mobile Scans Inbox"
+        maxWidth="max-w-5xl"
+      >
+        {(() => {
+          const activeScans = scansTab === 'pending' ? pendingScans : claimedScans;
+          const previewIndex = activeScans.findIndex(
+            (s) => `${s.ownerUid || 'me'}_${s.id}` === selectedPreviewScanId
+          );
+          const previewScan = previewIndex >= 0 ? activeScans[previewIndex] : activeScans[0] || null;
+          const effectivePreviewIndex = previewIndex >= 0 ? previewIndex : previewScan ? 0 : -1;
 
-          {/* Direct Desktop 3D File Upload */}
-          <div className="p-3.5 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs font-bold text-gray-900">Upload 3D File from Computer</div>
-              <div className="text-[11px] text-gray-500">Supports .usdz, .glb, .gltf, or .obj</div>
-            </div>
-            <input
-              ref={scanFileInputRef}
-              type="file"
-              accept=".usdz,.glb,.gltf,.obj"
-              onChange={handleDirect3DFileUpload}
-              className="hidden"
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              disabled={isUploading3D}
-              isLoading={isUploading3D}
-              onClick={() => scanFileInputRef.current?.click()}
-              className="shrink-0 text-xs font-bold"
-            >
-              <Upload size={14} className="mr-1.5" />
-              {isUploading3D ? 'Uploading...' : 'Choose File'}
-            </Button>
-          </div>
+          const formatScanTitle = (scan: any) => {
+            const isCustomFile = scan?.fileName && !/^scan_\d+\.usdz$/i.test(scan.fileName);
+            return isCustomFile
+              ? scan.fileName
+              : `Incoming ${scan?.mode === 'flat' ? 'Flat Lay Scan' : '3D Scan'}`;
+          };
 
-          {/* Filter Tabs + Clear All */}
-          <div className="flex items-center justify-between gap-2 border-b border-gray-200 pb-2">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setScansTab('pending')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  scansTab === 'pending'
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                New ({pendingScans.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setScansTab('claimed')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  scansTab === 'claimed'
-                    ? 'bg-black text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Previously Attached ({claimedScans.length})
-              </button>
-            </div>
+          const formatScanMeta = (scan: any) => {
+            const timestampMs = scan?.createdAt?.toMillis
+              ? scan.createdAt.toMillis()
+              : scan?.createdAt?.seconds
+              ? scan.createdAt.seconds * 1000
+              : null;
+            const uploaderDisplay = scan?.uploaderEmail || scan?.ownerLabel || '';
+            return `${timestampMs ? new Date(timestampMs).toLocaleString() : 'Just now'}${
+              uploaderDisplay ? ` · ${uploaderDisplay}` : ''
+            }`;
+          };
 
-            {(scansTab === 'pending' ? pendingScans.length : claimedScans.length) > 0 && (
-              <button
-                type="button"
-                disabled={deletingScanId === 'all'}
-                onClick={handleClearScansTab}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <Trash2 size={13} />
-                Clear All
-              </button>
-            )}
-          </div>
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Click any scan to inspect a live 3D preview on the right before attaching it to this Tech Pack, or choose a local 3D file to preview before uploading.
+              </p>
 
-          {/* Scans List */}
-          {(() => {
-            const activeScans = scansTab === 'pending' ? pendingScans : claimedScans;
-            if (activeScans.length === 0) {
-              return (
-                <div className="py-8 text-center text-sm text-gray-400">
-                  {scansTab === 'pending'
-                    ? 'No unattached mobile scans right now. Sync a scan from the companion app, check "Previously Attached", or upload a file above.'
-                    : 'No previously attached scans.'}
-                </div>
-              );
-            }
-            return (
-              <div className="grid gap-2.5">
-                {activeScans.map((scan) => {
-                  const timestampMs = scan.createdAt?.toMillis
-                    ? scan.createdAt.toMillis()
-                    : scan.createdAt?.seconds
-                    ? scan.createdAt.seconds * 1000
-                    : null;
-                  const uploaderDisplay = scan.uploaderEmail || scan.ownerLabel || '';
-                  const isCustomFile = scan.fileName && !/^scan_\d+\.usdz$/i.test(scan.fileName);
-
-                  return (
-                    <div
-                      key={`${scan.ownerUid || 'me'}_${scan.id}`}
-                      className="flex items-center justify-between gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors"
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* LEFT COLUMN: Upload + Tabs + Scans List */}
+                <div className="lg:col-span-6 space-y-3.5">
+                  {/* Direct Desktop 3D File Upload */}
+                  <div className="p-3.5 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-gray-900">Upload 3D File from Computer</div>
+                      <div className="text-[11px] text-gray-500">Preview .usdz, .glb, .gltf, or .obj before attaching</div>
+                    </div>
+                    <input
+                      ref={scanFileInputRef}
+                      type="file"
+                      accept=".usdz,.glb,.gltf,.obj"
+                      onChange={handleStageLocal3DFile}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={isUploading3D}
+                      onClick={() => scanFileInputRef.current?.click()}
+                      className="shrink-0 text-xs font-bold"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                          <Archive size={20} />
-                        </div>
+                      <Upload size={14} className="mr-1.5" />
+                      Choose File
+                    </Button>
+                  </div>
+
+                  {/* Filter Tabs + Clear All */}
+                  <div className="flex items-center justify-between gap-2 border-b border-gray-200 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStagedLocal3DFile(null);
+                          setScansTab('pending');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          scansTab === 'pending'
+                            ? 'bg-black text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        New ({pendingScans.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStagedLocal3DFile(null);
+                          setScansTab('claimed');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          scansTab === 'claimed'
+                            ? 'bg-black text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        Previously Attached ({claimedScans.length})
+                      </button>
+                    </div>
+
+                    {activeScans.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={deletingScanId === 'all'}
+                        onClick={handleClearScansTab}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={13} />
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable Scans List */}
+                  {activeScans.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-gray-400">
+                      {scansTab === 'pending'
+                        ? 'No unattached mobile scans right now. Sync a scan from the companion app, check "Previously Attached", or choose a file above.'
+                        : 'No previously attached scans.'}
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 max-h-[50vh] overflow-y-auto pr-1 pb-1">
+                      {activeScans.map((scan) => {
+                        const rowKey = `${scan.ownerUid || 'me'}_${scan.id}`;
+                        const isPreviewing = !stagedLocal3DFile && previewScan && `${previewScan.ownerUid || 'me'}_${previewScan.id}` === rowKey;
+
+                        return (
+                          <div
+                            key={rowKey}
+                            onClick={() => {
+                              if (stagedLocal3DFile?.objectUrl) {
+                                URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+                                setStagedLocal3DFile(null);
+                              }
+                              setSelectedPreviewScanId(rowKey);
+                            }}
+                            className={`flex items-center justify-between gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
+                              isPreviewing
+                                ? 'bg-blue-50/70 border-blue-500 ring-1 ring-blue-500/30 shadow-2xs'
+                                : 'bg-gray-50 border-gray-200 hover:border-blue-300 hover:bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isPreviewing ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-600'
+                                }`}
+                              >
+                                <Eye size={17} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs sm:text-sm text-gray-900 leading-tight truncate flex items-center gap-1.5">
+                                  <span className="truncate">{formatScanTitle(scan)}</span>
+                                  {isPreviewing && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded shrink-0">
+                                      Previewing
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                  {formatScanMeta(scan)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                onClick={() => handleAttachScan(scan)}
+                                size="sm"
+                                className="bg-blue-600 cursor-pointer text-xs px-3"
+                              >
+                                Attach
+                              </Button>
+                              <button
+                                type="button"
+                                disabled={deletingScanId === scan.id || deletingScanId === 'all'}
+                                onClick={() => handleDeleteScan(scan)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Delete scan"
+                              >
+                                {deletingScanId === scan.id ? (
+                                  <Loader2 size={15} className="animate-spin text-red-500" />
+                                ) : (
+                                  <Trash2 size={15} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* RIGHT COLUMN: Live 3D Preview Stage */}
+                <div className="lg:col-span-6 bg-gray-50/80 border border-gray-200 rounded-2xl p-4 space-y-3">
+                  {stagedLocal3DFile ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="font-bold text-sm text-gray-900 leading-tight truncate">
-                            {isCustomFile
-                              ? scan.fileName
-                              : `Incoming ${scan.mode === 'flat' ? 'Flat Lay Scan' : '3D Scan'}`}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-0.5 truncate">
-                            {timestampMs ? new Date(timestampMs).toLocaleString() : 'Just now'}
-                            {uploaderDisplay ? ` · ${uploaderDisplay}` : ''}
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                            Local File Preview (Not Uploaded Yet)
+                          </span>
+                          <div className="text-sm font-bold text-gray-900 truncate mt-1">
+                            {stagedLocal3DFile.file.name}
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          onClick={async () => {
-                            try {
-                              setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
-                              isDirtyRef.current = true;
-                              if (id && id !== 'draft') {
-                                await updateDoc(doc(db, 'techPacks', id), {
-                                  model3dUrl: scan.url,
-                                  'techPack.model3dUrl': scan.url,
-                                });
-                              }
-                              const targetUid = scan.ownerUid || user?.uid;
-                              if (targetUid && scan.status !== 'claimed') {
-                                await updateDoc(doc(db, `users/${targetUid}/pendingScans`, scan.id), {
-                                  status: 'claimed',
-                                });
-                              }
-                              setShowScansInbox(false);
-                              pushLog(`Linked Mobile 3D Scan (${scan.mode || '3d'})`, 'image');
-                            } catch (e: any) {
-                              console.error('Failed to claim scan:', e);
-                              alert('Failed to attach scan: ' + (e?.message || String(e)));
-                            }
+                        <button
+                          type="button"
+                          onClick={() => {
+                            URL.revokeObjectURL(stagedLocal3DFile.objectUrl);
+                            setStagedLocal3DFile(null);
                           }}
-                          size="sm"
-                          className="bg-blue-600 cursor-pointer"
+                          className="text-xs font-semibold text-gray-500 hover:text-gray-900 px-2 py-1 rounded-lg hover:bg-gray-200/60"
                         >
-                          Attach
+                          Cancel
+                        </button>
+                      </div>
+
+                      <ScanPreview3D
+                        url={stagedLocal3DFile.objectUrl}
+                        formatHint={stagedLocal3DFile.file.name}
+                      />
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          onClick={handleConfirmStagedLocalUpload}
+                          isLoading={isUploading3D}
+                          disabled={isUploading3D}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl"
+                        >
+                          {isUploading3D ? 'Uploading & Attaching...' : 'Upload & Attach to Tech Pack'}
+                        </Button>
+                      </div>
+                    </>
+                  ) : previewScan ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                            3D Scan Preview ({effectivePreviewIndex + 1} of {activeScans.length})
+                          </div>
+                          <div className="text-sm font-bold text-gray-900 truncate">
+                            {formatScanTitle(previewScan)}
+                          </div>
+                          <div className="text-[11px] text-gray-500 truncate">
+                            {formatScanMeta(previewScan)}
+                          </div>
+                        </div>
+
+                        {activeScans.length > 1 && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={effectivePreviewIndex <= 0}
+                              onClick={() => {
+                                const prev = activeScans[effectivePreviewIndex - 1];
+                                if (prev) setSelectedPreviewScanId(`${prev.ownerUid || 'me'}_${prev.id}`);
+                              }}
+                              className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors"
+                              title="Previous scan"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={effectivePreviewIndex >= activeScans.length - 1}
+                              onClick={() => {
+                                const next = activeScans[effectivePreviewIndex + 1];
+                                if (next) setSelectedPreviewScanId(`${next.ownerUid || 'me'}_${next.id}`);
+                              }}
+                              className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors"
+                              title="Next scan"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <ScanPreview3D
+                        url={previewScan.url}
+                        formatHint={previewScan.fileName}
+                      />
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          onClick={() => handleAttachScan(previewScan)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer"
+                        >
+                          Attach Previewed Scan to Tech Pack
                         </Button>
                         <button
                           type="button"
-                          disabled={deletingScanId === scan.id || deletingScanId === 'all'}
-                          onClick={() => handleDeleteScan(scan)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Delete scan"
+                          disabled={deletingScanId === previewScan.id || deletingScanId === 'all'}
+                          onClick={() => handleDeleteScan(previewScan)}
+                          className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-red-50 hover:border-red-200 text-gray-600 hover:text-red-600 text-xs font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                          title="Delete this scan"
                         >
-                          {deletingScanId === scan.id ? (
-                            <Loader2 size={16} className="animate-spin text-red-500" />
-                          ) : (
-                            <Trash2 size={16} />
-                          )}
+                          <Trash2 size={14} />
+                          Delete
                         </button>
                       </div>
+                    </>
+                  ) : (
+                    <div className="h-[320px] flex flex-col items-center justify-center text-center p-6 text-gray-400 gap-2">
+                      <Archive size={28} className="opacity-50" />
+                      <div className="text-xs font-semibold text-gray-500">No Scan Selected</div>
+                      <div className="text-[11px]">
+                        Select a scan from the list or choose a 3D file from your computer to preview it here.
+                      </div>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
-            );
-          })()}
-        </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       <TechPackHistoryDrawer 

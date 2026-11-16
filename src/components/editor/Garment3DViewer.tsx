@@ -5,22 +5,28 @@ import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
+import { Download, Smartphone, Box, Ruler, Check, X, Undo2, Loader2, AlertCircle } from 'lucide-react';
 
 const Model = ({ 
   url, 
+  formatHint,
   isMeasuring, 
   lastPoint, 
   onAddSegment, 
   onLoadedScale,
-  scaleRatios
+  scaleRatios,
+  onLoadingChange,
+  onErrorChange
 }: { 
   url: string, 
+  formatHint?: string,
   isMeasuring: boolean, 
   lastPoint: THREE.Vector3 | null, 
   onAddSegment: (pts: THREE.Vector3[]) => void, 
   onLoadedScale: (s: number) => void,
-  scaleRatios?: { x: number, y: number, z: number }
+  scaleRatios?: { x: number, y: number, z: number },
+  onLoadingChange?: (loading: boolean, progress: number | null) => void,
+  onErrorChange?: (err: string | null) => void
 }) => {
   const { camera } = useThree();
   const [scene, setScene] = useState<THREE.Group | null>(null);
@@ -29,7 +35,10 @@ const Model = ({
 
   useEffect(() => {
     let active = true;
+    setScene(null);
     setError(null);
+    onErrorChange?.(null);
+    onLoadingChange?.(true, null);
 
     const handleLoadedGroup = (group: THREE.Group) => {
       if (!active) return;
@@ -72,27 +81,40 @@ const Model = ({
       });
 
       setScene(group);
+      onLoadingChange?.(false, 100);
+    };
+
+    const handleProgress = (evt: ProgressEvent) => {
+      if (!active) return;
+      if (evt && evt.lengthComputable && evt.total > 0) {
+        onLoadingChange?.(true, Math.round((evt.loaded / evt.total) * 100));
+      }
     };
 
     const handleLoadError = (err: any) => {
       console.error("3D Model Loader Error:", err);
-      if (active) setError("Failed to load 3D mesh.");
+      if (active) {
+        const msg = "Failed to load 3D mesh.";
+        setError(msg);
+        onErrorChange?.(msg);
+        onLoadingChange?.(false, null);
+      }
     };
 
-    const cleanPath = decodeURIComponent(url.split('?')[0]).toLowerCase();
+    const cleanPath = decodeURIComponent((formatHint || url).split('?')[0]).toLowerCase();
     if (cleanPath.endsWith('.glb') || cleanPath.endsWith('.gltf')) {
       const gltfLoader = new GLTFLoader();
-      gltfLoader.load(url, (gltf) => handleLoadedGroup(gltf.scene), undefined, handleLoadError);
+      gltfLoader.load(url, (gltf) => handleLoadedGroup(gltf.scene), handleProgress, handleLoadError);
     } else if (cleanPath.endsWith('.obj')) {
       const objLoader = new OBJLoader();
-      objLoader.load(url, (obj) => handleLoadedGroup(obj), undefined, handleLoadError);
+      objLoader.load(url, (obj) => handleLoadedGroup(obj), handleProgress, handleLoadError);
     } else {
       const usdzLoader = new USDZLoader();
-      usdzLoader.load(url, (group: any) => handleLoadedGroup(group), undefined, handleLoadError);
+      usdzLoader.load(url, (group: any) => handleLoadedGroup(group), handleProgress, handleLoadError);
     }
 
     return () => { active = false; };
-  }, [url]);
+  }, [url, formatHint]);
 
   useEffect(() => {
     if (scene && baseScale && scaleRatios) {
@@ -437,6 +459,95 @@ export const Garment3DViewer = ({
           Export Source .USDZ
         </a>
       </div>
+    </div>
+  );
+};
+
+export const ScanPreview3D = ({
+  url,
+  formatHint,
+}: {
+  url: string;
+  formatHint?: string;
+}) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  if (!url) return null;
+
+  return (
+    <div className="w-full h-[300px] sm:h-[340px] bg-[#f4f5f7] rounded-2xl overflow-hidden relative border border-gray-200 shadow-inner cursor-grab active:cursor-grabbing">
+      {isLoading && !loadError && (
+        <div className="absolute inset-0 z-20 bg-white/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <Loader2 size={24} className="animate-spin text-blue-600" />
+          <span className="text-xs font-bold text-gray-700">
+            Loading 3D Preview{progress !== null ? ` (${progress}%)` : '...'}
+          </span>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="absolute inset-0 z-20 bg-gray-50 flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <AlertCircle size={24} className="text-red-500" />
+          <span className="text-xs font-bold text-gray-800">{loadError}</span>
+          <span className="text-[11px] text-gray-500">
+            This scan file could not be rendered (it may be corrupted or no longer available).
+          </span>
+        </div>
+      )}
+
+      <Canvas
+        shadows
+        camera={{ position: [0, 1.8, 7.5], fov: 40 }}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
+      >
+        <color attach="background" args={['#f4f5f7']} />
+
+        <Suspense fallback={<Loader />}>
+          <Environment preset="city" />
+          <ambientLight intensity={1.25} />
+          <spotLight position={[5, 10, 5]} intensity={2.5} color="#ffffff" angle={0.5} penumbra={1} castShadow />
+          <directionalLight position={[-10, 5, -5]} intensity={1.4} color="#e0f2fe" />
+
+          <Bounds key={url} fit clip observe margin={1.2}>
+            <Center>
+              <Model
+                url={url}
+                formatHint={formatHint}
+                isMeasuring={false}
+                lastPoint={null}
+                onAddSegment={() => {}}
+                onLoadedScale={() => {}}
+                onLoadingChange={(loading, pct) => {
+                  setIsLoading(loading);
+                  setProgress(pct);
+                }}
+                onErrorChange={(err) => setLoadError(err)}
+              />
+            </Center>
+          </Bounds>
+
+          <ContactShadows resolution={512} scale={18} blur={3.5} opacity={0.5} far={10} color="#0f172a" />
+        </Suspense>
+
+        <OrbitControls
+          makeDefault
+          autoRotate
+          autoRotateSpeed={1.8}
+          enablePan={true}
+          minDistance={2.5}
+          maxDistance={14}
+        />
+      </Canvas>
+
+      {!isLoading && !loadError && (
+        <div className="absolute bottom-2.5 inset-x-0 flex justify-center z-10 pointer-events-none">
+          <span className="bg-white/85 backdrop-blur px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase text-gray-600 border border-gray-200/70 shadow-2xs">
+            Drag to Rotate · Scroll to Zoom
+          </span>
+        </div>
+      )}
     </div>
   );
 };
