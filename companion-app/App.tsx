@@ -99,11 +99,14 @@ export default function App() {
     if (!scannedModelUrl || !user) return;
     try {
       setIsUploading(true);
-      // Fetch local usdz file into a BLOB
+      // Fetch local 3D file into a BLOB
       const response = await fetch(scannedModelUrl);
       const blob = await response.blob();
       
-      const fileName = `scan_${Date.now()}.usdz`;
+      const cleanUri = scannedModelUrl.split('?')[0].toLowerCase();
+      const extMatch = cleanUri.match(/\.(usdz|glb|gltf|obj)$/);
+      const ext = extMatch ? extMatch[1] : 'usdz';
+      const fileName = `scan_${Date.now()}.${ext}`;
       const storageRef = ref(storage, `scans/${user.uid}/${fileName}`);
       
       // Upload
@@ -116,6 +119,7 @@ export default function App() {
         mode: scanMode,
         createdAt: serverTimestamp(),
         fileName,
+        uploaderEmail: user.email || '',
         status: 'pending'
       });
       

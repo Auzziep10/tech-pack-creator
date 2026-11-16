@@ -3,6 +3,8 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Center, Environment, ContactShadows, Float, Line, Bounds } from '@react-three/drei';
 import * as THREE from 'three';
 import { USDZLoader } from 'three/examples/jsm/loaders/USDZLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { Download, Smartphone, Box, Ruler, Check, X, Undo2 } from 'lucide-react';
 
 const Model = ({ 
@@ -27,62 +29,67 @@ const Model = ({
 
   useEffect(() => {
     let active = true;
-    const loader = new USDZLoader();
-    loader.load(
-      url,
-      (group: any) => {
-        if (active) {
-          // Reset scale in case this is a cached group from a previous render
-          group.scale.set(1, 1, 1);
-          group.updateMatrixWorld(true);
+    setError(null);
 
-          // Normalize scale aggressively using bounding box
-          const box = new THREE.Box3().setFromObject(group);
-          const size = box.getSize(new THREE.Vector3()).length();
-          const targetScale = 4.5 / size; 
-          setBaseScale(targetScale);
-          group.scale.setScalar(targetScale);
-          if (scaleRatios) {
-            group.scale.set(targetScale * scaleRatios.x, targetScale * scaleRatios.y, targetScale * scaleRatios.z);
-          }
-          onLoadedScale(targetScale);
-          
-          // Force a resize event shortly after load to fix R3F Canvas initial layout shift bugs
-          setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+    const handleLoadedGroup = (group: THREE.Group) => {
+      if (!active) return;
+      // Reset scale in case this is a cached group from a previous render
+      group.scale.set(1, 1, 1);
+      group.updateMatrixWorld(true);
 
-          // Force mesh to cast and receive shadows for premium lighting
-          group.traverse((child: any) => {
-             if (child.isMesh) {
-                 child.castShadow = true;
-                 child.receiveShadow = true;
-                 
-                 // iPhone-style Material Enhancements for PBR
-                 if (child.material) {
-                     const materials = Array.isArray(child.material) ? child.material : [child.material];
-                     materials.forEach((mat: any) => {
-                         // Apple uses intense Image-Based Lighting (IBL) for deep reflections
-                         if (mat.envMapIntensity !== undefined) mat.envMapIntensity = 2.0; 
-                         
-                         // Prevent shiny "plastic" artifacts on fabric by enforcing baseline roughness
-                         if (mat.roughness !== undefined) {
-                             mat.roughness = Math.max(0.65, mat.roughness); 
-                         }
-                         
-                         mat.needsUpdate = true;
-                     });
-                 }
-             }
-          });
-
-          setScene(group);
-        }
-      },
-      undefined,
-      (err: any) => {
-        console.error("USDZLoader Error:", err);
-        if (active) setError("Failed to load 3D mesh.");
+      // Normalize scale aggressively using bounding box
+      const box = new THREE.Box3().setFromObject(group);
+      const size = box.getSize(new THREE.Vector3()).length() || 1;
+      const targetScale = 4.5 / size;
+      setBaseScale(targetScale);
+      group.scale.setScalar(targetScale);
+      if (scaleRatios) {
+        group.scale.set(targetScale * scaleRatios.x, targetScale * scaleRatios.y, targetScale * scaleRatios.z);
       }
-    );
+      onLoadedScale(targetScale);
+
+      // Force a resize event shortly after load to fix R3F Canvas initial layout shift bugs
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+
+      // Force mesh to cast and receive shadows for premium lighting
+      group.traverse((child: any) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+
+          // iPhone-style Material Enhancements for PBR
+          if (child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((mat: any) => {
+              if (mat.envMapIntensity !== undefined) mat.envMapIntensity = 2.0;
+              if (mat.roughness !== undefined) {
+                mat.roughness = Math.max(0.65, mat.roughness);
+              }
+              mat.needsUpdate = true;
+            });
+          }
+        }
+      });
+
+      setScene(group);
+    };
+
+    const handleLoadError = (err: any) => {
+      console.error("3D Model Loader Error:", err);
+      if (active) setError("Failed to load 3D mesh.");
+    };
+
+    const cleanPath = decodeURIComponent(url.split('?')[0]).toLowerCase();
+    if (cleanPath.endsWith('.glb') || cleanPath.endsWith('.gltf')) {
+      const gltfLoader = new GLTFLoader();
+      gltfLoader.load(url, (gltf) => handleLoadedGroup(gltf.scene), undefined, handleLoadError);
+    } else if (cleanPath.endsWith('.obj')) {
+      const objLoader = new OBJLoader();
+      objLoader.load(url, (obj) => handleLoadedGroup(obj), undefined, handleLoadError);
+    } else {
+      const usdzLoader = new USDZLoader();
+      usdzLoader.load(url, (group: any) => handleLoadedGroup(group), undefined, handleLoadError);
+    }
 
     return () => { active = false; };
   }, [url]);

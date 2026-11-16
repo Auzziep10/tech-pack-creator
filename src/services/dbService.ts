@@ -1,7 +1,7 @@
 import { initializeApp, deleteApp } from 'firebase/app';
 import { initializeAuth, inMemoryPersistence, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { collection, addDoc, updateDoc, deleteDoc, writeBatch, doc, getDocs, getDoc, query, where, serverTimestamp, orderBy, onSnapshot, setDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { auth, db, storage, firebaseConfig } from './firebase';
 
 export interface FolderData {
@@ -898,6 +898,46 @@ export const getCompanyTechPacks = async (companyId: string): Promise<TechPackDa
     const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
     return timeB - timeA;
   });
+};
+
+export const upload3DScanFile = async (
+  file: File,
+  userId: string,
+  userEmail?: string
+): Promise<{ url: string; scanId: string; fileName: string }> => {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `scan_${Date.now()}_${safeName}`;
+  const storageRef = ref(storage, `scans/${userId}/${fileName}`);
+
+  await uploadBytes(storageRef, file);
+  const downloadUrl = await getDownloadURL(storageRef);
+
+  const docRef = await addDoc(collection(db, `users/${userId}/pendingScans`), {
+    url: downloadUrl,
+    mode: 'mannequin',
+    createdAt: serverTimestamp(),
+    fileName: file.name,
+    uploaderEmail: userEmail || '',
+    status: 'claimed',
+  });
+
+  return { url: downloadUrl, scanId: docRef.id, fileName: file.name };
+};
+
+export const deleteMobileScan = async (
+  ownerUid: string,
+  scanId: string,
+  scanUrl?: string,
+  isClaimed = false
+): Promise<void> => {
+  await deleteDoc(doc(db, `users/${ownerUid}/pendingScans`, scanId));
+  if (!isClaimed && scanUrl && scanUrl.includes('firebasestorage.googleapis.com')) {
+    try {
+      await deleteObject(ref(storage, scanUrl));
+    } catch {
+      // Ignore storage cleanup errors
+    }
+  }
 };
 
 

@@ -7,7 +7,7 @@ import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image, uploadGarmentImage, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, uploadGarmentImage, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry, getCompanyUsers, upload3DScanFile, deleteMobileScan } from '../services/dbService';
 import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
@@ -455,7 +455,7 @@ export function TechPackEditor() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, effectiveCompanyId } = useAuth();
   const exportRef = useRef<HTMLDivElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -1487,20 +1487,151 @@ export function TechPackEditor() {
     }
   };
 
-  const [pendingScans, setPendingScans] = useState<any[]>([]);
+  const [allWorkspaceScans, setAllWorkspaceScans] = useState<any[]>([]);
   const [showScansInbox, setShowScansInbox] = useState(false);
+  const [scansTab, setScansTab] = useState<'pending' | 'claimed'>('pending');
+  const [isUploading3D, setIsUploading3D] = useState(false);
+  const [deletingScanId, setDeletingScanId] = useState<string | null>(null);
+  const scanFileInputRef = useRef<HTMLInputElement>(null);
+
+  const pendingScans = allWorkspaceScans.filter((s: any) => s.status !== 'claimed');
+  const claimedScans = allWorkspaceScans.filter((s: any) => s.status === 'claimed');
+
+  useEffect(() => {
+    if (!user) {
+      setAllWorkspaceScans([]);
+      return;
+    }
+
+    let cancelled = false;
+    const unsubs: (() => void)[] = [];
+    const memberScansMap = new Map<string, any[]>();
+
+    const recomputeSortedScans = () => {
+      const merged: any[] = [];
+      memberScansMap.forEach((items) => merged.push(...items));
+      merged.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        return timeB - timeA;
+      });
+      if (!cancelled) {
+        setAllWorkspaceScans(merged);
+      }
+    };
+
+    const attachMemberListener = (memberUid: string, memberLabel: string) => {
+      const qScans = query(collection(db, `users/${memberUid}/pendingScans`));
+      const unsub = onSnapshot(
+        qScans,
+        (snapshot) => {
+          const scans = snapshot.docs.map((d) => ({
+            id: d.id,
+            ownerUid: memberUid,
+            ownerLabel: memberLabel,
+            ...d.data(),
+          }));
+          memberScansMap.set(memberUid, scans);
+          recomputeSortedScans();
+        },
+        (err) => {
+          console.warn(`Could not read pendingScans for ${memberUid}:`, err);
+        }
+      );
+      unsubs.push(unsub);
+    };
+
+    (async () => {
+      const memberMap = new Map<string, string>();
+      memberMap.set(user.uid, profile?.name || user.email || 'You');
+
+      if (effectiveCompanyId) {
+        try {
+          const companyMembers = await getCompanyUsers(effectiveCompanyId);
+          companyMembers.forEach((m: any) => {
+            if (m?.uid) {
+              memberMap.set(m.uid, m.name || m.email || 'Teammate');
+            }
+          });
+        } catch (err) {
+          console.warn('Failed to fetch company members for scan inbox:', err);
+        }
+      }
+
+      if (cancelled) return;
+      memberMap.forEach((label, uid) => attachMemberListener(uid, label));
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubs.forEach((fn) => fn());
+    };
+  }, [user, profile?.name, effectiveCompanyId]);
+
+  const handleDirect3DFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !user) return;
+
+    setIsUploading3D(true);
+    try {
+      const { url, fileName } = await upload3DScanFile(file, user.uid, user.email || undefined);
+      setData((prev: any) => ({ ...prev, model3dUrl: url }));
+      isDirtyRef.current = true;
+      if (id && id !== 'draft') {
+        await updateDoc(doc(db, 'techPacks', id), {
+          model3dUrl: url,
+          'techPack.model3dUrl': url,
+        });
+      }
+      setShowScansInbox(false);
+      pushLog(`Uploaded & Attached 3D Model (${fileName})`, 'image');
+    } catch (err: any) {
+      console.error('Failed to upload 3D file:', err);
+      alert('Failed to upload 3D scan: ' + (err?.message || String(err)));
+    } finally {
+      setIsUploading3D(false);
+    }
+  };
+
+  const handleDeleteScan = async (scan: any) => {
+    const ownerUid = scan.ownerUid || user?.uid;
+    if (!ownerUid) return;
+    setDeletingScanId(scan.id);
+    try {
+      await deleteMobileScan(ownerUid, scan.id, scan.url, scan.status === 'claimed');
+    } catch (err: any) {
+      console.error('Failed to delete scan:', err);
+      alert('Failed to delete scan: ' + (err?.message || String(err)));
+    } finally {
+      setDeletingScanId(null);
+    }
+  };
+
+  const handleClearScansTab = async () => {
+    const targetList = scansTab === 'pending' ? pendingScans : claimedScans;
+    if (targetList.length === 0) return;
+    if (!confirm(`Delete all ${targetList.length} ${scansTab === 'pending' ? 'unattached' : 'previously attached'} scan${targetList.length === 1 ? '' : 's'} from this list?`)) {
+      return;
+    }
+    setDeletingScanId('all');
+    try {
+      await Promise.all(
+        targetList.map((scan) =>
+          deleteMobileScan(scan.ownerUid || user?.uid || '', scan.id, scan.url, scan.status === 'claimed')
+        )
+      );
+    } catch (err: any) {
+      console.error('Failed to clear scans:', err);
+      alert('Failed to delete some scans: ' + (err?.message || String(err)));
+    } finally {
+      setDeletingScanId(null);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
-    
-    // Listen for incoming 3D LiDAR Scans from the iOS Companion App
-    const qScans = query(collection(db, `users/${user.uid}/pendingScans`));
-    const unsubScans = onSnapshot(qScans, (snapshot) => {
-      const scans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPendingScans(scans.filter((s: any) => s.status === 'pending'));
-    });
-
-    if (!id && id !== 'draft') return () => { unsubScans(); };
+    if (!id && id !== 'draft') return;
 
     const q = query(collection(db, 'companionUploads'));
     const unsub = onSnapshot(q, (snapshot) => {
@@ -1556,7 +1687,7 @@ export function TechPackEditor() {
         }
       });
     });
-    return () => { unsub(); unsubScans(); };
+    return () => { unsub(); };
   }, [user, id]);
 
   // Live Presence Management
@@ -2696,17 +2827,24 @@ export function TechPackEditor() {
 
           {/* Right Controls: Scans, Locks, Save & History */}
           <div className="flex items-center gap-2 shrink-0">
-            {pendingScans.length > 0 && (
+            {!isTechPackLocked && (
               <Button 
                  onClick={() => setShowScansInbox(true)} 
-                 className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 relative shrink-0 text-xs rounded-xl"
-                 title="New 3D Scans Available"
+                 variant="secondary"
+                 className={`h-9 px-3 relative shrink-0 text-xs rounded-xl ${
+                   pendingScans.length > 0
+                     ? 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200'
+                     : 'text-gray-700 hover:bg-gray-100'
+                 }`}
+                 title="Open 3D Scans Inbox or Upload a 3D Model"
               >
                  <Smartphone size={15} className="mr-1.5" />
-                 <span className="font-bold">Scans</span>
-                 <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
-                   {pendingScans.length}
-                 </div>
+                 <span className="font-bold">3D Scans</span>
+                 {pendingScans.length > 0 && (
+                   <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
+                     {pendingScans.length}
+                   </div>
+                 )}
               </Button>
             )}
 
@@ -4678,46 +4816,172 @@ export function TechPackEditor() {
 
       {/* Mobile Scans Inbox Modal */}
       <Modal isOpen={showScansInbox} onClose={() => setShowScansInbox(false)} title="Mobile Scans Inbox">
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 pb-4">
+        <div className="space-y-4 max-h-[68vh] overflow-y-auto pr-1 pb-2">
           <p className="text-sm text-gray-500">
-            These 3D scans were recently captured by your team using the companion app. Select one to instantly link it to this Tech Pack.
+            3D scans synced by anyone in your workspace via the companion app appear below (newest first), or upload a 3D file directly from your computer.
           </p>
-          
-          <div className="grid gap-3">
-            {pendingScans.map((scan) => (
-              <div key={scan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center text-blue-600">
-                    <Archive size={20} />
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 leading-tight">Incoming {scan.mode === 'flat' ? 'Flat Lay Scan' : '3D Scan'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{new Date(scan.createdAt?.toMillis() || Date.now()).toLocaleString()}</div>
-                  </div>
-                </div>
-                <Button onClick={async () => {
-                  try {
-                    setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
-                    isDirtyRef.current = true;
-                    if (id && id !== 'draft') {
-                      await updateDoc(doc(db, 'techPacks', id), {
-                        "model3dUrl": scan.url,
-                        "techPack.model3dUrl": scan.url
-                      });
-                    }
-                    await updateDoc(doc(db, `users/${user?.uid}/pendingScans`, scan.id), { status: 'claimed' });
-                    setShowScansInbox(false);
-                    pushLog(`Linked Mobile 3D Scan (${scan.mode})`, 'image');
-                  } catch (e: any) {
-                    console.error("Failed to claim scan:", e);
-                    alert("Failed to claim scan: " + (e?.message || String(e)));
-                  }
-                }} size="sm" className="bg-blue-600 cursor-pointer">
-                  Attach
-                </Button>
-              </div>
-            ))}
+
+          {/* Direct Desktop 3D File Upload */}
+          <div className="p-3.5 rounded-xl bg-gray-50 border border-dashed border-gray-300 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-gray-900">Upload 3D File from Computer</div>
+              <div className="text-[11px] text-gray-500">Supports .usdz, .glb, .gltf, or .obj</div>
+            </div>
+            <input
+              ref={scanFileInputRef}
+              type="file"
+              accept=".usdz,.glb,.gltf,.obj"
+              onChange={handleDirect3DFileUpload}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={isUploading3D}
+              isLoading={isUploading3D}
+              onClick={() => scanFileInputRef.current?.click()}
+              className="shrink-0 text-xs font-bold"
+            >
+              <Upload size={14} className="mr-1.5" />
+              {isUploading3D ? 'Uploading...' : 'Choose File'}
+            </Button>
           </div>
+
+          {/* Filter Tabs + Clear All */}
+          <div className="flex items-center justify-between gap-2 border-b border-gray-200 pb-2">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setScansTab('pending')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  scansTab === 'pending'
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                New ({pendingScans.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScansTab('claimed')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  scansTab === 'claimed'
+                    ? 'bg-black text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Previously Attached ({claimedScans.length})
+              </button>
+            </div>
+
+            {(scansTab === 'pending' ? pendingScans.length : claimedScans.length) > 0 && (
+              <button
+                type="button"
+                disabled={deletingScanId === 'all'}
+                onClick={handleClearScansTab}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={13} />
+                Clear All
+              </button>
+            )}
+          </div>
+
+          {/* Scans List */}
+          {(() => {
+            const activeScans = scansTab === 'pending' ? pendingScans : claimedScans;
+            if (activeScans.length === 0) {
+              return (
+                <div className="py-8 text-center text-sm text-gray-400">
+                  {scansTab === 'pending'
+                    ? 'No unattached mobile scans right now. Sync a scan from the companion app, check "Previously Attached", or upload a file above.'
+                    : 'No previously attached scans.'}
+                </div>
+              );
+            }
+            return (
+              <div className="grid gap-2.5">
+                {activeScans.map((scan) => {
+                  const timestampMs = scan.createdAt?.toMillis
+                    ? scan.createdAt.toMillis()
+                    : scan.createdAt?.seconds
+                    ? scan.createdAt.seconds * 1000
+                    : null;
+                  const uploaderDisplay = scan.uploaderEmail || scan.ownerLabel || '';
+                  const isCustomFile = scan.fileName && !/^scan_\d+\.usdz$/i.test(scan.fileName);
+
+                  return (
+                    <div
+                      key={`${scan.ownerUid || 'me'}_${scan.id}`}
+                      className="flex items-center justify-between gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                          <Archive size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-gray-900 leading-tight truncate">
+                            {isCustomFile
+                              ? scan.fileName
+                              : `Incoming ${scan.mode === 'flat' ? 'Flat Lay Scan' : '3D Scan'}`}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">
+                            {timestampMs ? new Date(timestampMs).toLocaleString() : 'Just now'}
+                            {uploaderDisplay ? ` · ${uploaderDisplay}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          onClick={async () => {
+                            try {
+                              setData((prev: any) => ({ ...prev, model3dUrl: scan.url }));
+                              isDirtyRef.current = true;
+                              if (id && id !== 'draft') {
+                                await updateDoc(doc(db, 'techPacks', id), {
+                                  model3dUrl: scan.url,
+                                  'techPack.model3dUrl': scan.url,
+                                });
+                              }
+                              const targetUid = scan.ownerUid || user?.uid;
+                              if (targetUid && scan.status !== 'claimed') {
+                                await updateDoc(doc(db, `users/${targetUid}/pendingScans`, scan.id), {
+                                  status: 'claimed',
+                                });
+                              }
+                              setShowScansInbox(false);
+                              pushLog(`Linked Mobile 3D Scan (${scan.mode || '3d'})`, 'image');
+                            } catch (e: any) {
+                              console.error('Failed to claim scan:', e);
+                              alert('Failed to attach scan: ' + (e?.message || String(e)));
+                            }
+                          }}
+                          size="sm"
+                          className="bg-blue-600 cursor-pointer"
+                        >
+                          Attach
+                        </Button>
+                        <button
+                          type="button"
+                          disabled={deletingScanId === scan.id || deletingScanId === 'all'}
+                          onClick={() => handleDeleteScan(scan)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                          title="Delete scan"
+                        >
+                          {deletingScanId === scan.id ? (
+                            <Loader2 size={16} className="animate-spin text-red-500" />
+                          ) : (
+                            <Trash2 size={16} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       </Modal>
 
