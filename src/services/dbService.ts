@@ -940,4 +940,24 @@ export const deleteMobileScan = async (
   }
 };
 
+export const getCompanyGradingProfiles = async (companyId: string): Promise<any[]> => {
+  if (!companyId) return [];
+  const snap = await getDoc(doc(db, 'companies', companyId));
+  if (!snap.exists()) return [];
+  const data = snap.data();
+  return Array.isArray(data?.customGradingProfiles) ? data.customGradingProfiles : [];
+};
+
+export const saveCompanyGradingProfiles = async (
+  companyId: string,
+  profiles: any[]
+): Promise<void> => {
+  if (!companyId) return;
+  await setDoc(
+    doc(db, 'companies', companyId),
+    { customGradingProfiles: profiles },
+    { merge: true }
+  );
+};
+
 

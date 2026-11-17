@@ -878,6 +878,10 @@ export function SharedTechPack() {
                                 baseSize: displayData?.properties?.baseSize || 'M',
                                 unit: globalUnit,
                                 measurements: displayData?.measurements || [],
+                                gradingProfile:
+                                  displayData?.gradingProfileSnapshot ||
+                                  displayData?.gradingProfileId ||
+                                  'standard',
                               })
                             }
                             className="text-[10px] font-sans font-bold bg-white hover:bg-black hover:text-white border border-gray-200 text-gray-700 px-2.5 py-1 rounded-lg uppercase tracking-wider transition-all shadow-2xs flex items-center gap-1 print:hidden cursor-pointer"
@@ -921,9 +925,13 @@ export function SharedTechPack() {
                           <tbody className="divide-y divide-gray-100">
                             {(displayData.measurements || []).map((m: any, index: number) => {
                               const baseSize = displayData?.properties?.baseSize || 'M';
+                              const activeProfile =
+                                displayData?.gradingProfileSnapshot ||
+                                displayData?.gradingProfileId ||
+                                'standard';
                               const displayVal = activeSizeTab === baseSize
                                 ? (m.value || '-')
-                                : (computeGradedValueForSize(m, baseSize, activeSizeTab, globalUnit) || m.sizes?.[activeSizeTab] || m.value || '-');
+                                : (computeGradedValueForSize(m, baseSize, activeSizeTab, globalUnit, activeProfile) || m.sizes?.[activeSizeTab] || (String(m.value || '').trim().toLowerCase() === 'n/a' ? '-' : (m.value || '-')));
                               const displayTol = m.tolerance || (m.tolPlus ? `+${m.tolPlus} / -${m.tolMinus || m.tolPlus}` : '0.5');
 
                               return (

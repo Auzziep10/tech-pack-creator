@@ -35,10 +35,35 @@ const DEFAULT_GRADING_CM: Record<string, number> = {
   PK003: 0.5,
 };
 
+const STREET_GRADING_CM: Record<string, number> = {
+  FL001: 2,
+  BL001: 2,
+  CW001: 2.5,
+  WS001: 2.5,
+  HM001: 2,
+  HH001: 0,
+  SS001: 0.5,
+  SW001: 1.5,
+  AH001: 1,
+  SL001: 1,
+  BW001: 1,
+  CO001: 0.5,
+  CH001: 0,
+  NW001: 0.5,
+  CW002: 0,
+  FD001: 0.3,
+  BD001: 0,
+  HD001: 1,
+  HD002: 1,
+  PK001: 0.5,
+  PK002: 0.5,
+  PK003: 0.5,
+};
+
 const parseNumericValue = (val: any): number | null => {
   if (val === null || val === undefined) return null;
   const str = String(val).trim().replace(/,/g, '.');
-  if (!str) return null;
+  if (!str || str.toLowerCase() === 'n/a' || str === '-') return null;
 
   let match = str.match(/^([+-]?\d+)[\s-]+(\d+)\/(\d+)$/);
   if (match) {
@@ -61,7 +86,7 @@ const formatGradedNumber = (num: number): string => {
   return String(Number(rounded.toFixed(2)));
 };
 
-const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
+const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm', gradingProfile?: any): number => {
   if (
     m?.customGrading &&
     m?.grading !== undefined &&
@@ -72,15 +97,42 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
     if (parsed !== null) return parsed;
   }
 
+  const isStreet =
+    gradingProfile === 'street' ||
+    gradingProfile?.id === 'street' ||
+    gradingProfile?.baseType === 'street';
+  const rulesCm: Record<string, number> =
+    (typeof gradingProfile === 'object' && gradingProfile?.rulesCm) ||
+    (isStreet ? STREET_GRADING_CM : DEFAULT_GRADING_CM);
+  const customRows: any[] =
+    (typeof gradingProfile === 'object' && !gradingProfile?.isBuiltIn && gradingProfile?.customRows) || [];
+
   const idUpper = String(m?.id || '').trim().toUpperCase();
-  const pointText = `${m?.point || ''} ${m?.name || ''}`.toLowerCase();
-  const text = `${pointText} ${m?.description || ''}`.toLowerCase();
+  const pointRaw = String(m?.point || m?.name || '').trim().toLowerCase();
+  const text = `${pointRaw} ${m?.description || ''}`.toLowerCase();
 
   let cmStep: number | undefined;
-  if (idUpper === 'CH001' && (pointText.includes('chest') || pointText.includes('bust'))) {
-    cmStep = 2.5;
-  } else {
-    cmStep = DEFAULT_GRADING_CM[idUpper];
+
+  if (customRows.length > 0) {
+    const byPoint = pointRaw
+      ? customRows.find((r: any) => r.point && String(r.point).trim().toLowerCase() === pointRaw)
+      : undefined;
+    if (byPoint !== undefined) {
+      cmStep = Number(byPoint.stepCm);
+    } else if (idUpper) {
+      const byId = customRows.find((r: any) => r.id && String(r.id).trim().toUpperCase() === idUpper);
+      if (byId !== undefined) {
+        cmStep = Number(byId.stepCm);
+      }
+    }
+  }
+
+  if (cmStep === undefined) {
+    if (idUpper === 'CH001' && (pointRaw.includes('chest') || pointRaw.includes('bust'))) {
+      cmStep = rulesCm.CW001 ?? 2.5;
+    } else if (idUpper && rulesCm[idUpper] !== undefined) {
+      cmStep = rulesCm[idUpper];
+    }
   }
 
   if (cmStep === undefined) {
@@ -115,16 +167,20 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
     ) {
       cmStep = 0;
     } else if (
+      text.includes('hem width') ||
+      text.includes('bottom opening') ||
+      text.includes('sweep')
+    ) {
+      cmStep = rulesCm.HM001 ?? (isStreet ? 2 : 2.5);
+    } else if (text.includes('shoulder width')) {
+      cmStep = rulesCm.SW001 ?? (isStreet ? 1.5 : 2.5);
+    } else if (
       text.includes('chest') ||
       text.includes('bust') ||
       text.includes('waist') ||
-      text.includes('hem width') ||
-      text.includes('bottom opening') ||
-      text.includes('sweep') ||
-      text.includes('shoulder width') ||
       text.includes('hip')
     ) {
-      cmStep = 2.5;
+      cmStep = rulesCm.CW001 ?? 2.5;
     } else if (
       text.includes('front length') ||
       text.includes('back length') ||
@@ -133,11 +189,15 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
       text.includes('inseam') ||
       text.includes('outseam')
     ) {
-      cmStep = 2;
+      cmStep = rulesCm.FL001 ?? 2;
     } else if (text.includes('neck opening') || text.includes('neck width')) {
-      cmStep = 0.75;
-    } else if (text.includes('shoulder seam') || text.includes('front neck drop')) {
-      cmStep = 0.5;
+      cmStep = rulesCm.NW001 ?? (isStreet ? 0.5 : 0.75);
+    } else if (text.includes('front neck drop')) {
+      cmStep = rulesCm.FD001 ?? (isStreet ? 0.3 : 0.5);
+    } else if (text.includes('shoulder seam')) {
+      cmStep = rulesCm.SS001 ?? 0.5;
+    } else if (text.includes('sleeve opening') || text.includes('cuff opening')) {
+      cmStep = rulesCm.CO001 ?? (isStreet ? 0.5 : 1);
     } else {
       cmStep = 1;
     }
@@ -155,7 +215,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { measurements, baseSize = 'M', targetSize = 'M', unit = 'cm' } = req.body;
+    const { measurements, baseSize = 'M', targetSize = 'M', unit = 'cm', gradingProfile } = req.body;
     const normalizedBase = SIZES.includes(String(baseSize).toUpperCase())
       ? String(baseSize).toUpperCase()
       : 'M';
@@ -168,15 +228,16 @@ export default async function handler(req: any, res: any) {
 
     const graded = (measurements || []).map((m: any) => {
       const baseNum = parseNumericValue(m?.value);
-      const gradingStep = inferGradingStep(m, unit);
-      let newVal = m?.value || '';
+      const isNA = baseNum === null && String(m?.value || '').trim() !== '';
+      const gradingStep = inferGradingStep(m, unit, gradingProfile);
+      let newVal = targetIdx === baseIdx ? (m?.value || '') : '';
       if (baseNum !== null) {
         const computed = Math.max(0, baseNum + (targetIdx - baseIdx) * gradingStep);
         newVal = formatGradedNumber(computed);
       }
       return {
         ...m,
-        grading: String(gradingStep),
+        grading: isNA ? '' : String(gradingStep),
         value: newVal,
       };
     });

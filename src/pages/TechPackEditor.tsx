@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
-import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2, Crop } from 'lucide-react';
+import { Download, Save, ArrowLeft, Wand2, History, Lock, Unlock, X, Scan, QrCode, ArrowUp, ArrowDown, Smartphone, Archive, Calculator, Palette, Sparkles, Upload, TrendingUp, Loader2, ChevronDown, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, Trash2, GripVertical, Camera, Image as LucideImage, Share2, Crop, SlidersHorizontal } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { ShareModal } from '../components/ui/ShareModal';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../contexts/AuthContext';
-import { saveTechPack, getTechPack, uploadBase64Image, uploadGarmentImage, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry, getCompanyUsers, upload3DScanFile, deleteMobileScan } from '../services/dbService';
+import { saveTechPack, getTechPack, uploadBase64Image, uploadGarmentImage, subscribeToTechPack, updateTechPackPresence, removeTechPackPresence, subscribeToTechPackPresence, UserPresence, addTechPackActivityLog, ActivityLogEntry, getCompanyUsers, upload3DScanFile, deleteMobileScan, getCompanyGradingProfiles, saveCompanyGradingProfiles } from '../services/dbService';
 import { downloadAsLargePng } from '../utils/imageDownloader';
 import { GarmentAnnotator } from '../components/editor/GarmentAnnotator';
 import { DetailAnnotator, DetailItem } from '../components/editor/DetailAnnotator';
@@ -19,6 +19,7 @@ import { compressImageFile } from '../utils/imageCompressor';
 import { collection, onSnapshot, query, deleteDoc, doc, updateDoc, deleteField } from 'firebase/firestore';
 import { Garment3DViewer, ScanPreview3D } from '../components/editor/Garment3DViewer';
 import { ScanMeshEditorModal } from '../components/editor/ScanMeshEditorModal';
+import { GradingProfileModal } from '../components/editor/GradingProfileModal';
 import { translateTechPack } from '../services/geminiService';
 import {
   exportMeasurementsToCsv,
@@ -26,6 +27,9 @@ import {
   computeGradedValueForSize,
   computeSizeSpreadForMeasurement,
   computeSizeSpreadForAllMeasurements,
+  BUILT_IN_GRADING_PROFILES,
+  GradingProfile,
+  resolveGradingProfile,
 } from '../utils/csvExporter';
 
 const forceDownload = async (url: string, filename: string) => {
@@ -633,6 +637,102 @@ export function TechPackEditor() {
     }
   }, [displayData?.properties?.baseSize]);
 
+  const [customGradingProfiles, setCustomGradingProfiles] = useState<GradingProfile[]>([]);
+  const [showGradingModal, setShowGradingModal] = useState(false);
+  const [gradingModalCreateMode, setGradingModalCreateMode] = useState(false);
+
+  useEffect(() => {
+    if (!effectiveCompanyId) return;
+    getCompanyGradingProfiles(effectiveCompanyId)
+      .then((profiles) => setCustomGradingProfiles(profiles))
+      .catch((err) => console.warn('Failed to load custom grading profiles:', err));
+  }, [effectiveCompanyId]);
+
+  const activeGradingProfileId: string =
+    data?.gradingProfileId || (data?.gradingProfileSnapshot?.id) || 'standard';
+  const activeGradingProfile: GradingProfile = resolveGradingProfile(
+    customGradingProfiles.find((p) => p.id === activeGradingProfileId) ||
+      (activeGradingProfileId === 'standard' || activeGradingProfileId === 'street'
+        ? activeGradingProfileId
+        : data?.gradingProfileSnapshot || activeGradingProfileId),
+    customGradingProfiles
+  );
+
+  const applyGradingProfileToPack = (profile: GradingProfile) => {
+    if (checkReadonly()) return;
+    isDirtyRef.current = true;
+    const baseSize = data?.properties?.baseSize || 'M';
+    const currentMeasurements = data?.measurements || [];
+    // Clear previous per-row overrides when switching the Tech Pack's overall grading type
+    const clearedMeasurements = currentMeasurements.map((m: any) => {
+      const next = { ...m };
+      delete next.customGrading;
+      delete next.grading;
+      return next;
+    });
+    const recomputed = computeSizeSpreadForAllMeasurements(
+      clearedMeasurements,
+      baseSize,
+      globalUnit,
+      profile
+    );
+
+    const updatedData: any = {
+      ...data,
+      gradingProfileId: profile.id,
+      gradingProfileSnapshot: profile,
+      measurements: recomputed,
+    };
+
+    if (data?.translations) {
+      updatedData.translations = Object.fromEntries(
+        Object.entries(data.translations).map(([lang, tData]: [string, any]) => [
+          lang,
+          {
+            ...tData,
+            gradingProfileId: profile.id,
+            gradingProfileSnapshot: profile,
+            measurements: (tData.measurements || []).map((tm: any, tIdx: number) => {
+              const matchingUpdated =
+                recomputed.find(
+                  (um: any) =>
+                    um.id &&
+                    tm.id &&
+                    String(um.id).trim().toLowerCase() === String(tm.id).trim().toLowerCase()
+                ) || recomputed[tIdx];
+              if (matchingUpdated && matchingUpdated.sizes) {
+                return {
+                  ...tm,
+                  grading: matchingUpdated.grading,
+                  sizes: { ...(tm.sizes || {}), ...matchingUpdated.sizes },
+                };
+              }
+              return tm;
+            }),
+          },
+        ])
+      );
+    }
+
+    setData(updatedData);
+    pushLog(`Switched grading profile to "${profile.name}"`, 'measurement');
+  };
+
+  const handleSaveCustomGradingProfiles = async (
+    nextCustomProfiles: GradingProfile[],
+    newlySavedProfile?: GradingProfile
+  ) => {
+    setCustomGradingProfiles(nextCustomProfiles);
+    if (effectiveCompanyId) {
+      await saveCompanyGradingProfiles(effectiveCompanyId, nextCustomProfiles);
+    }
+    if (newlySavedProfile) {
+      applyGradingProfileToPack(newlySavedProfile);
+    } else if (!nextCustomProfiles.some((p) => p.id === activeGradingProfileId) && activeGradingProfileId.startsWith('custom_')) {
+      applyGradingProfileToPack(BUILT_IN_GRADING_PROFILES[0]);
+    }
+  };
+
   const handleGradeSize = async () => {
     if (checkReadonly()) return;
     const baseSize = displayData?.properties?.baseSize || 'M';
@@ -645,7 +745,8 @@ export function TechPackEditor() {
       const updatedMeasurements = computeSizeSpreadForAllMeasurements(
         currentMeasurements,
         baseSize,
-        globalUnit
+        globalUnit,
+        activeGradingProfile
       );
 
       const updatedData: any = {
@@ -2456,7 +2557,7 @@ export function TechPackEditor() {
     if (field === 'value') {
        if (activeSizeTab === baseSize) {
           const updatedM = { ...newData.measurements[index], value };
-          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit, activeGradingProfile);
           newData.measurements[index] = updatedM;
        } else {
           newData.measurements[index].sizes = { 
@@ -2475,14 +2576,14 @@ export function TechPackEditor() {
           updatedM.customGrading = false;
        }
        if (updatedM.value) {
-          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit, activeGradingProfile);
        }
        newData.measurements[index] = updatedM;
     } else {
        const updatedM = { ...newData.measurements[index], [field]: value };
        if ((field === 'point' || field === 'description' || field === 'id') && updatedM.value && !updatedM.customGrading) {
-          updatedM.grading = String(inferGradingStep(updatedM, globalUnit));
-          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+          updatedM.grading = String(inferGradingStep(updatedM, globalUnit, activeGradingProfile));
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit, activeGradingProfile);
        }
        newData.measurements[index] = updatedM;
     }
@@ -3967,6 +4068,7 @@ export function TechPackEditor() {
                           baseSize: displayData?.properties?.baseSize || 'M',
                           unit: globalUnit,
                           measurements: displayData?.measurements || [],
+                          gradingProfile: activeGradingProfile,
                         });
                       }}
                       className="text-[10px] font-sans font-bold bg-white hover:bg-black hover:text-white border border-gray-200 text-gray-700 px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-xs flex items-center gap-1 print:hidden cursor-pointer"
@@ -3981,7 +4083,7 @@ export function TechPackEditor() {
                   </div>
                 </h3>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 print:hidden">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4 print:hidden">
                   <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 overflow-x-auto max-w-full">
                     {SIZES.map(size => (
                       <button 
@@ -3993,28 +4095,86 @@ export function TechPackEditor() {
                       </button>
                     ))}
                   </div>
-                  {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (() => {
-                    const isAlreadyComputed = (displayData?.measurements || []).some(
-                      (m: any) => m.sizes?.[activeSizeTab] && String(m.sizes[activeSizeTab]).trim() !== '' && String(m.sizes[activeSizeTab]).trim() !== '0.0' && String(m.sizes[activeSizeTab]).trim() !== '0'
-                    );
-                    return (
-                      <Button 
-                        onClick={handleGradeSize} 
-                        disabled={isGrading || isTechPackLocked} 
-                        isLoading={isGrading} 
-                        size="sm" 
-                        className={`shrink-0 text-xs font-semibold ${
-                          isAlreadyComputed 
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
-                        title={isAlreadyComputed ? `Measurements for Size ${activeSizeTab} are computed. Click to re-run AI grading.` : `Compute AI grading for Size ${activeSizeTab}`}
+
+                  {/* Grading Type Selector + Add/Manage Custom Grading */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200/70">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 px-2">
+                        Grading:
+                      </span>
+                      <select
+                        disabled={isTechPackLocked}
+                        value={activeGradingProfile.id}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '__ADD_NEW__') {
+                            setGradingModalCreateMode(true);
+                            setShowGradingModal(true);
+                            return;
+                          }
+                          const chosen = resolveGradingProfile(val, customGradingProfiles);
+                          applyGradingProfileToPack(chosen);
+                        }}
+                        className="bg-white text-gray-900 text-xs font-bold px-2.5 py-1 rounded-lg border border-gray-200 shadow-2xs outline-none cursor-pointer disabled:opacity-60"
+                        title="Select grading profile (Standard, Street, or Custom)"
                       >
-                        <Calculator size={14} className="mr-1 inline-block"/> 
-                        {isAlreadyComputed ? `Recompute Size ${activeSizeTab}` : `Compute Size ${activeSizeTab}`}
-                      </Button>
-                    );
-                  })()}
+                        {BUILT_IN_GRADING_PROFILES.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                        {customGradingProfiles.length > 0 && (
+                          <optgroup label="Custom Grading">
+                            {customGradingProfiles.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {!isTechPackLocked && (
+                          <option value="__ADD_NEW__">+ Add New Grading...</option>
+                        )}
+                      </select>
+                      {!isTechPackLocked && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGradingModalCreateMode(false);
+                            setShowGradingModal(true);
+                          }}
+                          className="ml-1 px-2 py-1 rounded-lg text-gray-600 hover:text-black hover:bg-white transition-colors inline-flex items-center gap-1 text-[11px] font-bold"
+                          title="Inspect or add custom grading rules"
+                        >
+                          <SlidersHorizontal size={13} />
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {activeSizeTab !== (displayData?.properties?.baseSize || 'M') && (() => {
+                      const isAlreadyComputed = (displayData?.measurements || []).some(
+                        (m: any) => m.sizes?.[activeSizeTab] && String(m.sizes[activeSizeTab]).trim() !== '' && String(m.sizes[activeSizeTab]).trim() !== '0.0' && String(m.sizes[activeSizeTab]).trim() !== '0'
+                      );
+                      return (
+                        <Button 
+                          onClick={handleGradeSize} 
+                          disabled={isGrading || isTechPackLocked} 
+                          isLoading={isGrading} 
+                          size="sm" 
+                          className={`shrink-0 text-xs font-semibold ${
+                            isAlreadyComputed 
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                              : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                          title={isAlreadyComputed ? `Measurements for Size ${activeSizeTab} are computed (${activeGradingProfile.name}). Click to recompute.` : `Compute ${activeGradingProfile.name} grading for Size ${activeSizeTab}`}
+                        >
+                          <Calculator size={14} className="mr-1 inline-block"/> 
+                          {isAlreadyComputed ? `Recompute ${activeSizeTab}` : `Compute ${activeSizeTab}`}
+                        </Button>
+                      );
+                    })()}
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm max-w-full">
@@ -4211,8 +4371,14 @@ export function TechPackEditor() {
                             <td className="px-1 py-2 align-top print:hidden">
                                <AutoTextarea
                                  className="w-full bg-transparent outline-none text-blue-600 font-mono text-xs text-center leading-none"
-                                 placeholder={String(inferGradingStep(m, globalUnit))}
-                                 value={m.customGrading ? (m.grading ?? '') : String(inferGradingStep(m, globalUnit))}
+                                 placeholder={String(inferGradingStep(m, globalUnit, activeGradingProfile))}
+                                 value={
+                                   String(m.value || '').trim().toLowerCase() === 'n/a'
+                                     ? ''
+                                     : m.customGrading
+                                     ? (m.grading ?? '')
+                                     : String(inferGradingStep(m, globalUnit, activeGradingProfile))
+                                 }
                                  onFocus={(e) => { initialMeasurementRef.current[`${i}_grading`] = e.target.value; }}
                                  onBlur={(e) => {
                                    if (e.target.value.trim() === '') {
@@ -5405,6 +5571,18 @@ export function TechPackEditor() {
           onSaveEditedFile={handleSaveEdited3DModel}
         />
       )}
+
+      <GradingProfileModal
+        isOpen={showGradingModal}
+        onClose={() => setShowGradingModal(false)}
+        activeProfileId={activeGradingProfile.id}
+        customProfiles={customGradingProfiles}
+        currentMeasurements={displayData?.measurements || []}
+        currentUnit={globalUnit}
+        startInCreateMode={gradingModalCreateMode}
+        onSelectProfile={(prof) => applyGradingProfileToPack(prof)}
+        onSaveCustomProfiles={handleSaveCustomGradingProfiles}
+      />
 
       <TechPackHistoryDrawer 
         isOpen={showHistory} 
