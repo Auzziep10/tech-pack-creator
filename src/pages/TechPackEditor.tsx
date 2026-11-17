@@ -22,6 +22,7 @@ import { ScanMeshEditorModal } from '../components/editor/ScanMeshEditorModal';
 import { translateTechPack } from '../services/geminiService';
 import {
   exportMeasurementsToCsv,
+  inferGradingStep,
   computeGradedValueForSize,
   computeSizeSpreadForMeasurement,
   computeSizeSpreadForAllMeasurements,
@@ -2451,8 +2452,8 @@ export function TechPackEditor() {
     if (checkReadonly()) return;
     isDirtyRef.current = true;
     const newData = { ...data };
+    const baseSize = newData.properties?.baseSize || 'M';
     if (field === 'value') {
-       const baseSize = newData.properties?.baseSize || 'M';
        if (activeSizeTab === baseSize) {
           const updatedM = { ...newData.measurements[index], value };
           updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
@@ -2463,10 +2464,97 @@ export function TechPackEditor() {
              [activeSizeTab]: value 
           };
        }
+    } else if (field === 'grading') {
+       const updatedM = {
+          ...newData.measurements[index],
+          grading: value,
+          customGrading: value !== '__AUTO__',
+       };
+       if (value === '__AUTO__') {
+          delete updatedM.grading;
+          updatedM.customGrading = false;
+       }
+       if (updatedM.value) {
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+       }
+       newData.measurements[index] = updatedM;
     } else {
-       newData.measurements[index][field] = value;
+       const updatedM = { ...newData.measurements[index], [field]: value };
+       if ((field === 'point' || field === 'description' || field === 'id') && updatedM.value && !updatedM.customGrading) {
+          updatedM.grading = String(inferGradingStep(updatedM, globalUnit));
+          updatedM.sizes = computeSizeSpreadForMeasurement(updatedM, baseSize, globalUnit);
+       }
+       newData.measurements[index] = updatedM;
     }
     setData(newData);
+  };
+
+  const addPanelMeasurements = () => {
+    if (checkReadonly()) return;
+    isDirtyRef.current = true;
+    const newData = { ...data };
+    if (!newData.measurements) newData.measurements = [];
+    const baseSize = newData.properties?.baseSize || 'M';
+    const defaultTol = globalUnit === 'in' ? '0.5' : '1.27';
+
+    const panelDefs = [
+      { id: 'M17', point: 'Front panel: across lower armhole corners.', cmGrade: 2 },
+      { id: 'M18', point: 'Lower front: across top of hem band.', cmGrade: 2 },
+      { id: 'M19', point: 'Side panel: across middle of rib.', cmGrade: 0.5 },
+      { id: 'M20', point: 'Side panel: LENGTH', cmGrade: 1 },
+      { id: 'M21', point: 'Visible side panel: across exposed rib, front view.', cmGrade: 0.25 },
+    ];
+
+    const existingPoints = new Set(
+      newData.measurements.map((m: any) => String(m.point || '').trim().toLowerCase())
+    );
+    const existingIds = new Set(
+      newData.measurements.map((m: any) => String(m.id || '').trim().toUpperCase())
+    );
+
+    let nextNum = newData.measurements.length + 1;
+    const rowsToInsert: any[] = [];
+
+    for (const def of panelDefs) {
+      if (existingPoints.has(def.point.toLowerCase())) continue;
+      let useId = def.id;
+      while (existingIds.has(useId.toUpperCase())) {
+        useId = `M${String(nextNum++).padStart(2, '0')}`;
+      }
+      existingIds.add(useId.toUpperCase());
+
+      const step = globalUnit === 'in' ? Number((def.cmGrade / 2.54).toFixed(2)) : def.cmGrade;
+      const rowObj: any = {
+        id: useId,
+        point: def.point,
+        description: '',
+        value: '',
+        tolMinus: defaultTol,
+        tolPlus: defaultTol,
+        grading: String(step),
+        sizes: {},
+      };
+      rowObj.sizes = computeSizeSpreadForMeasurement(rowObj, baseSize, globalUnit);
+      rowsToInsert.push(rowObj);
+    }
+
+    if (rowsToInsert.length === 0) return;
+
+    // Insert right below BD001 (Back neck drop) if present, otherwise append at end
+    const bdIdx = newData.measurements.findIndex(
+      (m: any) =>
+        String(m.id || '').trim().toUpperCase() === 'BD001' ||
+        String(m.point || '').toLowerCase().includes('back neck drop')
+    );
+
+    if (bdIdx >= 0) {
+      newData.measurements.splice(bdIdx + 1, 0, ...rowsToInsert);
+    } else {
+      newData.measurements.push(...rowsToInsert);
+    }
+
+    setData(newData);
+    pushLog(`Added ${rowsToInsert.length} panel measurement points with grading`, 'measurement');
   };
 
   const addMeasurement = () => {
@@ -3939,6 +4027,7 @@ export function TechPackEditor() {
                         <th className="px-2 py-1 font-medium w-20">Spec</th>
                         <th className="px-1 py-1 font-medium w-12 text-center">Tol (-)</th>
                         <th className="px-1 py-1 font-medium w-12 text-center">Tol (+)</th>
+                        <th className="px-1 py-1 font-medium w-14 text-center print:hidden" title="Grading increment per size step">Grade</th>
                         {!isTechPackLocked && <th className="w-20 px-1 py-1 text-center font-medium text-gray-400 print:hidden">Actions</th>}
                       </tr>
                     </thead>
@@ -4119,6 +4208,23 @@ export function TechPackEditor() {
                                  onChange={e => updateMeasurement(i, 'tolPlus', e.target.value)} 
                                />
                             </td>
+                            <td className="px-1 py-2 align-top print:hidden">
+                               <AutoTextarea
+                                 className="w-full bg-transparent outline-none text-blue-600 font-mono text-xs text-center leading-none"
+                                 placeholder={String(inferGradingStep(m, globalUnit))}
+                                 value={m.customGrading ? (m.grading ?? '') : String(inferGradingStep(m, globalUnit))}
+                                 onFocus={(e) => { initialMeasurementRef.current[`${i}_grading`] = e.target.value; }}
+                                 onBlur={(e) => {
+                                   if (e.target.value.trim() === '') {
+                                     updateMeasurement(i, 'grading', '__AUTO__');
+                                   }
+                                   if (initialMeasurementRef.current[`${i}_grading`] !== undefined && initialMeasurementRef.current[`${i}_grading`] !== e.target.value) {
+                                     pushLog(`Updated grading step for "${m.point || m.id}" to ${e.target.value.trim() || 'auto'}`, 'measurement');
+                                   }
+                                 }}
+                                 onChange={e => updateMeasurement(i, 'grading', e.target.value)}
+                               />
+                            </td>
                             {!isTechPackLocked && (
                               <td className="px-1 py-2 align-middle text-center print:hidden w-20">
                                 <div className="flex items-center justify-center gap-0.5 opacity-60 group-hover/row:opacity-100 transition-opacity">
@@ -4159,7 +4265,7 @@ export function TechPackEditor() {
                       })}
                       {(displayData.measurements || []).length === 0 && (
                         <tr>
-                          <td colSpan={!isTechPackLocked ? 7 : 5} className="py-8 text-center text-gray-400 italic text-xs">
+                          <td colSpan={!isTechPackLocked ? 8 : 6} className="py-8 text-center text-gray-400 italic text-xs">
                             No measurements added yet. Click &quot;+ Add Measurement&quot; to begin.
                           </td>
                         </tr>
@@ -4167,15 +4273,26 @@ export function TechPackEditor() {
                     </tbody>
                   </table>
                   {!isTechPackLocked && (
-                    <div className="p-2.5 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between print:hidden">
-                      <button
-                        type="button"
-                        onClick={addMeasurement}
-                        className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-black bg-white hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 shadow-2xs transition-all cursor-pointer"
-                      >
-                        <Plus size={14} className="text-gray-500" />
-                        <span>Add Measurement</span>
-                      </button>
+                    <div className="p-2.5 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-between gap-2 print:hidden">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={addMeasurement}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 hover:text-black bg-white hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Plus size={14} className="text-gray-500" />
+                          <span>Add Measurement</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={addPanelMeasurements}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-50/70 hover:bg-blue-100 border border-blue-200 rounded-lg px-3 py-1.5 transition-all cursor-pointer"
+                          title="Insert M17–M21 Front/Lower/Side Panel measurements below Back Neck Drop with standard grading (2, 2, 0.5, 1, 0.25)"
+                        >
+                          <Plus size={14} className="text-blue-600" />
+                          <span>Add Panel POMs (M17–M21)</span>
+                        </button>
+                      </div>
                       <span className="text-[11px] text-gray-400">
                         {(displayData.measurements || []).length} measurement point{(displayData.measurements || []).length === 1 ? '' : 's'}
                       </span>

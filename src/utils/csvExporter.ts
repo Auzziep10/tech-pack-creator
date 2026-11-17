@@ -74,14 +74,26 @@ export const parseNumericValue = (val: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
+export const formatGradedNumber = (num: number): string => {
+  const rounded = Math.round((num + Number.EPSILON) * 100) / 100;
+  return String(Number(rounded.toFixed(2)));
+};
+
 export const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
-  if (m?.grading !== undefined && m?.grading !== null && String(m.grading).trim() !== '') {
+  // Only honor stored m.grading as a manual override when explicitly customized by the user
+  if (
+    m?.customGrading &&
+    m?.grading !== undefined &&
+    m?.grading !== null &&
+    String(m.grading).trim() !== ''
+  ) {
     const parsed = parseNumericValue(m.grading);
     if (parsed !== null) return parsed;
   }
 
   const idUpper = String(m?.id || '').trim().toUpperCase();
   const pointText = `${m?.point || ''} ${m?.name || ''}`.toLowerCase();
+  const text = `${pointText} ${m?.description || ''}`.toLowerCase();
 
   // Handle CH001 disambiguation: in core specs CH001 may be "Chest Width" (2.5), otherwise "Sleeve hem height / Cuff Height" (0)
   let cmStep: number | undefined;
@@ -92,8 +104,27 @@ export const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
   }
 
   if (cmStep === undefined) {
-    const text = `${pointText} ${m?.description || ''}`.toLowerCase();
-    if (
+    // Panel & rib measurements (commonly added below Back Neck Drop BD001)
+    if (text.includes('visible side panel') || text.includes('exposed rib')) {
+      cmStep = 0.25;
+    } else if (
+      text.includes('side panel') &&
+      (text.includes('length') || text.includes('height') || text.includes('tall'))
+    ) {
+      cmStep = 1;
+    } else if (text.includes('side panel')) {
+      cmStep = 0.5;
+    } else if (
+      text.includes('front panel') ||
+      text.includes('back panel') ||
+      text.includes('lower armhole corner') ||
+      text.includes('lower front') ||
+      text.includes('lower back') ||
+      text.includes('top of hem band') ||
+      text.includes('across top of hem')
+    ) {
+      cmStep = 2;
+    } else if (
       text.includes('hem height') ||
       text.includes('cuff height') ||
       text.includes('neckband') ||
@@ -167,12 +198,12 @@ export const computeGradedValueForSize = (
   const targetIdx = SIZES.indexOf(normalizedTarget);
 
   if (targetIdx === baseIdx) {
-    return baseNum.toFixed(1);
+    return formatGradedNumber(baseNum);
   }
 
   const gradingStep = inferGradingStep(m, unit);
   const computed = Math.max(0, baseNum + (targetIdx - baseIdx) * gradingStep);
-  return computed.toFixed(1);
+  return formatGradedNumber(computed);
 };
 
 export const computeSizeSpreadForMeasurement = (

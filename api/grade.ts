@@ -56,14 +56,25 @@ const parseNumericValue = (val: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
+const formatGradedNumber = (num: number): string => {
+  const rounded = Math.round((num + Number.EPSILON) * 100) / 100;
+  return String(Number(rounded.toFixed(2)));
+};
+
 const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
-  if (m?.grading !== undefined && m?.grading !== null && String(m.grading).trim() !== '') {
+  if (
+    m?.customGrading &&
+    m?.grading !== undefined &&
+    m?.grading !== null &&
+    String(m.grading).trim() !== ''
+  ) {
     const parsed = parseNumericValue(m.grading);
     if (parsed !== null) return parsed;
   }
 
   const idUpper = String(m?.id || '').trim().toUpperCase();
   const pointText = `${m?.point || ''} ${m?.name || ''}`.toLowerCase();
+  const text = `${pointText} ${m?.description || ''}`.toLowerCase();
 
   let cmStep: number | undefined;
   if (idUpper === 'CH001' && (pointText.includes('chest') || pointText.includes('bust'))) {
@@ -73,8 +84,26 @@ const inferGradingStep = (m: any, unit: 'in' | 'cm' = 'cm'): number => {
   }
 
   if (cmStep === undefined) {
-    const text = `${pointText} ${m?.description || ''}`.toLowerCase();
-    if (
+    if (text.includes('visible side panel') || text.includes('exposed rib')) {
+      cmStep = 0.25;
+    } else if (
+      text.includes('side panel') &&
+      (text.includes('length') || text.includes('height') || text.includes('tall'))
+    ) {
+      cmStep = 1;
+    } else if (text.includes('side panel')) {
+      cmStep = 0.5;
+    } else if (
+      text.includes('front panel') ||
+      text.includes('back panel') ||
+      text.includes('lower armhole corner') ||
+      text.includes('lower front') ||
+      text.includes('lower back') ||
+      text.includes('top of hem band') ||
+      text.includes('across top of hem')
+    ) {
+      cmStep = 2;
+    } else if (
       text.includes('hem height') ||
       text.includes('cuff height') ||
       text.includes('neckband') ||
@@ -143,7 +172,7 @@ export default async function handler(req: any, res: any) {
       let newVal = m?.value || '';
       if (baseNum !== null) {
         const computed = Math.max(0, baseNum + (targetIdx - baseIdx) * gradingStep);
-        newVal = computed.toFixed(1);
+        newVal = formatGradedNumber(computed);
       }
       return {
         ...m,
